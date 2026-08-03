@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Modbus485Emulator", "src\Modbus485EmulatorDll\Modbus485Emulator.vcxproj", "{8E680C0C-E066-4F2F-82E0-553BE5B4B014}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Debug|x64.ActiveCfg = Debug|x64
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Debug|x64.Build.0 = Debug|x64
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Release|x64.ActiveCfg = Release|x64
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Release|x64.Build.0 = Release|x64
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Debug|Win32.Build.0 = Debug|Win32
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Release|Win32.ActiveCfg = Release|Win32
+		{8E680C0C-E066-4F2F-82E0-553BE5B4B014}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,10 @@
+LIBRARY "Modbus485Emulator"
+EXPORTS
+    M485_Init
+    M485_Reset
+    M485_SetHolding
+    M485_GetHolding
+    M485_SetInput
+    M485_GetInput
+    M485_ProcessRtu
+    M485_LastError

@@ -1,0 +1,34 @@
+/* Minimal CAPL usage sketch for Modbus485Emulator.dll.
+   Adjust DLL loading/import syntax to your CANoe/CANalyzer version and project settings. */
+
+variables
+{
+  byte req[8];
+  byte res[256];
+  long resLen;
+}
+
+/* Declare/import these functions from Modbus485Emulator.dll in your CAPL DLL configuration.
+long M485_Init(byte unitId);
+long M485_SetHolding(word address, word value);
+long M485_ProcessRtu(byte request[], long requestLength, byte response[], long responseCapacity);
+*/
+
+on start
+{
+  M485_Init(1);
+  M485_SetHolding(0, 1234);
+
+  /* Unit 1, function 0x03, start 0, quantity 1, CRC 0x840A (low byte first). */
+  req[0] = 0x01;
+  req[1] = 0x03;
+  req[2] = 0x00;
+  req[3] = 0x00;
+  req[4] = 0x00;
+  req[5] = 0x01;
+  req[6] = 0x84;
+  req[7] = 0x0A;
+
+  resLen = M485_ProcessRtu(req, 8, res, 256);
+  write("M485_ProcessRtu returned %d", resLen);
+}
