@@ -1,4 +1,4 @@
-# Modbus485Emulator
+# MB485Emul_for_CAPL
 
 CAPL에서 호출해서 쓰는 Windows native DLL 기반 Modbus RTU(RS-485) 에뮬레이터입니다.
 
