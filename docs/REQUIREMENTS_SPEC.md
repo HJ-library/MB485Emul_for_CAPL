@@ -1,7 +1,7 @@
 # Modbus485 Emulator for CAPL 요구사항 명세
 
 > 상태: 요구사항 수집 및 Plan 단계
-> 기준: 2026-08-04까지 누적된 사용자 요구사항
+> 기준: 2026-08-05까지 누적된 사용자 요구사항 및 CANalyzer 13 공식 CAPL DLL Sample 조사 결과
 > 주의: 본 문서의 **제안** 및 **미확정** 항목은 확정 요구사항이 아니다.
 
 ## 1. 프로젝트 목적
@@ -26,6 +26,7 @@
 | ENV-007 | CAN Monitoring 메시지는 Extended CAN을 사용한다. |
 | ENV-008 | CAPL Register 배열은 Address당 16bit인 `word` 배열을 사용한다. |
 | ENV-009 | 현재 단계는 요구사항 수집 및 Plan 단계이며, “Plan 확정 검토” 전에는 구현하지 않는다. |
+| ENV-010 | CANalyzer 13 설치 환경과 공식 CAPL DLL Sample은 DLL 연동 구조 및 향후 x64 호환성 검토에 사용한다. 1차 실행 대상은 CANalyzer 9.x x86으로 유지한다. |
 
 ## 3. 기능 요구사항
 
@@ -165,7 +166,30 @@
 
 ## 5. 외부 인터페이스
 
-### 5.1 명명 규칙
+### 5.1 CAPL DLL 연동 구조
+
+#### 확인된 사실
+
+| ID | 확인 내용 |
+| --- | --- |
+| FACT-DLL-001 | CANalyzer 13 공식 Sample은 CAPL의 `#pragma library`로 CAPL DLL 또는 `.vmodule`을 로딩한다. |
+| FACT-DLL-002 | `#pragma library`와 Vector CAPL DLL Export Table은 대체 관계가 아니다. CAPL은 라이브러리를 로딩하고 DLL은 Export Table로 CAPL 공개 함수를 등록한다. |
+| FACT-DLL-003 | 공식 Sample은 `TOOL_MAJOR_VERSION >= 13`에서 `.vmodule`을 사용하고, 이전 버전에서는 아키텍처별 DLL을 직접 지정한다. |
+| FACT-DLL-004 | 공식 Sample의 DLL은 `CAPL_DLL_INFO4`와 `caplDllTable4`를 사용한다. 제공된 `cdll.h`에는 `CAPL_DLL_INFO4`가 CANoe/CANalyzer 8.1 이상에서 유효하다고 명시되어 있다. |
+| FACT-DLL-005 | Windows x86에서 `CAPLPASCAL`은 `__stdcall`이며, CAPL-visible 함수명과 실제 C++ 함수 주소는 Export Table에서 연결한다. |
+| FACT-DLL-006 | CAPL 배열은 Export Table에 원소 타입과 배열 차원을 등록하지만 C++ 함수에는 포인터로 전달되며 실제 배열 원소 수는 자동 전달되지 않는다. |
+| FACT-DLL-007 | CAPL 문자열은 `char[]` 배열로 DLL에 전달할 수 있지만 문자열 인코딩과 상대경로 기준은 Sample만으로 확정되지 않는다. |
+| FACT-DLL-008 | CANalyzer 13 공식 Sample은 동일 소스에 대해 Windows x86, Windows x64 및 Linux x64 바이너리와 이들을 묶는 `.vmodule`을 제공한다. |
+
+#### 설계 제안
+
+| ID | 내용 |
+| --- | --- |
+| PROP-IF-DLL-001 | 1차 CANalyzer 9.x x86 산출물은 `#pragma library`로 Win32 DLL을 직접 로딩하고 DLL은 `CAPL_DLL_INFO4` Export Table을 제공한다. |
+| PROP-IF-DLL-002 | DLL 경계의 C++ 타입은 `uint8_t`, `uint16_t`, `uint32_t`, `int32_t`처럼 크기가 명확한 타입을 사용하고 CAPL `word[]`는 `uint16_t*`에 매핑한다. |
+| PROP-IF-DLL-003 | CANalyzer 13 이상 및 x64 지원 시 동일 소스를 아키텍처별로 빌드하고 `.vmodule`로 패키징하는 방식을 후속 체크리스트에서 검토한다. |
+
+### 5.2 명명 규칙
 
 | ID | 요구사항 |
 | --- | --- |
@@ -179,7 +203,7 @@
 | --- | --- |
 | PROP-IF-001 | DLL Export는 `M485E_Dll_`, Monitoring은 `M485E_Mon_`, UI는 `M485E_UI_` 형식을 권장한다. |
 
-### 5.2 필요한 인터페이스 범주
+### 5.3 필요한 인터페이스 범주
 
 | ID | 인터페이스 요구사항 |
 | --- | --- |
@@ -196,7 +220,7 @@
 | IF-011 | DLL 상태 및 오류 조회 인터페이스 |
 | IF-012 | CAN Monitoring 메시지를 CAPL로 전달하는 인터페이스 |
 
-### 5.3 수동 Register 인터페이스
+### 5.4 수동 Register 인터페이스
 
 | ID | 요구사항 |
 | --- | --- |
@@ -211,7 +235,7 @@
 | --- | --- |
 | PROP-IF-002 | CAPL 공개 Wrapper는 4개 논리 파라미터를 유지하고, 실제 DLL 호출에는 안전한 배열 검증을 위해 CAPL이 계산한 배열 길이를 추가로 전달한다. |
 
-### 5.4 Signal 인터페이스
+### 5.5 Signal 인터페이스
 
 | ID | 요구사항 |
 | --- | --- |
@@ -363,6 +387,7 @@
 | COMP-005 | Modbus RTU `0x03`, `0x04`, `0x10` 요청과 호환되어야 한다. |
 | COMP-006 | Signal Value Table은 CAN DBC 규칙과 호환되어야 한다. |
 | COMP-007 | BigEndian/Motorola 및 LittleEndian/Intel 표기를 처리해야 한다. |
+| COMP-008 | x86과 향후 x64 바이너리는 동일한 CAPL-visible 논리 API를 유지해야 한다. 단, 아키텍처별 DLL은 별도로 빌드·배포한다. |
 
 ## 11. 테스트 가능한 인수 조건
 
@@ -390,21 +415,31 @@
 | AC-020 | FR-LOAD-004 | CAN 부하 90% 이상에서 해당 Port의 Monitoring CAN 송출이 정지된다. |
 | AC-021 | FR-LOAD-005 | Critical Overload 중에도 해당 Port의 RTU 요청에 응답한다. |
 | AC-022 | COMP-002 | 산출 DLL이 Win32/x86 바이너리로 빌드되고 CANalyzer 9.x에서 로딩된다. |
+| AC-023 | PROP-IF-DLL-001 | CANalyzer 9.x CAPL에서 `#pragma library`로 x86 DLL을 로딩하고 Export Table에 등록된 함수를 컴파일 및 호출할 수 있다. |
+| AC-024 | FACT-DLL-006 | CAPL `word[]`를 전달하는 API가 CAPL Wrapper에서 계산한 배열 길이를 DLL에서 검증하고 범위를 벗어나 읽거나 쓰지 않는다. |
 
 ## 12. 미확정 사항
 
 `★`는 공개 API, 데이터 손실, 호환성, 안정성 등에 영향을 주므로 Plan 확정 전에 명시적 확인이 필요한 항목이다.
+`◆`는 CANalyzer 9.x 환경에서 실제 CAPL 컴파일 또는 로딩 검증이 필요한 항목이다.
+
+### 12.1 조사로 해소된 항목
+
+| ID | 결론 | 남은 검증 |
+| --- | --- | --- |
+| TBD-001 ★◆ | `#pragma library`로 라이브러리를 로딩하고 DLL은 Vector CAPL DLL Export Table을 제공한다. 두 방식은 함께 사용한다. | CANalyzer 9.x에서 x86 DLL 컴파일 및 로딩 확인 |
+| TBD-003 ★◆ | x86 함수는 `__stdcall`을 사용한다. 배열은 Export Table에 타입과 차원을 선언하고 C++에는 포인터로 전달하며, 문자열은 `char[]`로 전달할 수 있다. | CANalyzer 9.x에서 `word[]`와 `char[]` 최소 호출 시험 |
+| TBD-008 ★ | `0x80IIRRMM`과 `0x81IIRRMM`은 Vector 내부 Extended Flag가 포함된 표현이며 실제 29bit Arbitration ID는 각각 `0x00IIRRMM`, `0x01IIRRMM`이다. | 없음 |
+
+### 12.2 계속 검토할 항목
 
 | ID | 미확정 내용 |
 | --- | --- |
-| TBD-001 ★ | CANalyzer 9.x에서 일반 Native DLL Import를 사용할지 Vector CAPL DLL Export Table 방식을 사용할지 |
-| TBD-002 ★ | DLL Export 함수의 정확한 이름, 파라미터 타입, 호출 규약 및 반환 규칙 |
-| TBD-003 ★ | CAPL 배열과 문자열을 x86 DLL 경계로 전달하는 정확한 ABI |
-| TBD-004 ★ | `WriteRegisters` DLL API에 배열 길이 또는 `DataCount`를 포함할지 |
+| TBD-002 ★◆ | DLL Export 함수의 정확한 이름, 파라미터 타입 및 반환 규칙. x86 호출 규약은 `__stdcall`로 확인되었으나 프로젝트 공개 API 명세는 확정이 필요하다. |
+| TBD-004 ★◆ | `WriteRegisters`의 사용자용 CAPL API에서는 `DataCount`를 숨기고, 내부 DLL API에는 CAPL Wrapper가 계산한 배열 길이를 포함할지 명시적 확인 필요 |
 | TBD-005 ★ | Disconnect 후 재연결할 때 현재 Register 값을 유지할지 Init Value로 다시 초기화할지 |
 | TBD-006 ★ | ReadSwitch가 `0x80` 주기 메시지만 제어할지 `0x81` Snapshot까지 제어할지 |
 | TBD-007 | ReadSwitch가 전체 공통인지 Port, Index 또는 Rule별인지 |
-| TBD-008 ★ | `0x80IIRRMM`, `0x81IIRRMM`이 실제 CAN Arbitration ID인지 Vector Extended Flag가 포함된 API 표현인지 |
 | TBD-009 | `ModbusRule.csv`에서 Monitoring 주기를 저장할 칼럼명과 단위 |
 | TBD-010 | 100ms 미만 주기를 오류로 거부할지 100ms로 보정할지 |
 | TBD-011 | RS-485 Port와 가상 CAN 채널 번호를 어느 설정에서 관리할지 |
@@ -422,12 +457,13 @@
 | TBD-023 | ReadSwitch OFF 동안 발생한 변경 Snapshot을 폐기할지 보관할지 |
 | TBD-024 | 부하 보호 해제 후 현재 상태 Snapshot을 다시 송출할지 |
 | TBD-025 | 정확한 오류 코드 체계와 로그 출력 위치 |
+| TBD-026 ★ | CAN Monitoring Frame을 DLL에서 CAPL로 전달할 때 CAPL Polling Queue, VIA Callback 또는 혼합 방식을 사용할지 |
 
 ## 13. 요구사항 간 충돌
 
 | ID | 충돌 또는 위험 |
 | --- | --- |
-| CON-001 ★ | 표준 Extended CAN Arbitration ID는 29bit인데 `0x80IIRRMM`과 `0x81IIRRMM`은 숫자 그대로 보면 29bit 범위를 초과한다. Vector의 bit 31 Extended Flag 표현인지 반드시 확인해야 한다. |
+| CON-001 | `0x80IIRRMM`과 `0x81IIRRMM`을 표준 29bit Arbitration ID로 직접 사용하면 범위를 초과한다. Vector bit 31 Extended Flag 표현으로 확인되어 실제 Arbitration ID를 `0x00IIRRMM`, `0x01IIRRMM`으로 분리해 문서화하는 것으로 해소한다. |
 | CON-002 | 주기 송출은 `ModbusRule.csv` 값으로 수행해야 하지만 현재 정의된 칼럼에는 Cycle 값이 없다. |
 | CON-003 | 원 요구사항의 총 메시지 수 `1 + [Quantity/4]`에서 대괄호의 올림/버림 의미가 명확하지 않다. 마지막 잔여 Register를 포함하려면 `1 + ceil(Quantity/4)`가 필요하다. |
 | CON-004 ★ | CAPL 사용 편의를 위해 `WriteRegisters`에서 InputCount를 생략하려는 요구와, DLL이 포인터만으로 실제 배열 크기를 알 수 없다는 메모리 안전성 문제가 충돌한다. |
@@ -436,6 +472,8 @@
 | CON-007 | 현재 저장소의 기존 API는 단일 Unit ID와 `M485_` Prefix를 사용하므로 다중 Port·다중 Device 및 `M485E` 명명 요구사항과 맞지 않는다. |
 | CON-008 | 현재 README의 주요 빌드 예시는 x64이지만 목표 CAPL DLL은 x86이다. |
 | CON-009 | 현재 설계 문서의 `Modbus485EmulMap.csv` 스키마에는 새로 확정된 `Type` 칼럼이 반영되어 있지 않다. |
+| CON-010 ★ | CAPL DLL Sample은 배열의 실제 길이를 C++ 함수에 자동 전달하지 않는다. 따라서 `WriteRegisters` 공개 API에서 `DataCount`를 완전히 제거하면서 DLL이 실제 배열 범위를 검증하도록 하는 것은 불가능하다. |
+| CON-011 ★ | DLL이 CAN Frame을 생성하더라도 CAPL `output()` 호출 주체와 DLL→CAPL 전달 방식이 확정되지 않아 Snapshot 지연과 스레드 안정성 설계에 영향을 준다. |
 
 ### 제안
 
