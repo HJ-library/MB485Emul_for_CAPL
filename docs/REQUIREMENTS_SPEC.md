@@ -54,6 +54,10 @@
 | FR-RTU-014 | 거부된 외부 Write는 Register를 부분 변경하지 않고 변경 Snapshot도 생성하지 않는다. |
 | FR-RTU-015 | 신규 외부 Modbus RTU Dispatcher는 Function Code `0x03`, `0x04`, `0x10`만 지원한다. |
 | FR-RTU-016 | Function Code `0x06`을 포함한 미지원 Function 요청은 Register를 변경하지 않고 Exception Code `0x01 Illegal Function`을 반환한다. |
+| FR-RTU-017 | 외부 `0x03` 및 `0x04` Read 요청의 Quantity는 1~125 Register만 허용한다. |
+| FR-RTU-018 | 외부 `0x10` Write 요청의 Quantity는 1~123 Register만 허용한다. |
+| FR-RTU-019 | Quantity가 Function별 허용 범위를 벗어나거나 `0x10` Byte Count가 `Quantity × 2`와 다르면 Register를 변경하지 않고 Exception Code `0x03 Illegal Data Value`를 반환한다. |
+| FR-RTU-020 | `Address + Quantity - 1`이 16bit Address 범위를 초과하거나 요청 범위가 유효한 단일 Rule 안에 포함되지 않으면 Exception Code `0x02 Illegal Data Address`를 반환한다. |
 
 #### 설계 결정
 
@@ -81,9 +85,22 @@
 | FR-SIG-001 | Signal은 `Index`와 `SignalName`으로 식별한다. |
 | FR-SIG-002 | Signal 물리값 Read/Write API를 제공한다. |
 | FR-SIG-003 | CAPL은 Signal과 System Variable을 매칭하고 DLL API를 통해 물리값을 읽고 쓴다. |
-| FR-SIG-004 | DLL은 Type, Byte Order, Start Bit, Size, Scale, Offset을 이용해 Register Raw 값과 물리값을 변환한다. |
+| FR-SIG-004 | DLL은 Type, Byte Order, Start Bit, Size, Scale, Offset을 이용해 Register Raw 값과 물리값을 변환하되 IEEE Float/Double은 `FR-SIG-007~008`의 직접 물리값 규칙을 적용한다. |
 | FR-SIG-005 | 변환된 값이 Signal Size로 표현할 수 없는 경우 오류를 반환한다. |
 | FR-SIG-006 | Signal 물리값 변경은 `SourceType 0x02` 변경 Snapshot을 발생시킨다. |
+| FR-SIG-007 | `IEEE Float`와 `IEEE Double`은 IEEE 비트열을 Decode한 실수값 자체를 물리값으로 사용하며 별도의 Scale/Offset 산술 변환을 적용하지 않는다. |
+| FR-SIG-008 | `IEEE Float`와 `IEEE Double`의 Init 및 Signal Write 입력값은 동일한 IEEE 실수값으로 직접 Encode하고, Signal Read는 Decode한 동일한 실수값을 반환한다. |
+| FR-SIG-009 | 32bit 이상의 다중 Register 값은 가장 낮은 Address에 최상위 16bit Word를 저장하고 Address가 증가할수록 다음 하위 Word를 저장하는 고정 `HighWordFirst` 규칙을 사용한다. |
+| FR-SIG-010 | 다중 Register 값에 암묵적인 Word Swap을 적용하지 않는다. |
+| FR-SIG-011 | `Start Bit`은 HighWordFirst로 구성된 Length Byte Signal Frame 전체 값의 0-based LSB0 위치다. Bit 0은 Frame의 최하위 Bit이며 Windows 계산기와 같은 Bit 번호 체계를 사용한다. |
+| FR-SIG-012 | `Length`는 Signal Frame의 전체 Byte 크기이며 Classic CAN Data Frame Payload에 맞춰 `2`, `4`, `6`, `8`Byte만 허용한다. Frame Bit 수는 `Length × 8`, 점유 Register 수는 `Length / 2`다. |
+| FR-SIG-013 | `WordCount = Length / 2`일 때 Start Bit의 대상 Register Offset은 `WordCount - 1 - floor(Start Bit / 16)`, 해당 Register 내 Bit 위치는 `Start Bit % 16`으로 계산한다. 따라서 Frame의 Bit 0~15는 가장 높은 Address의 최하위 Word에 위치한다. |
+| FR-SIG-014 | Signal은 `Start Bit >= 0`, `Size > 0`, `Start Bit + Size <= Length × 8`을 만족해야 하며 위반하면 행 단위 CSV 검증 오류로 처리한다. |
+| FR-SIG-015 | 같은 Device Index의 Signal Frame은 `Address + Length` 조합으로 식별하며 두 값이 모두 같은 행은 하나의 Frame을 공유한다. |
+| FR-SIG-016 | 동일 Frame에 여러 Signal을 정의할 수 있지만 실제 Signal Bit 영역이 하나라도 겹치면 CSV 검증 오류로 처리한다. |
+| FR-SIG-017 | 같은 Device Index에서 `Address + Length`가 다른 두 Frame의 점유 Register 범위가 일부라도 겹치면 CSV 검증 오류로 처리하며, Address가 같고 Length가 다른 경우도 허용하지 않는다. |
+| FR-SIG-018 | 독립된 다음 Frame은 앞 Frame이 점유한 마지막 Register보다 큰 Address에서 시작해야 한다. |
+| FR-SIG-019 | Signal Frame 하나는 Classic CAN Data Frame Payload 크기에 맞춰 최대 8Byte, 4 Register, 64bit로 제한한다. 실제 CAN Monitoring 분할은 Signal 경계가 아니라 Rule 시작 Address부터 Register 4개 단위로 수행하므로 Signal Frame이 항상 하나의 CAN Data Message에 포함되는 것은 아니다. |
 
 #### 설계 결정
 
@@ -126,6 +143,8 @@
 | FR-CAPL-002 | Core는 DLL 초기화, CSV 설정, COM 설정 및 Connect/Disconnect를 담당한다. |
 | FR-CAPL-003 | Monitoring은 CAN Monitoring 제어를 담당한다. |
 | FR-CAPL-004 | UI는 Panel 이벤트, 수동 Register 제어 및 Signal 물리값 제어를 담당한다. |
+| FR-CAPL-005 | DLL이 반환한 오류 상태와 상세 Context는 CAPL Core가 해석하여 CANalyzer Write Window에 출력한다. |
+| FR-CAPL-006 | 초기 오류 처리 함수는 Core 내부의 구분된 Error Handling 구획에 모으고, 규모와 재사용성이 커질 때 별도 CAPL Include 모듈로 분리한다. |
 | FR-UI-001 | Panel은 수동 Register Read/Write 기능을 제공한다. |
 | FR-UI-002 | Panel은 Signal과 System Variable을 이용한 물리값 Read/Write 기능을 제공한다. |
 | FR-UI-003 | Panel은 Connect/Disconnect 제어 기능을 제공한다. |
@@ -186,6 +205,8 @@
 | FR-CAN-046 | 지연된 `0x80` Pending에는 Register 데이터가 저장되지 않으며 실제 Register Snapshot은 DLL API 호출 시점의 현재값으로 생성한다. |
 | FR-CAN-047 | Output Pump는 Port 간 Round-robin과 Port별 지속 Rule Cursor를 함께 사용하여 Cycle이 지연되어도 배열 앞쪽 Rule만 반복 처리되는 Starvation을 방지한다. |
 | FR-CAN-048 | Cycle Deadline Miss만으로 Monitoring을 자동 정지하지 않고 bounded Output Pump와 Latest-Wins Coalescing으로 Best-effort 처리를 계속하며, 실제 Queue Critical 상태의 정지는 `FR-LOAD-006`~`010`을 따른다. |
+| FR-CAN-049 | CAN Header Byte 4~5의 Address는 CSV와 CAPL API에서 사용하는 16bit 직접 Address를 High Byte 우선으로 저장하며 Function Code 기반 변환이나 `±1` 보정을 하지 않는다. |
+| FR-CAN-050 | Rule Quantity는 최대 125 Register이며 하나의 Rule Snapshot은 최대 Header 1개와 Data Message 32개, 총 33개 CAN Message로 제한한다. |
 
 #### 설계 결정
 
@@ -415,6 +436,7 @@
 | DATA-002 | CSV 경로는 `Main.can`에서 지정한다. |
 | DATA-003 | 세 파일은 Device Index를 기준으로 연계한다. |
 | DATA-004 | CSV의 관리용 필드는 DLL 내부 제어에 불필요한 경우 사용하지 않는다. |
+| DATA-005 | 모든 CSV, CAPL API, DLL Register Memory 및 RTU PDU는 동일한 16bit 직접 Address를 사용하며 Address 값에 `3xxxx/4xxxx` Function Code 의미를 포함하거나 `±1` 보정을 적용하지 않는다. |
 
 ### 6.2 DeviceMap.csv
 
@@ -451,6 +473,7 @@
 | DATA-RULE-003 | Function Code가 `0x03`인 범위는 외부 `0x10` 쓰기가 가능하다. |
 | DATA-RULE-004 | Rule ID는 CAN ID의 1Byte `RR` 필드에 사용할 수 있어야 한다. |
 | DATA-RULE-005 | Quantity에 따라 필요한 CAN Data Message를 생성해야 한다. |
+| DATA-RULE-006 | `ModbusRule.csv`의 Quantity는 Function Code와 관계없이 1~125 Register여야 하며 범위를 벗어나면 CSV Load 또는 Refresh 전체를 실패 처리한다. |
 
 ### 6.4 Modbus485EmulMap.csv
 
@@ -460,9 +483,9 @@
 | 2 | `Address` | Signal 시작 Register Address |
 | 3 | `SignalName` | Signal 식별 이름 |
 | 4 | `Type` | Signal 데이터 타입 |
-| 5 | `Length` | Frame 크기 |
-| 6 | `Byte Order` | `BigEndian/Motorola` 또는 `LittleEndian/Intel` |
-| 7 | `Start Bit` | Frame 내 Signal 시작 Bit |
+| 5 | `Length` | Address부터 시작하는 Signal Frame의 전체 Byte 크기 |
+| 6 | `Byte Order` | `BigEndian` 또는 `LittleEndian` |
+| 7 | `Start Bit` | Length Byte Frame 기준 0-based LSB0 Signal 시작 Bit |
 | 8 | `Size` | Signal Bit 크기 |
 | 9 | `Scale` | 물리값 배율 |
 | 10 | `Offset` | 물리값 Offset |
@@ -476,11 +499,17 @@
 | --- | --- |
 | DATA-MAP-001 | `Type`은 `Signed`, `Unsigned`, `IEEE Float`, `IEEE Double`을 지원한다. |
 | DATA-MAP-002 | `Type` 칼럼은 `SignalName` 바로 오른쪽에 위치한다. |
-| DATA-MAP-003 | Byte Order는 BigEndian/Motorola와 LittleEndian/Intel 표기를 지원한다. |
+| DATA-MAP-003 | Byte Order의 공개 CSV 표기는 `BigEndian`과 `LittleEndian`만 사용하며 `Motorola`와 `Intel` 별칭을 사용하지 않는다. |
 | DATA-MAP-004 | Init Value는 최초 메모리 구성과 CSV Refresh 시 사용한다. |
 | DATA-MAP-005 | Value Table 형식은 CAN DBC 규칙과 동일하게 사용한다. |
 | DATA-MAP-006 | 모든 Address는 CAPL 내부 제어 관점에서 R/W 가능하다. |
 | DATA-MAP-007 | SignalName은 Index와 함께 Signal 조회 키로 사용한다. |
+| DATA-MAP-008 | `IEEE Float`의 Size는 32bit, `IEEE Double`의 Size는 64bit로 고정하며 다른 Size는 허용하지 않는다. |
+| DATA-MAP-009 | `IEEE Float`와 `IEEE Double` 행의 Scale은 `1`, Offset은 `0`이어야 하며 다른 값이 있으면 CSV Load 또는 Refresh 전체를 실패 처리한다. |
+| DATA-MAP-010 | 1차 `Modbus485EmulMap.csv`에는 `Word Order` 칼럼을 추가하지 않으며 모든 다중 Register Signal은 고정 `HighWordFirst`로 해석한다. |
+| DATA-MAP-011 | `Length`, `Start Bit`, `Size`의 Frame 범위 검증은 같은 CSV 행의 값만으로 수행하고 Frame 범위 및 Signal Bit 중복·겹침 검증은 같은 Index의 전체 Map을 대상으로 별도 수행한다. |
+| DATA-MAP-012 | Frame이 겹치는지는 실제 Signal Bit 사용 여부가 아니라 `Address`부터 `Length / 2`개 Register의 점유 범위를 기준으로 판단한다. |
+| DATA-MAP-013 | Length가 `2`, `4`, `6`, `8` 중 하나가 아니면 완전한 16bit Register Frame 또는 최대 8Byte CAN Payload 제한을 만족하지 않으므로 CSV 검증 오류로 처리한다. |
 
 ## 7. 오류 처리
 
@@ -494,13 +523,17 @@
 | ERR-006 | 잘못된 Index, Address 또는 Quantity로 메모리 범위를 벗어나면 오류로 처리해야 한다. |
 | ERR-007 | CSV Refresh 실패 시 불완전한 새 설정을 적용하면 안 된다. |
 | ERR-008 | Change Queue Overflow는 RTU Write 자체를 실패시키거나 Register 변경을 Rollback하는 오류로 처리하지 않고 Monitoring 데이터 손실 진단으로 처리한다. |
+| ERR-009 | CSV 검증 오류가 하나라도 있으면 Configuration을 Invalid 상태로 두고 성공적인 Load 또는 Refresh 전까지 Connect를 거부한다. |
+| ERR-010 | CSV의 `Start Bit + Size`가 `Length × 8`을 초과하면 인접 Frame 또는 Register를 변경하지 않고 CSV 검증 오류로 처리한다. |
+| ERR-011 | 같은 Index의 서로 다른 Frame이 Register를 중복 점유하거나 동일 Frame의 Signal Bit 영역이 겹치면 CSV 검증 오류로 처리한다. |
+| ERR-012 | `Modbus485EmulMap.csv`의 Length가 `2`, `4`, `6`, `8` 중 하나가 아니면 CSV 검증 오류로 처리하고 Connect를 거부한다. |
 
 ### 제안
 
 | ID | 내용 |
 | --- | --- |
 | PROP-ERR-001 | 외부 RTU 오류는 Modbus 표준 Exception Response로 반환한다. |
-| PROP-ERR-002 | CAPL/DLL API는 공통 상태 코드와 별도의 상세 오류 문자열 조회 기능을 제공한다. |
+| PROP-ERR-002 | DLL API는 공통 오류 코드를 반환하고 CSV 파일·행·칼럼·Signal 등 동적 Context는 별도 조회하며, CAPL Core가 오류 코드와 Context를 사용자 메시지로 구성해 Write Window에 출력한다. |
 | PROP-ERR-003 | 배열 길이를 DLL에 전달하여 `Quantity`와 실제 배열 길이가 다르면 호출을 거부한다. |
 
 ## 8. 로그와 진단
@@ -515,6 +548,7 @@
 | LOG-006 | Port별 Change Queue의 현재 Pending, Capacity, High-water Mark, 생성 수, Dequeue 수, Drop Count, Overflow Latch 및 마지막 Sequence를 조회할 수 있어야 한다. |
 | LOG-007 | Simulation Main Queue Load, Analysis Main Queue Load, 두 값의 최댓값, 현재 Overload 단계 및 ReadOption 적용 보류 상태를 진단할 수 있어야 한다. |
 | LOG-008 | Output Pump의 처리 Frame 수, 실행시간 예산 도달, Cycle Deadline Miss, Port별 Periodic Pending, Rule별 Missed Cycle Count 및 Last Sent Generation을 진단할 수 있어야 한다. |
+| LOG-009 | CSV 검증 오류 출력에는 오류 코드와 함께 파일명, 실제 파일 행 번호, 칼럼명 및 가능한 경우 Index, Address, SignalName과 잘못된 값을 포함한다. |
 
 ### 제안
 
@@ -553,7 +587,7 @@
 | COMP-004 | 기존에 확정된 세 CSV 파일명과 칼럼 구조를 지원해야 한다. |
 | COMP-005 | Modbus RTU `0x03`, `0x04`, `0x10` 요청과 호환되어야 한다. |
 | COMP-006 | Signal Value Table은 CAN DBC 규칙과 호환되어야 한다. |
-| COMP-007 | BigEndian/Motorola 및 LittleEndian/Intel 표기를 처리해야 한다. |
+| COMP-007 | `Modbus485EmulMap.csv`의 Byte Order 표기 `BigEndian` 및 `LittleEndian`을 처리해야 한다. |
 | COMP-008 | x86과 향후 x64 바이너리는 동일한 CAPL-visible 논리 API를 유지해야 한다. 단, 아키텍처별 DLL은 별도로 빌드·배포한다. |
 | COMP-009 | 기존 Prototype의 `M485_` Export API, DLL 바이너리 및 동작은 신규 개발의 하위 호환 대상이 아니다. |
 | COMP-010 | 구현 단계에서는 기존 Prototype 소스·API·빌드 설정·샘플·설명 정보를 신규 `M485E` 요구사항과 구조에 맞는 산출물로 교체하고, 최종 산출물에 혼재시키지 않는다. |
@@ -642,6 +676,24 @@
 | AC-059 | FR-CAN-047, DES-CAN-017 | 일부 Rule이 Cycle 내 처리되지 않은 경우 다음 처리는 지속 Rule Cursor 위치부터 시작하여 배열 뒤쪽 Rule도 영구적으로 누락되지 않는다. |
 | AC-060 | FR-LOAD-012 | 새 ReadOption 집합의 계산 Frame 비용이 검증된 Cycle 처리 예산을 초과하면 일부 Rule만 적용하지 않고 전체 변경을 거부하며 직전 Applied ReadOption을 유지한다. |
 | AC-061 | FR-CAN-048 | Cycle Deadline Miss만 발생하고 Application Queue Load가 Critical이 아니면 `0x80` Monitoring은 자동 정지되지 않고 최신 Pending을 Best-effort로 계속 처리한다. |
+| AC-062 | DATA-005, FR-CAN-049 | CSV Address `40000`은 CAPL과 DLL에서 `40000`, RTU Starting Address와 CAN Header에서 `0x9C40`으로 사용되며 `0` 또는 `39999`로 변환되지 않는다. |
+| AC-063 | FR-RTU-017 | `0x03/0x04` Quantity 125 요청은 허용되고 Quantity 0 또는 126 요청은 Exception `0x03`으로 거부된다. |
+| AC-064 | FR-RTU-018~019 | `0x10` Quantity 123과 올바른 Byte Count는 허용되고 Quantity 124 또는 Byte Count 불일치는 Exception `0x03`으로 거부되며 Register는 변경되지 않는다. |
+| AC-065 | DATA-RULE-006, FR-CAN-050 | Rule Quantity 125는 최대 33개 CAN Message로 출력되고 Quantity 126이 포함된 CSV는 전체 Load 또는 Refresh가 실패한다. |
+| AC-066 | FR-RTU-020 | Address `65535`, Quantity 2 요청은 16bit Address 범위를 넘으므로 Exception `0x02`로 거부된다. |
+| AC-067 | FR-SIG-007~008 | IEEE Float/Double의 Init 또는 Signal Write에 `12.5`를 입력하면 해당 IEEE 비트열이 Register에 저장되고 Signal Read 결과로 `12.5`가 반환된다. |
+| AC-068 | DATA-MAP-008~009 | IEEE Float의 Size가 32bit가 아니거나 IEEE Double의 Size가 64bit가 아니거나 Scale/Offset이 `1/0`이 아닌 CSV는 Load 또는 Refresh 전체가 실패하며 기존 설정과 Register 값은 유지된다. |
+| AC-069 | FR-SIG-009~010 | IEEE Float `12.5`의 비트열 `0x41480000`을 Address 10000부터 저장하면 Address 10000은 `0x4148`, Address 10001은 `0x0000`이며 암묵적인 Word Swap이 발생하지 않는다. |
+| AC-070 | FR-SIG-009~010 | IEEE Double `12.5`의 비트열 `0x4029000000000000`을 Address 10000부터 저장하면 Address 10000부터 순서대로 `0x4029`, `0x0000`, `0x0000`, `0x0000`이 저장된다. |
+| AC-071 | FR-SIG-011~013 | Address 10000, Length 2 Frame의 Start Bit 0은 Address 10000의 Bit 0, Start Bit 15는 Address 10000의 Bit 15를 읽고 쓴다. |
+| AC-072 | DATA-MAP-003 | CSV Byte Order 값 `BigEndian`과 `LittleEndian`은 인식되고 공개 CSV 표기에서 `Motorola`와 `Intel` 별칭에 의존하지 않는다. |
+| AC-073 | FR-SIG-011~014 | Address 10000, Length 4, Start Bit 30, Size 1인 `Control_SD_Detect_Switch`는 유효하며 Address 10000의 Bit 14를 읽고 쓴다. |
+| AC-074 | FR-SIG-014, ERR-009~010 | Length 4에서 Start Bit 32, Size 1 또는 Start Bit 30, Size 3인 행은 범위를 벗어난 CSV 오류가 되고 Connect는 거부된다. |
+| AC-075 | FR-SIG-015~018, ERR-011 | 같은 Index에서 Address 10000, Length 4인 두 Signal 행은 동일 Frame을 공유할 수 있지만 Address 10001, Length 2인 별도 행은 앞 Frame의 점유 범위 10000~10001과 겹치므로 CSV 오류가 된다. |
+| AC-076 | FR-SIG-013, FR-SIG-015~016 | Address 10001의 Bit 15에 위치할 `State`는 기존 Frame과 같은 Address 10000, Length 4, Start Bit 15, Size 1로 정의하며 Address 10000의 Bit 14에 위치한 Start Bit 30 Signal과 겹치지 않는다. |
+| AC-077 | FR-SIG-016~017 | 같은 Index에서 Address 10000, Length 4와 Address 10000, Length 2는 서로 다른 Frame 정의로 거부되고, Address 10000, Length 4 다음의 독립 Frame은 Address 10002 이상에서 시작할 때 허용된다. |
+| AC-078 | FR-SIG-012, DATA-MAP-013, ERR-012 | Length 2, 4, 6, 8인 행은 Length 형식 검사를 통과하고 Length 1, 3, 10인 행은 CSV 오류가 되어 Connect가 거부된다. |
+| AC-079 | FR-SIG-019, FR-CAN-016~019 | Length 8 Frame은 최대 4 Register와 64bit Signal 영역을 사용한다. Signal Frame이 Rule의 4-Register Data Message 경계를 넘으면 기존 Rule 기반 분할 규칙에 따라 둘 이상의 CAN Data Message에 나뉠 수 있다. |
 
 ## 12. 미확정 사항
 
@@ -667,6 +719,10 @@
 | TBD-013 ◆ | Critical Overload는 자동 재개하지 않고 ReadSwitch OFF 후 ON으로 Latch를 해제한다. | 정지·재개 반복 부하 시험 |
 | TBD-026 ◆ | `0x81`은 Port별 256개 불변 Snapshot FIFO와 CAPL 10ms 단건 Dequeue Polling을 사용하며 Overflow는 oldest-drop으로 처리한다. | 배열 출력 Buffer, Queue Overflow 및 10ms Polling 시험 |
 | TBD-027 ◆ | `0x80` Pending은 Rule별 최신 Generation 한 개로 병합하고 지속 Rule Cursor로 처리하며 과거 Cycle을 Catch-up 재생하지 않는다. | 200 Rule, 두 가상 채널 및 `0x81` Burst 공정성 시험 |
+| TBD-031 ◆ | CSV, CAPL API, DLL, RTU PDU 및 CAN Header는 동일한 16bit 직접 Address를 사용한다. `40000`은 그대로 `40000`이며 Function Code 기반 변환과 `±1` 보정을 하지 않는다. | Address `0`, `40000`, `65535` 및 Address+Quantity 경계 시험 |
+| TBD-019 ◆ | 외부 `0x03/0x04` Quantity는 1~125, 외부 `0x10`은 1~123, `ModbusRule.csv` Rule Quantity는 1~125로 제한한다. 초과 Quantity는 `0x03`, Address 범위 초과는 `0x02` Exception으로 처리한다. | Function별 경계값, Byte Count 불일치 및 최대 33개 CAN Message 시험 |
+| TBD-014 ◆ | IEEE Float/Double은 Decode한 실수값 자체를 물리값으로 사용한다. Init/Write 값은 그대로 IEEE 형식으로 Encode하고 Read 값은 그대로 반환하며 CSV의 Scale/Offset은 `1/0`만 허용한다. | Float 32bit, Double 64bit의 양수·음수·소수 및 잘못된 Size/Scale/Offset 시험 |
+| TBD-015 ◆ | 모든 다중 Register 값은 낮은 Address부터 최상위 16bit Word를 저장하는 고정 `HighWordFirst`를 사용하고 암묵적인 Word Swap을 하지 않는다. 1차 CSV에는 `Word Order` 칼럼을 추가하지 않는다. | Float 2 Word와 Double 4 Word의 Address별 Raw 값 및 RTU 전송 순서 시험 |
 
 ### 12.2 Plan 확정 전 명시적 확인이 필요한 사항
 
@@ -678,25 +734,21 @@
 | TBD-005 ★ | Disconnect 후 재연결 시 Register 값 유지 여부 | Disconnect/Connect는 현재값을 유지하고 Refresh 또는 명시적 Reset만 Init Value를 다시 적용 | 런타임 데이터 보존 |
 | TBD-006 ★ | ReadSwitch가 `0x80`만 제어할지 `0x81`까지 제어할지 | 전체 CAN Monitoring Master Switch로 사용하여 `0x80`과 `0x81` 출력을 모두 제어 | Monitoring 데이터 누락 |
 | TBD-007 ★ | ReadSwitch 적용 범위 | ReadSwitch는 전체 공통 1개, 개별 Rule은 ReadOption으로 제어 | CAPL UI와 상태 구조 |
-| TBD-014 ★ | IEEE Float/Double에 Scale과 Offset 적용 여부 | IEEE 값을 Decode한 뒤 다른 타입과 동일하게 `Physical = Raw × Scale + Offset` 적용 | Signal 물리값 호환성 |
-| TBD-015 ★ | IEEE Float/Double의 Byte Order와 Word Order | DBC Intel/Motorola 전체 Bit Ordering만 적용하고 암묵적 Modbus Word Swap은 하지 않음; 필요 시 별도 칼럼 추가 | CSV 스키마, 데이터 손상 위험 |
 | TBD-017 ★ | Port별 Serial Configuration 전체 항목 | Baud Rate, Data Bits, Parity, Stop Bits, Flow Control, Response/Inter-frame Timeout을 Port별 명시 | Port 설정 API, RTU 안정성 |
 | TBD-018 ★ | Modbus Broadcast Slave ID `0` 지원 여부 | 1차 범위에서는 지원하지 않음 | 무응답 Broadcast Write 동작 |
-| TBD-019 ★ | Function별 Quantity 제한 | Modbus 표준에 따라 `0x03/0x04`는 1~125, `0x10`은 1~123 Register | 프로토콜 호환성, Buffer 크기 |
 | TBD-020 ★ | CSV 경로 입력 단위 | `Main.can`이 공통 설정 디렉터리 하나를 전달하고 세 파일명은 고정 | 공개 CSV 설정 API |
 | TBD-021 ★◆ | CSV 상대경로 기준과 문자열 인코딩 | CAPL에서 절대경로로 변환한 후 DLL에 전달하고 CANalyzer 9.x `char[]` 인코딩을 최소 시험으로 확정 | 한글 경로, 파일 로딩 호환성 |
 | TBD-022 ★ | Refresh 직후 Snapshot 발생 여부 | Disconnect 상태의 Refresh에서는 송출하지 않고 다음 Monitoring 시작 시 Init Snapshot 생성 | 초기 CAN 출력 시점 |
 | TBD-023 ★ | ReadSwitch OFF 중 발생한 `0x81` 처리 | 변경값은 Register에 반영하되 Snapshot은 Queue에 쌓지 않고 Suppressed Count만 기록 | 의도적 Monitoring 데이터 누락 |
 | TBD-024 ★ | Overload 해제 후 Snapshot 복구 방식 | 오래된 `0x80`은 재생하지 않고 `0x81` FIFO만 예산 안에서 처리한 뒤 최신 Periodic 상태로 복귀 | 재개 직후 부하, 데이터 최신성 |
-| TBD-025 ★ | 공통 오류 코드, 상세 오류 조회 및 로그 출력 위치 | 음수 상태 코드 + Context별 상세 오류 조회 + CAPL Write Window/System Variable 진단 | 공개 오류 API, 운영 진단 |
+| TBD-025 ★ | 공통 오류 코드, 상세 오류 조회 및 로그 출력 위치 | DLL 함수는 오류 코드를 반환하고 동적 Context는 별도 조회하며 CAPL Core가 Write Window에 출력한다. 코드만으로 파일·행·Signal을 표현할 수 없으므로 상세 Context 전달 형태는 CAPL DLL ABI 확인 후 확정 | 공개 오류 API, 운영 진단 |
 | TBD-028 ★ | 범용 Register Read 공개 API 유지 여부 | `M485E_Core_ReadRegisters(..., OutData[])`를 유지하고 Panel 전용 Wrapper만 별도로 숨김 | 공개 CAPL API |
 | TBD-029 ★◆ | Performance Monitor가 비활성화된 경우 | RTU는 시작하되 CAN Monitoring 시작은 오류로 거부 | 보호 기능 부재 시 안정성 |
-| TBD-031 ★ | CSV/API/CAN Header의 Register Address 기준 | Modbus PDU와 동일한 0-based Address를 그대로 사용하고 `3xxxx/4xxxx` 표기 변환은 하지 않음 | 모든 Address 해석 |
-| TBD-032 ★ | `Length`, `Start Bit`, `Size` 단위와 Bit Numbering | Length는 Byte 단위 Signal Container, Start Bit/Size는 DBC Intel/Motorola 규칙으로 해석 | Signal Packing, CSV 스키마 |
+| TBD-032 ★ | `Length`, `Start Bit`, `Size` 단위와 Register 경계 규칙 | 확정: Length는 Classic CAN Payload에 맞춘 2/4/6/8Byte, Start Bit은 HighWordFirst Frame 전체 값의 0-based LSB0이며 Windows 계산기식 Bit 번호를 사용한다. Bit 0~15는 가장 높은 Address의 최하위 Word다. `Start Bit + Size <= Length × 8`을 행 단위 검사하고 같은 `Index + Address + Length`만 Frame을 공유하며 다른 Frame의 Register 범위 겹침은 금지한다. 미확정: Register 경계를 넘는 다중 Byte Signal의 LittleEndian 배치 | Signal Packing, CSV 스키마 |
 | TBD-033 ★ | `Init Value`가 Raw 값인지 Physical 값인지와 초기화 순서 | Physical 값으로 해석해 Signal 변환 후 Register에 기록하고 겹치는 Bit 초기값 충돌은 오류 처리 | 초기 Register 데이터 |
 | TBD-034 ★ | Default Reset의 공개 API, 대상 범위 및 실행 중 허용 여부 | Device Index 단위 Reset을 제공하고 Connected 상태에서도 원자적으로 Init Value를 적용한 뒤 SourceType `0x03` 생성 | 대량 데이터 변경, Snapshot 부하 |
 | TBD-035 ★ | Init Snapshot 발생 조건과 대상 Rule | Connect와 ReadSwitch가 모두 활성화되는 최초 시점에 활성 ReadOption Rule만 SourceType `0x04`로 송출 | 최초 출력량, Monitoring 의미 |
-| TBD-036 ★ | Rule 및 Signal Map 중복·겹침 검증 | `Index + Rule_ID` 중복 금지, Rule 겹침은 허용, 동일 Index의 Signal Bit 영역 중복은 오류 | CAN ID 충돌, Write Trigger 중복 |
+| TBD-036 ★ | Rule 및 Signal Map 중복·겹침 검증 | Signal 확정: 동일 `Index + Address + Length` Frame 공유만 허용하고 다른 Frame의 Register 범위 겹침과 동일 Frame 내부 Signal Bit 겹침은 오류. Rule 제안: `Index + Rule_ID` 중복 금지, Rule Address 범위 겹침은 허용 | CAN ID 충돌, Write Trigger 중복 |
 | TBD-037 ★ | Min/Max, 정수 반올림, Scale 0, NaN/Infinity 처리 | Min/Max는 Write와 Init에 강제하고 정수 Raw 변환은 최근접 반올림, Scale 0과 NaN/Infinity는 거부 | Signal 변환 결과 |
 | TBD-038 ★ | 두 Port 중 하나만 Open 실패했을 때 Connect 상태 | 전체 Connect를 실패시키고 이미 열린 Port도 닫아 일관된 Disconnected 상태 유지 | 부분 연결, Refresh 안전성 |
 | TBD-039 ★◆ | 정량적인 RTU 응답시간과 Monitoring 지연 목표 | RTU는 설정 Timeout 안에 응답하고 정상 부하에서는 기존 10ms/1,000ms Deadline을 만족하도록 실측 후 수치 확정 | 성능 인수 기준 |
@@ -710,6 +762,7 @@
 | TBD-011 ◇ | RS-485 Port와 가상 CAN 채널 번호의 관리 위치 | `Main.can`의 Port-to-Channel 상수 배열로 관리하고 CSV 스키마는 변경하지 않음 |
 | TBD-016 ◇ | SignalName 대소문자 구분 및 Index 내 중복 | 대소문자를 구분하는 정확 일치 사용, 동일 Index 내 중복 금지 |
 | TBD-042 ◇ | CSV Header·숫자·빈 Cell·Quote·BOM 처리 규칙 | Header는 명세와 정확 일치, 숫자는 Decimal과 `0x` Hex 허용, RFC 4180 Quote와 UTF-8 BOM을 허용하고 필수 Cell 공백은 오류 처리 |
+| TBD-043 ◇ | 오류 코드 숫자 범위와 기능 영역별 할당 | 전체 오류 목록과 CAPL DLL 반환 타입을 확정한 뒤 CSV, Lifecycle, Serial/RTU, Register/Signal, Monitoring 영역별 범위를 배정 |
 
 ### 12.4 구현·시험 단계에서 확정할 수치
 
@@ -732,12 +785,12 @@
 
 | 순서 | 결정 묶음 | 관련 항목 |
 | ---: | --- | --- |
-| 1 | Modbus Address, Quantity와 Signal Raw/Physical 해석 | `TBD-014`, `TBD-015`, `TBD-019`, `TBD-031`~`037`, `TBD-041`~`042` |
-| 2 | CAPL/DLL 공개 API, CSV/Port 설정 및 오류 계약 | `TBD-002`, `TBD-017`, `TBD-020`, `TBD-021`, `TBD-025`, `TBD-028` |
+| 1 | Signal Raw/Physical 해석 | `TBD-032`~`037`, `TBD-041`~`042` |
+| 2 | CAPL/DLL 공개 API, CSV/Port 설정 및 오류 계약 | `TBD-002`, `TBD-017`, `TBD-020`, `TBD-021`, `TBD-025`, `TBD-028`, `TBD-043` |
 | 3 | Connect/Reset/Init, ReadSwitch와 데이터 보존 정책 | `TBD-005`~`007`, `TBD-022`~`024`, `TBD-029`, `TBD-034`, `TBD-035`, `TBD-038`, `TBD-040` |
 | 4 | CANalyzer 9.x SP8 ABI와 정량 부하 검증 | `TBD-001`, `TBD-003`, `TBD-004`, `TBD-012`, `TBD-026`, `TBD-027`, `TBD-030`, `TBD-039` |
 
-검토 기준은 Modbus Organization의 [MODBUS Application Protocol Specification V1.1b3](https://www.modbus.org/file/secure/modbusprotocolspecification.pdf)과 CANalyzer 공식 도움말이다. Modbus PDU Register Address는 0-based이며, 표준 최대 Quantity는 `0x03/0x04` 125개, `0x10` 123개다.
+검토 기준은 Modbus Organization의 [MODBUS Application Protocol Specification V1.1b3](https://www.modbus.org/file/secure/modbusprotocolspecification.pdf)과 CANalyzer 공식 도움말이다. 프로젝트의 CSV Address는 별도 Reference Number 변환 없이 PDU Starting Address 필드에 직접 사용한다. 표준 최대 Quantity는 `0x03/0x04` 125개, `0x10` 123개다.
 
 ## 13. 요구사항 간 충돌
 
@@ -779,7 +832,7 @@
 | ID | 충돌 또는 위험 |
 | --- | --- |
 | RISK-001 | 공개 CAPL/DLL API가 아직 확정되지 않아 구현 후 함수명·파라미터 변경 시 CAPL Core와 Panel을 함께 수정해야 할 위험이 있다. `TBD-002`, `TBD-025`, `TBD-028`에서 추적한다. |
-| RISK-002 | IEEE Byte/Word Order, Signal Bit Numbering 및 Init Value 의미가 확정되지 않으면 정상적으로 보이는 값도 잘못된 Register Raw 값으로 변환될 수 있다. `TBD-014`, `TBD-015`, `TBD-032`, `TBD-033`, `TBD-037`에서 추적한다. |
+| RISK-002 | Signal Byte/Bit Ordering 및 Signed/Unsigned Init Value 의미가 확정되지 않으면 정상적으로 보이는 값도 잘못된 Register Raw 값으로 변환될 수 있다. `TBD-032`, `TBD-033`, `TBD-037`에서 추적한다. IEEE Float/Double의 직접 물리값 규칙과 고정 HighWordFirst는 `TBD-014~015`에서 확정했다. |
 | RISK-003 | ReadSwitch OFF와 Overload 정지 중 Snapshot 보관 정책에 따라 의도적인 Monitoring 데이터 누락 또는 재개 시 Burst가 발생할 수 있다. `TBD-006`, `TBD-023`, `TBD-024`에서 추적한다. |
 | RISK-004 | 최대 200 Rule과 `0x81` Burst 조건의 안전 처리예산이 CANalyzer 9.x SP8 x86에서 아직 측정되지 않았다. `TBD-027`, `TBD-030`, `TBD-039`에서 추적한다. |
 | RISK-005 | 두 COM Port 중 하나의 Open 실패, Port 설정 오류 또는 Timeout 정책이 미확정이라 부분 연결 및 Refresh 가능 상태가 불일치할 수 있다. `TBD-017`, `TBD-038`에서 추적한다. |
