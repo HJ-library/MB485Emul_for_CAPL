@@ -163,7 +163,7 @@
 | FR-CAN-023 | CAPL Monitoring Dispatch Timer는 Pending Rule을 10ms 간격으로 분산하여 Rule별로 DLL에 Snapshot을 요청한다. |
 | FR-CAN-024 | DLL은 `0x80` Periodic Monitoring을 Scheduling하지 않고 CAPL이 요청한 `Index`와 `Rule_ID`의 현재 Register Snapshot을 동기적으로 반환한다. |
 | FR-CAN-025 | CAPL은 DLL이 반환한 Snapshot을 Header 및 Data CAN Message로 변환하여 출력한다. |
-| FR-CAN-026 | ReadOption Checkbox 변경은 즉시 DLL 요청이나 CAN 재전송을 발생시키지 않고 다음 Monitoring Cycle의 Pending Rule 목록부터 반영한다. |
+| FR-CAN-026 | ReadOption Checkbox 변경은 즉시 DLL 요청이나 CAN 재전송을 발생시키지 않고 다음 Monitoring Cycle의 최신 Pending 상태부터 반영한다. |
 | FR-CAN-027 | 여러 ReadOption Checkbox가 동시에 변경되더라도 최종 선택 상태를 한 번 종합하여 적용하며 변경 개수만큼 중복 재전송하지 않는다. |
 | FR-CAN-028 | 하나의 Rule Snapshot의 Data Message 수는 `ceil(Quantity / 4)`이며 총 Message 수는 Header 1개를 포함한 `1 + ceil(Quantity / 4)`이다. |
 | FR-CAN-029 | RTU Write, CAPL Direct Write, Default Reset 또는 Init 처리로 값이 변경되면 DLL은 영향받은 Rule별 변경 당시 Snapshot을 해당 Port의 Change Snapshot Queue에 적재한다. |
@@ -521,7 +521,7 @@
 | ID | 내용 |
 | --- | --- |
 | PROP-LOG-001 | CSV 로딩 파일명, 행 번호, 칼럼명과 오류 원인을 함께 제공한다. |
-| PROP-LOG-002 | Connect, Disconnect, Refresh, Monitoring Start/Stop과 자동 부하 정지·복구를 상태 로그로 기록한다. |
+| PROP-LOG-002 | Connect, Disconnect, Refresh, Monitoring Start/Stop과 자동 부하 정지·수동 재개를 상태 로그로 기록한다. |
 | PROP-LOG-003 | Port, Slave ID, Device Index를 오류 로그에 함께 표시한다. |
 
 ## 9. 성능 요구사항
@@ -529,7 +529,7 @@
 | ID | 요구사항 |
 | --- | --- |
 | PERF-001 | `0x80` 주기 Monitoring은 CAPL에 고정된 1,000ms 공통 Cycle을 사용한다. |
-| PERF-002 | 변경 Trigger Snapshot은 주기 송출 시점까지 지연하지 않고 즉시 처리한다. |
+| PERF-002 | 정상 부하 상태에서 변경 Trigger Snapshot은 주기 송출 시점까지 지연하지 않고 다음 Output Pump Tick부터 처리한다. |
 | PERF-003 | 두 COM Port의 여러 Slave 요청을 Index 단위로 구분해 처리할 수 있어야 한다. |
 | PERF-004 | `M485E_ApplicationQueueLoad`가 90% 이상이면 단계적으로 Monitoring 송출을 정지하여 CANalyzer 내부 Queue와 분석 처리를 보호해야 한다. |
 | PERF-005 | Monitoring 부하 보호가 RTU 요청 처리 성능을 중단시키면 안 된다. |
@@ -541,7 +541,7 @@
 | PERF-011 | Periodic Pending은 활성 Rule당 최대 한 개로 제한하여 최대 200개를 초과하지 않으며 Cycle 지연이 발생해도 Historical Pending Backlog가 증가하면 안 된다. |
 | PERF-012 | 정상 지원 부하에서는 모든 활성 Rule이 각 1,000ms Generation 안에 한 번씩 처리되어 Missed Periodic Sample이 발생하지 않아야 한다. |
 
-정량적인 RTU 응답 시간과 Snapshot 최대 지연 시간은 아직 확정되지 않았다.
+정량적인 RTU 응답 시간과 Snapshot 최대 지연 시간은 `TBD-039`, Output Pump 처리 예산은 `TBD-030`에서 추적한다.
 
 ## 10. 호환성 요구사항
 
@@ -605,7 +605,7 @@
 | AC-022 | COMP-002 | 산출 DLL이 Win32/x86 바이너리로 빌드되고 CANalyzer 9.x에서 로딩된다. |
 | AC-023 | PROP-IF-DLL-001 | CANalyzer 9.x CAPL에서 `#pragma library`로 x86 DLL을 로딩하고 Export Table에 등록된 함수를 컴파일 및 호출할 수 있다. |
 | AC-024 | FACT-DLL-006 | CAPL `word[]`를 전달하는 API가 CAPL Wrapper에서 계산한 배열 길이를 DLL에서 검증하고 범위를 벗어나 읽거나 쓰지 않는다. |
-| AC-025 | FR-CAN-022 | Cycle Timer 실행 시점의 최종 Checkbox 상태에서 ON인 ReadOption만 Pending 목록에 포함된다. |
+| AC-025 | FR-CAN-022 | Cycle Timer 실행 시점의 최종 Checkbox 상태에서 ON인 ReadOption만 최신 Pending 상태에 반영된다. |
 | AC-026 | FR-CAN-027 | 여러 Checkbox를 한 번에 변경해도 변경 이벤트 수만큼 즉시 Snapshot이 발생하지 않고 다음 Cycle에 최종 상태가 한 번 반영된다. |
 | AC-027 | DES-CAN-006, DES-CAN-014 | Pending 200개를 고정 2 Rule/Tick으로 처리하지 않고 Snapshot별 Frame 비용과 검증된 Tick별 Frame 및 실행시간 예산으로 분산한다. |
 | AC-028 | FR-CAN-024 | Periodic DLL API 호출 시 COM 통신을 기다리지 않고 현재 Register Snapshot이 반환된다. |
@@ -645,48 +645,99 @@
 
 ## 12. 미확정 사항
 
-`★`는 공개 API, 데이터 손실, 호환성, 안정성 등에 영향을 주므로 Plan 확정 전에 명시적 확인이 필요한 항목이다.
-`◆`는 CANalyzer 9.x 환경에서 실제 CAPL 컴파일 또는 로딩 검증이 필요한 항목이다.
+`★`는 공개 API, 데이터 손실, 데이터 해석, 호환성 또는 안정성에 영향을 주므로 Plan 확정 전에 사용자의 명시적 확인이 필요한 항목이다.
 
-### 12.1 조사로 해소된 항목
+`◆`는 방향은 확정되었지만 CANalyzer 9.x SP8 또는 실제 부하 환경에서 검증해야 하는 항목이다.
 
-| ID | 결론 | 남은 검증 |
+`◇`는 외부 동작을 바꾸지 않는 세부 설계값으로 설계 단계까지 미룰 수 있는 항목이다.
+
+### 12.1 확정되었고 검증만 남은 사항
+
+아래 항목은 다시 선택할 사항이 아니라 구현·시험에서 확인할 사항이다.
+
+| ID | 확정 내용 | 남은 검증 |
 | --- | --- | --- |
-| TBD-001 ★◆ | `#pragma library`로 라이브러리를 로딩하고 DLL은 Vector CAPL DLL Export Table을 제공한다. 두 방식은 함께 사용한다. | CANalyzer 9.x에서 x86 DLL 컴파일 및 로딩 확인 |
-| TBD-003 ★◆ | x86 함수는 `__stdcall`을 사용한다. 배열은 Export Table에 타입과 차원을 선언하고 C++에는 포인터로 전달하며, 문자열은 `char[]`로 전달할 수 있다. | CANalyzer 9.x에서 `word[]`와 `char[]` 최소 호출 시험 |
-| TBD-004 ★◆ | CAPL 공개 Write Wrapper는 네 개 논리 파라미터를 유지하고 실제 DLL API에는 `ArrayLength`를 포함한다. CAPL은 `elcount(Data)`를 전달하고 DLL이 `ArrayLength == Quantity`를 최종 검증한다. | CANalyzer 9.x에서 배열 파라미터의 `elcount()` 동작 확인 |
-| TBD-008 ★ | `0x80IIRRMM`과 `0x81IIRRMM`은 Vector 내부 Extended Flag가 포함된 표현이며 실제 29bit Arbitration ID는 각각 `0x00IIRRMM`, `0x01IIRRMM`이다. | 없음 |
-| TBD-009 | `ModbusRule.csv`에 Monitoring Cycle 칼럼을 추가하지 않고 CAPL 코드의 1,000ms 공통 Cycle을 사용한다. | 없음 |
-| TBD-010 | Cycle은 CSV, Panel 또는 DLL API의 런타임 입력값이 아니므로 100ms 미만 입력 보정 정책을 사용하지 않는다. CAPL 설계값은 1,000ms로 확정한다. | 없음 |
-| TBD-026 ★ | `0x81` 변경 Snapshot은 Port별 고정 용량 불변 Snapshot FIFO에 적재하고 CAPL 10ms Output Pump가 원자적 단건 Dequeue로 Polling한다. Queue Overflow는 oldest-drop으로 처리하되 RTU Write는 유지한다. | CANalyzer 9.x에서 10ms Polling, 배열 출력 Buffer 및 부하 시험 |
-| TBD-012 ★◆ | 가상 CAN에서는 물리 Bus Load를 사용하지 않고 CANalyzer Performance Monitor의 Simulation 및 Analysis Main Queue Load 중 큰 값을 전역 Application Queue Load로 사용한다. | CANalyzer 9.x SP8에서 Performance Monitor 활성화, System Variable Namespace 및 CAPL 접근 구문 확인 |
-| TBD-013 | Critical Overload는 자동 재개하지 않고 ReadSwitch OFF 후 ON 전환으로 Latch를 해제한다. | 실제 부하 시험에서 정지·재개 반복 여부 확인 |
-| TBD-027 ★ | Rule별 Periodic Pending은 최신 Generation 한 개로 병합하고 지속 Rule Cursor로 공정하게 처리한다. 처리하지 못한 과거 Cycle은 재생하지 않고 Missed Periodic Sample로 진단하며, 검증된 처리 예산을 초과한 새 ReadOption 집합은 원자적으로 거부한다. | CANalyzer 9.x SP8에서 200 Rule, 두 가상 채널, 대표 Quantity 및 `0x81` Burst 조건의 Deadline·공정성·처리예산 검증 |
+| TBD-001 ◆ | `#pragma library`로 x86 DLL을 로딩하고 DLL은 Vector CAPL DLL Export Table을 제공한다. | CANalyzer 9.x에서 x86 DLL 컴파일 및 로딩 |
+| TBD-003 ◆ | x86 Export는 `__stdcall`을 사용한다. 배열은 C++ Pointer로, 문자열은 `char[]`로 전달한다. | `word[]`, `double`, `char[]` 최소 호출 시험 |
+| TBD-004 ◆ | 공개 Write Wrapper는 네 개 논리 파라미터를 유지하고 Core가 `elcount(Data)`를 저수준 DLL API의 `ArrayLength`로 전달한다. | CANalyzer 9.x 배열 길이 전달 시험 |
+| TBD-008 | Vector 내부 Extended Flag 표현과 실제 29bit Arbitration ID를 분리한다. | 없음 |
+| TBD-009 | `ModbusRule.csv`에 Cycle 칼럼을 추가하지 않는다. | 없음 |
+| TBD-010 | CAPL 코드의 1,000ms 공통 Cycle을 사용한다. | 없음 |
+| TBD-012 ◆ | 가상 CAN의 물리 Bus Load 대신 Simulation/Analysis Main Queue Load 중 큰 값을 전역 Application Queue Load로 사용한다. | CANalyzer 9.x SP8 Namespace와 CAPL 접근 구문 |
+| TBD-013 ◆ | Critical Overload는 자동 재개하지 않고 ReadSwitch OFF 후 ON으로 Latch를 해제한다. | 정지·재개 반복 부하 시험 |
+| TBD-026 ◆ | `0x81`은 Port별 256개 불변 Snapshot FIFO와 CAPL 10ms 단건 Dequeue Polling을 사용하며 Overflow는 oldest-drop으로 처리한다. | 배열 출력 Buffer, Queue Overflow 및 10ms Polling 시험 |
+| TBD-027 ◆ | `0x80` Pending은 Rule별 최신 Generation 한 개로 병합하고 지속 Rule Cursor로 처리하며 과거 Cycle을 Catch-up 재생하지 않는다. | 200 Rule, 두 가상 채널 및 `0x81` Burst 공정성 시험 |
 
-### 12.2 계속 검토할 항목
+### 12.2 Plan 확정 전 명시적 확인이 필요한 사항
 
-| ID | 미확정 내용 |
-| --- | --- |
-| TBD-002 ★◆ | DLL Export 함수의 정확한 이름, 파라미터 타입 및 반환 규칙. x86 호출 규약은 `__stdcall`로 확인되었으나 프로젝트 공개 API 명세는 확정이 필요하다. |
-| TBD-005 ★ | Disconnect 후 재연결할 때 현재 Register 값을 유지할지 Init Value로 다시 초기화할지 |
-| TBD-006 ★ | ReadSwitch가 `0x80` 주기 메시지만 제어할지 `0x81` Snapshot까지 제어할지 |
-| TBD-007 | ReadSwitch가 전체 공통인지 Port, Index 또는 Rule별인지 |
-| TBD-011 | RS-485 Port와 가상 CAN 채널 번호를 어느 설정에서 관리할지 |
-| TBD-014 | IEEE Float/Double에 Scale과 Offset을 추가 적용할지 |
-| TBD-015 ★ | IEEE Float/Double의 Byte Order 및 Word Order 조합 규칙 |
-| TBD-016 | SignalName 대소문자 구분 및 Index 내 중복 허용 여부 |
-| TBD-017 | COM Port별 Parity, Flow Control, Timeout 등 전체 설정 항목 |
-| TBD-018 | Modbus Broadcast Slave ID `0` 지원 여부 |
-| TBD-019 | Function별 최대 Quantity와 RTU 응답 제한 |
-| TBD-020 | CSV 세 파일을 하나의 공통 디렉터리로 받을지 각각의 경로로 받을지 |
-| TBD-021 | CSV 경로의 상대경로 기준과 문자열 인코딩 |
-| TBD-022 | Refresh 완료 후 별도 Snapshot을 생성할지 다음 Connect의 Init Snapshot만 사용할지 |
-| TBD-023 | ReadSwitch OFF 동안 발생한 변경 Snapshot을 폐기할지 보관할지 |
-| TBD-024 | 부하 보호 해제 후 현재 상태 Snapshot을 다시 송출할지 |
-| TBD-025 | 정확한 오류 코드 체계와 로그 출력 위치 |
-| TBD-028 ★ | 범용 `M485E_Core_ReadRegisters(..., OutData[])`를 최종 공개 CAPL API로 유지할지, Manual Panel용 Wrapper가 전역 Buffer/System Variable을 내부 관리하도록 추가로 분리할지 재검토한다. 현재 기준안은 `OutData[]` 방식이다. |
-| TBD-029 ★◆ | CANalyzer Performance Monitor가 비활성화되어 Main Queue Load System Variable을 사용할 수 없을 때 Monitoring 시작을 거부할지, 검증된 Frame/시간 예산만으로 제한 운전할지 |
-| TBD-030 ◆ | `MaxFramesPerTick`과 Output Pump 실행시간 예산의 측정 방법 및 CANalyzer 9.x SP8 부하 시험 기준값 |
+다음 항목은 공개 인터페이스, 데이터 손실 또는 데이터 해석에 영향을 주므로 설계 단계로 넘기기 전에 명시적으로 결정해야 한다.
+
+| ID | 결정할 내용 | 추천 기본안 | 주요 영향 |
+| --- | --- | --- | --- |
+| TBD-002 ★◆ | 전체 CAPL 공개 API와 저수준 DLL Export의 함수명, 파라미터 타입, 출력 Buffer 및 반환 규칙 | CAPL은 `M485E_Core_`, DLL은 `M485E_Dll_`; 상태 코드를 반환하고 데이터는 caller-owned 출력 Buffer로 전달 | 공개 ABI, CANalyzer 9.x 컴파일 |
+| TBD-005 ★ | Disconnect 후 재연결 시 Register 값 유지 여부 | Disconnect/Connect는 현재값을 유지하고 Refresh 또는 명시적 Reset만 Init Value를 다시 적용 | 런타임 데이터 보존 |
+| TBD-006 ★ | ReadSwitch가 `0x80`만 제어할지 `0x81`까지 제어할지 | 전체 CAN Monitoring Master Switch로 사용하여 `0x80`과 `0x81` 출력을 모두 제어 | Monitoring 데이터 누락 |
+| TBD-007 ★ | ReadSwitch 적용 범위 | ReadSwitch는 전체 공통 1개, 개별 Rule은 ReadOption으로 제어 | CAPL UI와 상태 구조 |
+| TBD-014 ★ | IEEE Float/Double에 Scale과 Offset 적용 여부 | IEEE 값을 Decode한 뒤 다른 타입과 동일하게 `Physical = Raw × Scale + Offset` 적용 | Signal 물리값 호환성 |
+| TBD-015 ★ | IEEE Float/Double의 Byte Order와 Word Order | DBC Intel/Motorola 전체 Bit Ordering만 적용하고 암묵적 Modbus Word Swap은 하지 않음; 필요 시 별도 칼럼 추가 | CSV 스키마, 데이터 손상 위험 |
+| TBD-017 ★ | Port별 Serial Configuration 전체 항목 | Baud Rate, Data Bits, Parity, Stop Bits, Flow Control, Response/Inter-frame Timeout을 Port별 명시 | Port 설정 API, RTU 안정성 |
+| TBD-018 ★ | Modbus Broadcast Slave ID `0` 지원 여부 | 1차 범위에서는 지원하지 않음 | 무응답 Broadcast Write 동작 |
+| TBD-019 ★ | Function별 Quantity 제한 | Modbus 표준에 따라 `0x03/0x04`는 1~125, `0x10`은 1~123 Register | 프로토콜 호환성, Buffer 크기 |
+| TBD-020 ★ | CSV 경로 입력 단위 | `Main.can`이 공통 설정 디렉터리 하나를 전달하고 세 파일명은 고정 | 공개 CSV 설정 API |
+| TBD-021 ★◆ | CSV 상대경로 기준과 문자열 인코딩 | CAPL에서 절대경로로 변환한 후 DLL에 전달하고 CANalyzer 9.x `char[]` 인코딩을 최소 시험으로 확정 | 한글 경로, 파일 로딩 호환성 |
+| TBD-022 ★ | Refresh 직후 Snapshot 발생 여부 | Disconnect 상태의 Refresh에서는 송출하지 않고 다음 Monitoring 시작 시 Init Snapshot 생성 | 초기 CAN 출력 시점 |
+| TBD-023 ★ | ReadSwitch OFF 중 발생한 `0x81` 처리 | 변경값은 Register에 반영하되 Snapshot은 Queue에 쌓지 않고 Suppressed Count만 기록 | 의도적 Monitoring 데이터 누락 |
+| TBD-024 ★ | Overload 해제 후 Snapshot 복구 방식 | 오래된 `0x80`은 재생하지 않고 `0x81` FIFO만 예산 안에서 처리한 뒤 최신 Periodic 상태로 복귀 | 재개 직후 부하, 데이터 최신성 |
+| TBD-025 ★ | 공통 오류 코드, 상세 오류 조회 및 로그 출력 위치 | 음수 상태 코드 + Context별 상세 오류 조회 + CAPL Write Window/System Variable 진단 | 공개 오류 API, 운영 진단 |
+| TBD-028 ★ | 범용 Register Read 공개 API 유지 여부 | `M485E_Core_ReadRegisters(..., OutData[])`를 유지하고 Panel 전용 Wrapper만 별도로 숨김 | 공개 CAPL API |
+| TBD-029 ★◆ | Performance Monitor가 비활성화된 경우 | RTU는 시작하되 CAN Monitoring 시작은 오류로 거부 | 보호 기능 부재 시 안정성 |
+| TBD-031 ★ | CSV/API/CAN Header의 Register Address 기준 | Modbus PDU와 동일한 0-based Address를 그대로 사용하고 `3xxxx/4xxxx` 표기 변환은 하지 않음 | 모든 Address 해석 |
+| TBD-032 ★ | `Length`, `Start Bit`, `Size` 단위와 Bit Numbering | Length는 Byte 단위 Signal Container, Start Bit/Size는 DBC Intel/Motorola 규칙으로 해석 | Signal Packing, CSV 스키마 |
+| TBD-033 ★ | `Init Value`가 Raw 값인지 Physical 값인지와 초기화 순서 | Physical 값으로 해석해 Signal 변환 후 Register에 기록하고 겹치는 Bit 초기값 충돌은 오류 처리 | 초기 Register 데이터 |
+| TBD-034 ★ | Default Reset의 공개 API, 대상 범위 및 실행 중 허용 여부 | Device Index 단위 Reset을 제공하고 Connected 상태에서도 원자적으로 Init Value를 적용한 뒤 SourceType `0x03` 생성 | 대량 데이터 변경, Snapshot 부하 |
+| TBD-035 ★ | Init Snapshot 발생 조건과 대상 Rule | Connect와 ReadSwitch가 모두 활성화되는 최초 시점에 활성 ReadOption Rule만 SourceType `0x04`로 송출 | 최초 출력량, Monitoring 의미 |
+| TBD-036 ★ | Rule 및 Signal Map 중복·겹침 검증 | `Index + Rule_ID` 중복 금지, Rule 겹침은 허용, 동일 Index의 Signal Bit 영역 중복은 오류 | CAN ID 충돌, Write Trigger 중복 |
+| TBD-037 ★ | Min/Max, 정수 반올림, Scale 0, NaN/Infinity 처리 | Min/Max는 Write와 Init에 강제하고 정수 Raw 변환은 최근접 반올림, Scale 0과 NaN/Infinity는 거부 | Signal 변환 결과 |
+| TBD-038 ★ | 두 Port 중 하나만 Open 실패했을 때 Connect 상태 | 전체 Connect를 실패시키고 이미 열린 Port도 닫아 일관된 Disconnected 상태 유지 | 부분 연결, Refresh 안전성 |
+| TBD-039 ★◆ | 정량적인 RTU 응답시간과 Monitoring 지연 목표 | RTU는 설정 Timeout 안에 응답하고 정상 부하에서는 기존 10ms/1,000ms Deadline을 만족하도록 실측 후 수치 확정 | 성능 인수 기준 |
+| TBD-040 ★ | 85% Strong Warning에서 ReadOption 변경을 보류하는 방식 | 숨은 Pending 변경으로 보관하지 않고 적용 요청을 원자적으로 거부하며 사용자가 다시 요청 | UI 상태와 Applied 상태 일치 |
+| TBD-041 ★ | Value Table의 CSV Cell 문법과 런타임 사용 범위 | DBC와 동등한 Raw-to-Label 쌍으로 Parsing·검증하되 Register/Signal API는 숫자값을 유지하고 Label 조회는 별도 API로 분리 | CSV 호환성, 공개 API 범위 |
+
+### 12.3 설계 단계까지 미룰 수 있는 사항
+
+| ID | 미확정 내용 | 추천 기본안 |
+| --- | --- | --- |
+| TBD-011 ◇ | RS-485 Port와 가상 CAN 채널 번호의 관리 위치 | `Main.can`의 Port-to-Channel 상수 배열로 관리하고 CSV 스키마는 변경하지 않음 |
+| TBD-016 ◇ | SignalName 대소문자 구분 및 Index 내 중복 | 대소문자를 구분하는 정확 일치 사용, 동일 Index 내 중복 금지 |
+| TBD-042 ◇ | CSV Header·숫자·빈 Cell·Quote·BOM 처리 규칙 | Header는 명세와 정확 일치, 숫자는 Decimal과 `0x` Hex 허용, RFC 4180 Quote와 UTF-8 BOM을 허용하고 필수 Cell 공백은 오류 처리 |
+
+### 12.4 구현·시험 단계에서 확정할 수치
+
+| ID | 측정 항목 | 확정 방법 |
+| --- | --- | --- |
+| TBD-030 ◆ | `MaxFramesPerTick`, Output Pump 실행시간 예산, 검증된 Cycle Frame 예산 | CANalyzer 9.x SP8 x86, 가상 채널 2개, 실제 Trace/Panel, 200 Rule 및 대표 `0x81` Burst 부하 시험 |
+
+### 12.5 기존 제안 상태 재분류
+
+| 제안 ID | 상태 | 추적 위치 |
+| --- | --- | --- |
+| `PROP-NFR-001`, `PROP-NFR-002` | 요구사항에 이미 반영됨 | `FR-CSV-004`~`007`, `ERR-007` |
+| `PROP-IF-DLL-001`, `PROP-IF-DLL-002` | 방향 확정, CANalyzer 9.x 검증 대기 | `TBD-001`~`004` |
+| `PROP-IF-DLL-003` | x64 후속 범위 | `FUT-001`~`005` |
+| `PROP-IF-001`, `PROP-ERR-002`, `PROP-IF-003` | 공개 API 확정에 포함 | `TBD-002`, `TBD-025` |
+| `PROP-ERR-001`, `PROP-ERR-003` | 요구사항에 이미 반영됨 | `FR-RTU-013`~`016`, `IF-REG-006`~`009` |
+| `PROP-NFR-003`, `PROP-LOG-001`~`003` | 설계 단계 기본안 | 상태 머신 및 로그 설계 시 확정 |
+
+### 12.6 추천 결정 순서
+
+| 순서 | 결정 묶음 | 관련 항목 |
+| ---: | --- | --- |
+| 1 | Modbus Address, Quantity와 Signal Raw/Physical 해석 | `TBD-014`, `TBD-015`, `TBD-019`, `TBD-031`~`037`, `TBD-041`~`042` |
+| 2 | CAPL/DLL 공개 API, CSV/Port 설정 및 오류 계약 | `TBD-002`, `TBD-017`, `TBD-020`, `TBD-021`, `TBD-025`, `TBD-028` |
+| 3 | Connect/Reset/Init, ReadSwitch와 데이터 보존 정책 | `TBD-005`~`007`, `TBD-022`~`024`, `TBD-029`, `TBD-034`, `TBD-035`, `TBD-038`, `TBD-040` |
+| 4 | CANalyzer 9.x SP8 ABI와 정량 부하 검증 | `TBD-001`, `TBD-003`, `TBD-004`, `TBD-012`, `TBD-026`, `TBD-027`, `TBD-030`, `TBD-039` |
+
+검토 기준은 Modbus Organization의 [MODBUS Application Protocol Specification V1.1b3](https://www.modbus.org/file/secure/modbusprotocolspecification.pdf)과 CANalyzer 공식 도움말이다. Modbus PDU Register Address는 0-based이며, 표준 최대 Quantity는 `0x03/0x04` 125개, `0x10` 123개다.
 
 ## 13. 요구사항 간 충돌
 
@@ -727,12 +778,12 @@
 
 | ID | 충돌 또는 위험 |
 | --- | --- |
-| - | 현재 식별된 미해소 충돌은 없다. |
-
-### 제안
-
-| ID | 내용 |
-| --- | --- |
+| RISK-001 | 공개 CAPL/DLL API가 아직 확정되지 않아 구현 후 함수명·파라미터 변경 시 CAPL Core와 Panel을 함께 수정해야 할 위험이 있다. `TBD-002`, `TBD-025`, `TBD-028`에서 추적한다. |
+| RISK-002 | IEEE Byte/Word Order, Signal Bit Numbering 및 Init Value 의미가 확정되지 않으면 정상적으로 보이는 값도 잘못된 Register Raw 값으로 변환될 수 있다. `TBD-014`, `TBD-015`, `TBD-032`, `TBD-033`, `TBD-037`에서 추적한다. |
+| RISK-003 | ReadSwitch OFF와 Overload 정지 중 Snapshot 보관 정책에 따라 의도적인 Monitoring 데이터 누락 또는 재개 시 Burst가 발생할 수 있다. `TBD-006`, `TBD-023`, `TBD-024`에서 추적한다. |
+| RISK-004 | 최대 200 Rule과 `0x81` Burst 조건의 안전 처리예산이 CANalyzer 9.x SP8 x86에서 아직 측정되지 않았다. `TBD-027`, `TBD-030`, `TBD-039`에서 추적한다. |
+| RISK-005 | 두 COM Port 중 하나의 Open 실패, Port 설정 오류 또는 Timeout 정책이 미확정이라 부분 연결 및 Refresh 가능 상태가 불일치할 수 있다. `TBD-017`, `TBD-038`에서 추적한다. |
+| RISK-006 | 현재 저장소의 Prototype 코드·README·CAPL 예시는 신규 요구사항과 호환되지 않으며 구현 단계에서 혼재하면 잘못된 API와 Function Code가 다시 사용될 위험이 있다. `COMP-009`~`010`, `DOC-001`~`003`에 따라 교체한다. |
 
 ## 14. 범위에서 제외할 내용
 
