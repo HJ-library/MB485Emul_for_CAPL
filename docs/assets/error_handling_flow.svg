@@ -1,0 +1,39 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1400' height='820' viewBox='0 0 1400 820'>
+<defs><marker id='arrow' markerWidth='10' markerHeight='7' refX='9' refY='3.5' orient='auto'><polygon points='0 0, 10 3.5, 0 7' fill='#64748B'/></marker></defs>
+<rect width='1400' height='820' fill='#FFFFFF'/>
+<text x='700.0' y='42' text-anchor='middle' font-family='Arial' font-size='26' font-weight='700' fill='#1F4E79'>Error Handling Flow</text>
+<line x1='300' y1='200.0' x2='430' y2='200.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='295.0' y='176.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='365.0' y='192.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>snapshot</text>
+<line x1='300' y1='530.0' x2='430' y2='530.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='295.0' y='506.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='365.0' y='522.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>enqueue</text>
+<line x1='660' y1='200.0' x2='800' y2='360.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='660.0' y='256.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='730.0' y='272.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>query</text>
+<line x1='660' y1='530.0' x2='800' y2='360.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='660.0' y='421.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='730.0' y='437.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>poll</text>
+<line x1='1030' y1='360.0' x2='1130' y2='360.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='1010.0' y='336.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='1080.0' y='352.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>once</text>
+<rect x='70' y='150' width='230' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='185.0' y='188.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Synchronous API</text>
+<text x='185.0' y='213.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Failure</text>
+<rect x='430' y='150' width='230' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='545.0' y='188.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>LastSyncError</text>
+<text x='545.0' y='213.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>per Context</text>
+<rect x='70' y='480' width='230' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='185.0' y='518.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Worker / Queue</text>
+<text x='185.0' y='543.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Failure</text>
+<rect x='430' y='480' width='230' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='545.0' y='518.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Error Event FIFO</text>
+<text x='545.0' y='543.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>256 oldest-drop</text>
+<rect x='800' y='300' width='230' height='120' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='915.0' y='336.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>CAPL Core</text>
+<text x='915.0' y='361.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Code + Context</text>
+<text x='915.0' y='386.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Message</text>
+<rect x='1130' y='300' width='200' height='120' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='1230.0' y='348.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>CANalyzer</text>
+<text x='1230.0' y='373.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Write Window</text>
+</svg>

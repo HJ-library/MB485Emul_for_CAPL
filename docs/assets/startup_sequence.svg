@@ -1,0 +1,33 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1400' height='820' viewBox='0 0 1400 820'>
+<defs><marker id='arrow' markerWidth='10' markerHeight='7' refX='9' refY='3.5' orient='auto'><polygon points='0 0, 10 3.5, 0 7' fill='#64748B'/></marker></defs>
+<rect width='1400' height='820' fill='#FFFFFF'/>
+<text x='700.0' y='42' text-anchor='middle' font-family='Arial' font-size='26' font-weight='700' fill='#1F4E79'>Program Startup Sequence</text>
+<line x1='300' y1='225.0' x2='400' y2='225.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='280.0' y='201.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='350.0' y='217.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>API</text>
+<line x1='620' y1='225.0' x2='720' y2='225.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='600.0' y='201.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='670.0' y='217.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>command</text>
+<line x1='940' y1='225.0' x2='1040' y2='225.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='920.0' y='201.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='990.0' y='217.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>start</text>
+<line x1='300' y1='465.0' x2='400' y2='465.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<line x1='620' y1='465.0' x2='720' y2='465.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<line x1='940' y1='465.0' x2='1040' y2='465.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='80' y='180' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='190.0' y='225.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>CAPL Main</text>
+<rect x='400' y='180' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='510.0' y='225.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>M485E Core</text>
+<rect x='720' y='180' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='830.0' y='225.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Lifecycle Worker</text>
+<rect x='1040' y='180' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='1150.0' y='225.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Port Workers</text>
+<rect x='80' y='420' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='190.0' y='465.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>register + init</text>
+<rect x='400' y='420' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='510.0' y='465.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>paths + ports</text>
+<rect x='720' y='420' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='830.0' y='465.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>refresh + connect</text>
+<rect x='1040' y='420' width='220' height='90' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='1150.0' y='465.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>ready / Connected</text>
+</svg>

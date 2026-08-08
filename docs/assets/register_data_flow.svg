@@ -1,0 +1,36 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1400' height='820' viewBox='0 0 1400 820'>
+<defs><marker id='arrow' markerWidth='10' markerHeight='7' refX='9' refY='3.5' orient='auto'><polygon points='0 0, 10 3.5, 0 7' fill='#64748B'/></marker></defs>
+<rect width='1400' height='820' fill='#FFFFFF'/>
+<text x='700.0' y='42' text-anchor='middle' font-family='Arial' font-size='26' font-weight='700' fill='#1F4E79'>Register and Signal Data Flow</text>
+<line x1='290' y1='190.0' x2='500' y2='390.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='325.0' y='266.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='395.0' y='282.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>permissions</text>
+<line x1='290' y1='390.0' x2='500' y2='390.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='325.0' y='366.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='395.0' y='382.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>direct</text>
+<line x1='290' y1='590.0' x2='900' y2='560.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='525.0' y='551.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='595.0' y='567.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>physical</text>
+<line x1='900' y1='560.0' x2='780' y2='390.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='770.0' y='451.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='840.0' y='467.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>frame words</text>
+<line x1='780' y1='390.0' x2='930' y2='230.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
+<rect x='785.0' y='286.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
+<text x='855.0' y='302.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>changed rules</text>
+<rect x='70' y='140' width='220' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='180.0' y='190.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>RTU FC03/04/10</text>
+<rect x='70' y='340' width='220' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='180.0' y='390.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>CAPL Register API</text>
+<rect x='70' y='540' width='220' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='180.0' y='590.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>CAPL Signal API</text>
+<rect x='500' y='280' width='280' height='220' rx='14' fill='#D9EAF7' stroke='#2E75B6' stroke-width='2.5'/>
+<text x='640.0' y='366.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Register Service</text>
+<text x='640.0' y='391.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Shared uint16[65536]</text>
+<text x='640.0' y='416.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Allocation / FC Bitmaps</text>
+<rect x='900' y='500' width='240' height='120' rx='14' fill='#F8E8F8' stroke='#805AD5' stroke-width='2.5'/>
+<text x='1020.0' y='548.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Signal Codec</text>
+<text x='1020.0' y='573.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Physical ↔ Raw</text>
+<rect x='930' y='170' width='240' height='120' rx='14' fill='#E8F5E9' stroke='#2F855A' stroke-width='2.5'/>
+<text x='1050.0' y='218.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Snapshot Service</text>
+<text x='1050.0' y='243.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Periodic / Change</text>
+</svg>
