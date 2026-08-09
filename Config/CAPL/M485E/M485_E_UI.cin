@@ -17,17 +17,33 @@ variables
     word data[125];
   };
 
+  struct M485E_SignalRequest
+  {
+    long index;
+    char signalName[128];
+    float physicalValue;
+  };
+
   struct M485E_ManualReadRequest gM485E_LastReadRequest;
   long gM485E_LastReadValid;
   word gM485E_UIWordData[125];
   long gM485E_UILongData[125];
   long gM485E_ReadOptionValues[200];
-  char gM485E_UISignalName[128];
-  float gM485E_UIPhysicalValue;
+  struct M485E_SignalRequest gM485E_SignalRequest;
   msTimer tM485E_ManualAutoRead;
   msTimer tM485E_UISync;
   msTimer tM485E_LifecycleStatus;
   long gM485E_UILifecycleStatus[9];
+}
+
+void M485E_UI_LoadSignalRequest()
+{
+  gM485E_SignalRequest.index = @sysvar::M485E::SignalControl::Index;
+  sysGetVariableString(sysvar::M485E::SignalControl::SignalName,
+                       gM485E_SignalRequest.signalName,
+                       elcount(gM485E_SignalRequest.signalName));
+  gM485E_SignalRequest.physicalValue =
+      @sysvar::M485E::SignalControl::PhysicalValue;
 }
 
 long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
@@ -120,12 +136,13 @@ on sysvar_update sysvar::M485E::SignalControl::Read
 {
   long result;
   if (@this == 0) return;
-  sysGetVariableString(sysvar::M485E::SignalControl::SignalName,
-                       gM485E_UISignalName, elcount(gM485E_UISignalName));
-  result = M485E_Core_ReadSignal(@sysvar::M485E::SignalControl::Index,
-                                 gM485E_UISignalName, gM485E_UIPhysicalValue);
+  M485E_UI_LoadSignalRequest();
+  result = M485E_Core_ReadSignal(gM485E_SignalRequest.index,
+                                 gM485E_SignalRequest.signalName,
+                                 gM485E_SignalRequest.physicalValue);
   if (result == M485E_OK)
-    @sysvar::M485E::SignalControl::PhysicalValue = gM485E_UIPhysicalValue;
+    @sysvar::M485E::SignalControl::PhysicalValue =
+        gM485E_SignalRequest.physicalValue;
   @sysvar::M485E::SignalControl::ResultCode = result;
   M485E_Core_ReportSyncFailure("SignalRead", result);
   @this = 0;
@@ -135,11 +152,10 @@ on sysvar_update sysvar::M485E::SignalControl::Write
 {
   long result;
   if (@this == 0) return;
-  sysGetVariableString(sysvar::M485E::SignalControl::SignalName,
-                       gM485E_UISignalName, elcount(gM485E_UISignalName));
-  result = M485E_Core_WriteSignal(@sysvar::M485E::SignalControl::Index,
-                                  gM485E_UISignalName,
-                                  @sysvar::M485E::SignalControl::PhysicalValue);
+  M485E_UI_LoadSignalRequest();
+  result = M485E_Core_WriteSignal(gM485E_SignalRequest.index,
+                                  gM485E_SignalRequest.signalName,
+                                  gM485E_SignalRequest.physicalValue);
   @sysvar::M485E::SignalControl::ResultCode = result;
   M485E_Core_ReportSyncFailure("SignalWrite", result);
   @this = 0;
@@ -171,9 +187,11 @@ on timer tM485E_ManualAutoRead
 on timer tM485E_UISync
 {
   long index;
+  long readOptionCount;
   sysGetVariableLongArray(sysvar::M485E::Monitoring::Check_ReadOption,
                           gM485E_ReadOptionValues, elcount(gM485E_ReadOptionValues));
-  for (index = 0; index < gM485E_ReadOptionCount; index++)
+  readOptionCount = M485E_Monitoring_GetReadOptionCount();
+  for (index = 0; index < readOptionCount; index++)
     M485E_Monitoring_SetCandidate(index, gM485E_ReadOptionValues[index]);
   setTimer(tM485E_UISync, 100);
 }

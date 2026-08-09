@@ -49,11 +49,24 @@ Require-Match $monitoring 'M485E_MAX_FRAMES_PER_TICK\s*=\s*66' 'Monitoring frame
 Require-Match $monitoring 'M485E_MAX_CHANGE_FRAMES_PER_TICK\s*=\s*33' 'Change frame budget changed.'
 Require-Match $monitoring 'mkExtId\s*\(' 'Extended CAN ID conversion is missing.'
 Require-Match $monitoring 'gM485E_MonitoringMessage\.DLC\s*=\s*count\s*\*\s*2' 'Variable Data DLC contract is missing.'
-Require-Match $monitoring 'gM485E_ChangeStartPort' 'Two-Port round-robin state is missing.'
+Require-Match $monitoring 'struct\s+M485E_MonitoringState' `
+    'Monitoring scheduler state struct is missing.'
+Require-Match $monitoring 'gM485E_MonitoringState\.changeStartPort' `
+    'Two-Port round-robin state is missing.'
+Require-Match $monitoring 'M485E_Monitoring_GetReadOptionCount' `
+    'Monitoring ReadOption count accessor is missing.'
 
 Require-Match $ui 'AutoReadManual' 'Manual AutoRead adapter is missing.'
 Require-Match $ui 'M485E_Core_ReadSignal' 'Signal Read adapter is missing.'
 Require-Match $ui 'M485E_Core_WriteSignal' 'Signal Write adapter is missing.'
+Require-Match $ui 'struct\s+M485E_SignalRequest' 'Signal request struct is missing.'
+Require-Match $ui 'M485E_UI_LoadSignalRequest' 'Signal request loader is missing.'
+Require-Match $ui 'readOptionCount\s*=\s*M485E_Monitoring_GetReadOptionCount\s*\(' `
+    'UI must read the Monitoring ReadOption count through its accessor.'
+Require-Match $ui 'M485E_Core_ReadSignal\s*\(\s*gM485E_SignalRequest\.index,\s*gM485E_SignalRequest\.signalName,\s*gM485E_SignalRequest\.physicalValue\s*\)' `
+    'Signal Read must use the shared Signal request structure.'
+Require-Match $ui 'M485E_Core_WriteSignal\s*\(\s*gM485E_SignalRequest\.index,\s*gM485E_SignalRequest\.signalName,\s*gM485E_SignalRequest\.physicalValue\s*\)' `
+    'Signal Write must use the shared Signal request structure.'
 Require-Match $core 'M485E_Core_ReadSignal\s*\([^\)]*float&\s+outPhysicalValue\)' `
     'CAPL Signal Read wrapper must expose one caller-owned physical value by reference.'
 Require-Match $ui 'Check_ReadOption' 'ReadOption system variable adapter is missing.'

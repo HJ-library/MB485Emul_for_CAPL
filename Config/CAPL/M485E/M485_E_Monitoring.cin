@@ -12,6 +12,16 @@ variables
     long pendingGeneration;
   };
 
+  struct M485E_MonitoringState
+  {
+    long readOptionCount;
+    long generation;
+    long periodicCursor;
+    long changeStartPort;
+    long enabled;
+    long candidateDirty;
+  };
+
   const long M485E_MONITORING_CYCLE_MS = 1000;
   const long M485E_OUTPUT_PUMP_MS = 10;
   const long M485E_MAX_FRAMES_PER_TICK = 66;
@@ -19,12 +29,7 @@ variables
   const long M485E_MAX_READ_OPTIONS = 200;
 
   struct M485E_ReadOption gM485E_ReadOptions[200];
-  long gM485E_ReadOptionCount;
-  long gM485E_MonitoringGeneration;
-  long gM485E_PeriodicCursor;
-  long gM485E_ChangeStartPort;
-  long gM485E_MonitoringEnabled;
-  long gM485E_ReadOptionCandidateDirty;
+  struct M485E_MonitoringState gM485E_MonitoringState;
   msTimer tM485E_MonitoringCycle;
   msTimer tM485E_OutputPump;
   message * gM485E_MonitoringMessage;
@@ -40,20 +45,26 @@ long M485E_Monitoring_ConfigureReadOption(long slot, long index, long ruleId)
   gM485E_ReadOptions[slot].configured = 1;
   gM485E_ReadOptions[slot].index = index;
   gM485E_ReadOptions[slot].ruleId = ruleId;
-  if (slot >= gM485E_ReadOptionCount) gM485E_ReadOptionCount = slot + 1;
+  if (slot >= gM485E_MonitoringState.readOptionCount)
+    gM485E_MonitoringState.readOptionCount = slot + 1;
   return M485E_OK;
+}
+
+long M485E_Monitoring_GetReadOptionCount()
+{
+  return gM485E_MonitoringState.readOptionCount;
 }
 
 long M485E_Monitoring_SetCandidate(long slot, long enabled)
 {
-  if (slot < 0 || slot >= gM485E_ReadOptionCount ||
+  if (slot < 0 || slot >= gM485E_MonitoringState.readOptionCount ||
       gM485E_ReadOptions[slot].configured == 0)
     return M485E_ERR_READOPTION_INVALID;
   enabled = enabled != 0;
   if (gM485E_ReadOptions[slot].candidateEnabled != enabled)
   {
     gM485E_ReadOptions[slot].candidateEnabled = enabled;
-    gM485E_ReadOptionCandidateDirty = 1;
+    gM485E_MonitoringState.candidateDirty = 1;
   }
   return M485E_OK;
 }
@@ -62,8 +73,8 @@ long M485E_Monitoring_ApplyCandidates()
 {
   long slot;
   long result;
-  if (gM485E_ReadOptionCandidateDirty == 0) return M485E_OK;
-  for (slot = 0; slot < gM485E_ReadOptionCount; slot++)
+  if (gM485E_MonitoringState.candidateDirty == 0) return M485E_OK;
+  for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
   {
     if (gM485E_ReadOptions[slot].configured != 0 &&
         gM485E_ReadOptions[slot].candidateEnabled != 0)
@@ -75,14 +86,14 @@ long M485E_Monitoring_ApplyCandidates()
       if (result != M485E_OK) return result;
     }
   }
-  for (slot = 0; slot < gM485E_ReadOptionCount; slot++)
+  for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
   {
     gM485E_ReadOptions[slot].appliedEnabled =
         gM485E_ReadOptions[slot].candidateEnabled;
     if (gM485E_ReadOptions[slot].appliedEnabled == 0)
       gM485E_ReadOptions[slot].pendingGeneration = 0;
   }
-  gM485E_ReadOptionCandidateDirty = 0;
+  gM485E_MonitoringState.candidateDirty = 0;
   return M485E_OK;
 }
 
@@ -146,18 +157,19 @@ long M485E_Monitoring_TryOneChange()
   long result;
   for (offset = 0; offset < 2; offset++)
   {
-    portSlot = (gM485E_ChangeStartPort + offset) % 2;
+    portSlot = (gM485E_MonitoringState.changeStartPort + offset) % 2;
     result = M485E_Core_TryDequeueChangeSnapshot(portSlot, gM485E_SnapshotMeta,
                                                  gM485E_SnapshotRegisters);
     if (result == M485E_OK)
     {
       M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
                                       gM485E_SnapshotRegisters, 1);
-      gM485E_ChangeStartPort = (portSlot + 1) % 2;
+      gM485E_MonitoringState.changeStartPort = (portSlot + 1) % 2;
       return M485E_Monitoring_FrameCost(gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
     }
   }
-  gM485E_ChangeStartPort = (gM485E_ChangeStartPort + 1) % 2;
+  gM485E_MonitoringState.changeStartPort =
+      (gM485E_MonitoringState.changeStartPort + 1) % 2;
   return 0;
 }
 
@@ -169,16 +181,17 @@ void M485E_Monitoring_PumpOnce()
   long slot;
   long result;
   long cost;
-  if (gM485E_MonitoringEnabled == 0) return;
+  if (gM485E_MonitoringState.enabled == 0) return;
 
   usedFrames = 0;
   changeFrames = M485E_Monitoring_TryOneChange();
   if (changeFrames <= M485E_MAX_CHANGE_FRAMES_PER_TICK)
     usedFrames = changeFrames;
 
-  for (checked = 0; checked < gM485E_ReadOptionCount; checked++)
+  for (checked = 0; checked < gM485E_MonitoringState.readOptionCount; checked++)
   {
-    slot = (gM485E_PeriodicCursor + checked) % gM485E_ReadOptionCount;
+    slot = (gM485E_MonitoringState.periodicCursor + checked) %
+           gM485E_MonitoringState.readOptionCount;
     if (gM485E_ReadOptions[slot].appliedEnabled != 0 &&
         gM485E_ReadOptions[slot].pendingGeneration != 0)
     {
@@ -194,7 +207,8 @@ void M485E_Monitoring_PumpOnce()
                                         gM485E_SnapshotRegisters, 0);
         usedFrames = usedFrames + cost;
         gM485E_ReadOptions[slot].pendingGeneration = 0;
-        gM485E_PeriodicCursor = (slot + 1) % gM485E_ReadOptionCount;
+        gM485E_MonitoringState.periodicCursor =
+            (slot + 1) % gM485E_MonitoringState.readOptionCount;
       }
     }
   }
@@ -204,18 +218,20 @@ void M485E_Monitoring_NewCycle()
 {
   long slot;
   long result;
-  if (gM485E_MonitoringEnabled == 0) return;
+  if (gM485E_MonitoringState.enabled == 0) return;
   result = M485E_Monitoring_ApplyCandidates();
   if (result != M485E_OK)
   {
     write("M485E ReadOption candidate rejected: %d", result);
     return;
   }
-  gM485E_MonitoringGeneration++;
-  if (gM485E_MonitoringGeneration <= 0) gM485E_MonitoringGeneration = 1;
-  for (slot = 0; slot < gM485E_ReadOptionCount; slot++)
+  gM485E_MonitoringState.generation++;
+  if (gM485E_MonitoringState.generation <= 0)
+    gM485E_MonitoringState.generation = 1;
+  for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
     if (gM485E_ReadOptions[slot].appliedEnabled != 0)
-      gM485E_ReadOptions[slot].pendingGeneration = gM485E_MonitoringGeneration;
+      gM485E_ReadOptions[slot].pendingGeneration =
+          gM485E_MonitoringState.generation;
 }
 
 long M485E_Monitoring_Start()
@@ -223,7 +239,7 @@ long M485E_Monitoring_Start()
   long result;
   result = M485E_Core_StartMonitoring();
   if (result != M485E_OK) return result;
-  gM485E_MonitoringEnabled = 1;
+  gM485E_MonitoringState.enabled = 1;
   M485E_Monitoring_NewCycle();
   setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
   setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);
@@ -232,7 +248,7 @@ long M485E_Monitoring_Start()
 
 long M485E_Monitoring_Stop()
 {
-  gM485E_MonitoringEnabled = 0;
+  gM485E_MonitoringState.enabled = 0;
   cancelTimer(tM485E_MonitoringCycle);
   cancelTimer(tM485E_OutputPump);
   return M485E_Core_StopMonitoring();
