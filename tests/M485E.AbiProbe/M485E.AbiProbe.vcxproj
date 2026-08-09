@@ -58,6 +58,9 @@
     <ProjectReference Include="..\..\src\M485E.Dll\M485E.Dll.vcxproj">
       <Project>{0D46A32D-8CA8-4E15-9124-51343E9F2A2C}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\M485E.CaplAbiFixture\M485E.CaplAbiFixture.vcxproj">
+      <Project>{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Target Name="ValidateVectorCaplDllIncludeDir" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(VectorCaplDllIncludeDir)'==''" Text="Set VectorCaplDllIncludeDir to the Vector CAPLdll sample Includes directory." />

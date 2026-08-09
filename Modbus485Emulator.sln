@@ -6,6 +6,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.Dll", "src\M485E.Dll\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.AbiProbe", "tests\M485E.AbiProbe\M485E.AbiProbe.vcxproj", "{A7D7479D-49D7-4B0B-BBB9-8F9816627C79}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.CaplAbiFixture", "tests\M485E.CaplAbiFixture\M485E.CaplAbiFixture.vcxproj", "{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -20,5 +22,9 @@ Global
 		{A7D7479D-49D7-4B0B-BBB9-8F9816627C79}.Debug|Win32.Build.0 = Debug|Win32
 		{A7D7479D-49D7-4B0B-BBB9-8F9816627C79}.Release|Win32.ActiveCfg = Release|Win32
 		{A7D7479D-49D7-4B0B-BBB9-8F9816627C79}.Release|Win32.Build.0 = Release|Win32
+		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Debug|Win32.ActiveCfg = Debug|Win32
+		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Debug|Win32.Build.0 = Debug|Win32
+		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Release|Win32.ActiveCfg = Release|Win32
+		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 EndGlobal

@@ -24,15 +24,23 @@ target_include_directories(M485E PRIVATE
 )
 set_target_properties(M485E PROPERTIES OUTPUT_NAME M485E)
 
+add_library(M485E.CaplAbiFixture SHARED
+  tests/M485E.CaplAbiFixture/M485E_CaplAbiFixture.cpp
+)
+target_compile_features(M485E.CaplAbiFixture PRIVATE cxx_std_17)
+target_include_directories(M485E.CaplAbiFixture PRIVATE "${VECTOR_CAPL_DLL_INCLUDE_DIR}")
+set_target_properties(M485E.CaplAbiFixture PROPERTIES OUTPUT_NAME M485E.CaplAbiFixture)
+
 add_executable(M485E.AbiProbe tests/M485E.AbiProbe/M485E_AbiProbe.cpp)
 target_compile_features(M485E.AbiProbe PRIVATE cxx_std_17)
 target_include_directories(M485E.AbiProbe PRIVATE "${VECTOR_CAPL_DLL_INCLUDE_DIR}")
 
 if(MSVC)
   target_compile_options(M485E PRIVATE /W4 /WX /permissive-)
+  target_compile_options(M485E.CaplAbiFixture PRIVATE /W4 /WX /permissive-)
   target_compile_options(M485E.AbiProbe PRIVATE /W4 /WX /permissive-)
 endif()
 
 enable_testing()
 add_test(NAME M485E.AbiProbe
-         COMMAND M485E.AbiProbe $<TARGET_FILE:M485E>)
+         COMMAND M485E.AbiProbe $<TARGET_FILE:M485E> $<TARGET_FILE:M485E.CaplAbiFixture>)

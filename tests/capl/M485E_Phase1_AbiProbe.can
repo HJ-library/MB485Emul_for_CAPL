@@ -1,6 +1,7 @@
 includes
 {
   #pragma library("..\\..\\out\\Win32\\Release\\M485E.dll")
+  #pragma library("..\\..\\out\\Win32\\Release\\M485E.CaplAbiFixture.dll")
 }
 
 variables
@@ -11,8 +12,15 @@ variables
   char gM485EText[1024];
   float gM485EPhysicalValue[1];
 
-  char gM485EDeviceMapRelativePath[128] = ".\\Maps\\DeviceMap.csv";
-  char gM485EDeviceMapAbsolutePath[1024];
+  word gM485EFixtureWordsIn[3];
+  word gM485EFixtureWordsOut[3];
+  long gM485EFixtureLongsIn[3];
+  long gM485EFixtureLongsOut[3];
+  char gM485EFixtureTextIn[32] = "CAPL ABI";
+  char gM485EFixtureTextOut[32];
+  float gM485EFixturePhysical[1];
+
+  char gM485EDeviceMapAbsolutePath[128] = "C:\\M485E\\DeviceMap.csv";
   char gM485EPort[16] = "COM3";
   char gM485ESignalName[32] = "Power12V";
 }
@@ -26,57 +34,146 @@ on start
 {
   long result;
   long failureCount;
+  long index;
 
   failureCount = 0;
 
   result = M485E_Dll_InitializeContext(gM485EContext);
   if (result != 0) failureCount++;
+  result = M485E_Dll_InitializeContext(gM485EContext);
+  if (result != -104) failureCount++;
 
-  result = getAbsFilePath(gM485EDeviceMapRelativePath, gM485EDeviceMapAbsolutePath,
-                          elcount(gM485EDeviceMapAbsolutePath));
-  if (result < 0)
-  {
-    failureCount++;
-  }
-  else
-  {
-    result = M485E_Dll_SetCsvPath(gM485EContext, 1, strlen(gM485EDeviceMapAbsolutePath),
-                                  gM485EDeviceMapAbsolutePath);
-    if (result != 0) failureCount++;
-  }
-
-  result = M485E_Dll_SetPortConfig(gM485EContext, 0, strlen(gM485EPort), gM485EPort, 115200, 8, 0, 1);
+  result = M485E_Dll_SetCsvPath(gM485EContext, 1, strlen(gM485EDeviceMapAbsolutePath),
+                                gM485EDeviceMapAbsolutePath);
+  if (result != 0) failureCount++;
+  result = M485E_Dll_SetPortConfig(gM485EContext, 0, strlen(gM485EPort), gM485EPort,
+                                   115200, 8, 0, 1);
   if (result != 0) failureCount++;
 
-  M485E_Dll_RefreshCsv(gM485EContext);
-  M485E_Dll_Connect(gM485EContext);
-  M485E_Dll_Disconnect(gM485EContext);
+  result = M485E_Dll_RefreshCsv(gM485EContext);
+  if (result != -2002) failureCount++;
+  result = M485E_Dll_Connect(gM485EContext);
+  if (result != -2002) failureCount++;
+  result = M485E_Dll_Disconnect(gM485EContext);
+  if (result != -2000) failureCount++;
 
-  result = M485E_Dll_GetLifecycleStatus(gM485EContext, elcount(gM485EStatus), gM485EStatus);
-  if (result != 0 || gM485EStatus[0] != 1 || gM485EStatus[1] != 9) failureCount++;
+  for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
+  result = M485E_Dll_GetLifecycleStatus(gM485EContext, 8, gM485EStatus);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A) failureCount++;
+  result = M485E_Dll_GetLifecycleStatus(gM485EContext, 9, gM485EStatus);
+  if (result != 0 || gM485EStatus[0] != 1 || gM485EStatus[1] != 9 ||
+      gM485EStatus[2] != 1) failureCount++;
 
-  M485E_Dll_StartMonitoring(gM485EContext);
-  M485E_Dll_StopMonitoring(gM485EContext);
-  M485E_Dll_ReadRuleSnapshot(gM485EContext, 1, 1, elcount(gM485EStatus), gM485EStatus,
-                             elcount(gM485ERegisters), gM485ERegisters);
-  M485E_Dll_TryDequeueChangeSnapshot(gM485EContext, 0, elcount(gM485EStatus), gM485EStatus,
-                                     elcount(gM485ERegisters), gM485ERegisters);
-  M485E_Dll_GetChangeQueueStats(gM485EContext, 0, elcount(gM485EStatus), gM485EStatus);
-  M485E_Dll_ReadRegisters(gM485EContext, 1, 10000, 2, elcount(gM485ERegisters), gM485ERegisters);
-  M485E_Dll_WriteRegisters(gM485EContext, 1, 10000, 2, elcount(gM485ERegisters), gM485ERegisters);
-  M485E_Dll_ResetDevice(gM485EContext, 1);
+  result = M485E_Dll_StartMonitoring(gM485EContext);
+  if (result != -5000) failureCount++;
+  result = M485E_Dll_StopMonitoring(gM485EContext);
+  if (result != 0) failureCount++;
+
+  for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
+  for (index = 0; index < elcount(gM485ERegisters); index++) gM485ERegisters[index] = 0xA55A;
+  result = M485E_Dll_ReadRuleSnapshot(gM485EContext, 1, 1, 10, gM485EStatus,
+                                      elcount(gM485ERegisters), gM485ERegisters);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A || gM485ERegisters[0] != 0xA55A)
+    failureCount++;
+  result = M485E_Dll_ReadRuleSnapshot(gM485EContext, 1, 1, 11, gM485EStatus,
+                                      elcount(gM485ERegisters), gM485ERegisters);
+  if (result != -5001) failureCount++;
+
+  result = M485E_Dll_TryDequeueChangeSnapshot(gM485EContext, 0, 10, gM485EStatus,
+                                               elcount(gM485ERegisters), gM485ERegisters);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A || gM485ERegisters[0] != 0xA55A)
+    failureCount++;
+  result = M485E_Dll_TryDequeueChangeSnapshot(gM485EContext, 0, 11, gM485EStatus,
+                                               elcount(gM485ERegisters), gM485ERegisters);
+  if (result != 1) failureCount++;
+
+  for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
+  result = M485E_Dll_GetChangeQueueStats(gM485EContext, 0, 11, gM485EStatus);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A) failureCount++;
+  result = M485E_Dll_GetChangeQueueStats(gM485EContext, 0, 12, gM485EStatus);
+  if (result != 0 || gM485EStatus[0] != 1 || gM485EStatus[1] != 12) failureCount++;
+
+  for (index = 0; index < elcount(gM485ERegisters); index++) gM485ERegisters[index] = 0xA55A;
+  result = M485E_Dll_ReadRegisters(gM485EContext, 1, 10000, 2, 1, gM485ERegisters);
+  if (result != -105 || gM485ERegisters[0] != 0xA55A) failureCount++;
+  result = M485E_Dll_ReadRegisters(gM485EContext, 1, 10000, 2,
+                                   elcount(gM485ERegisters), gM485ERegisters);
+  if (result != -4000 || gM485ERegisters[0] != 0xA55A) failureCount++;
+  result = M485E_Dll_WriteRegisters(gM485EContext, 1, 10000, 2, 1, gM485ERegisters);
+  if (result != -105) failureCount++;
+  result = M485E_Dll_WriteRegisters(gM485EContext, 1, 10000, 2,
+                                    elcount(gM485ERegisters), gM485ERegisters);
+  if (result != -4000) failureCount++;
+  result = M485E_Dll_ResetDevice(gM485EContext, 1);
+  if (result != -4000) failureCount++;
 
   gM485EPhysicalValue[0] = 123.25;
-  M485E_Dll_ReadSignal(gM485EContext, 1, strlen(gM485ESignalName), gM485ESignalName,
-                       gM485EPhysicalValue);
-  M485E_Dll_WriteSignal(gM485EContext, 1, strlen(gM485ESignalName), gM485ESignalName, 12.5);
+  result = M485E_Dll_ReadSignal(gM485EContext, 1, strlen(gM485ESignalName),
+                                gM485ESignalName, gM485EPhysicalValue);
+  if (result != -4010 || gM485EPhysicalValue[0] != 123.25) failureCount++;
+  result = M485E_Dll_WriteSignal(gM485EContext, 1, strlen(gM485ESignalName),
+                                 gM485ESignalName, 12.5);
+  if (result != -4010) failureCount++;
 
-  M485E_Dll_GetLastSyncError(gM485EContext, elcount(gM485EStatus), gM485EStatus,
-                             elcount(gM485EText), gM485EText);
-  M485E_Dll_TryDequeueErrorEvent(gM485EContext, elcount(gM485EStatus), gM485EStatus,
-                                 elcount(gM485EText), gM485EText);
-  M485E_Dll_GetErrorQueueStats(gM485EContext, elcount(gM485EStatus), gM485EStatus);
+  for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
+  gM485EText[0] = 0x5A;
+  result = M485E_Dll_GetLastSyncError(gM485EContext, 19, gM485EStatus,
+                                      elcount(gM485EText), gM485EText);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A || gM485EText[0] != 0x5A)
+    failureCount++;
+  result = M485E_Dll_GetLastSyncError(gM485EContext, 20, gM485EStatus,
+                                      elcount(gM485EText), gM485EText);
+  if (result != 0 || gM485EStatus[3] != -4010 || strlen(gM485EText) == 0) failureCount++;
 
+  for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
+  gM485EText[0] = 0x5A;
+  result = M485E_Dll_TryDequeueErrorEvent(gM485EContext, 19, gM485EStatus,
+                                          elcount(gM485EText), gM485EText);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A || gM485EText[0] != 0x5A)
+    failureCount++;
+  result = M485E_Dll_TryDequeueErrorEvent(gM485EContext, 20, gM485EStatus,
+                                          elcount(gM485EText), gM485EText);
+  if (result != 1) failureCount++;
+
+  for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
+  result = M485E_Dll_GetErrorQueueStats(gM485EContext, 10, gM485EStatus);
+  if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A) failureCount++;
+  result = M485E_Dll_GetErrorQueueStats(gM485EContext, 11, gM485EStatus);
+  if (result != 0 || gM485EStatus[0] != 1 || gM485EStatus[1] != 11) failureCount++;
+
+  gM485EFixtureWordsIn[0] = 0x1234;
+  gM485EFixtureWordsIn[1] = 0xABCD;
+  gM485EFixtureWordsIn[2] = 0x0001;
+  result = M485E_Phase1_EchoWords(3, gM485EFixtureWordsIn, gM485EFixtureWordsOut);
+  if (result != 0 || gM485EFixtureWordsOut[0] != 0x1234 ||
+      gM485EFixtureWordsOut[1] != 0xABCD || gM485EFixtureWordsOut[2] != 0x0001)
+    failureCount++;
+
+  gM485EFixtureLongsIn[0] = -1;
+  gM485EFixtureLongsIn[1] = 0x12345678;
+  gM485EFixtureLongsIn[2] = 42;
+  result = M485E_Phase1_EchoLongs(3, gM485EFixtureLongsIn, gM485EFixtureLongsOut);
+  if (result != 0 || gM485EFixtureLongsOut[0] != -1 ||
+      gM485EFixtureLongsOut[1] != 0x12345678 || gM485EFixtureLongsOut[2] != 42)
+    failureCount++;
+
+  result = M485E_Phase1_EchoText(strlen(gM485EFixtureTextIn), gM485EFixtureTextIn,
+                                 elcount(gM485EFixtureTextOut), gM485EFixtureTextOut);
+  if (result != 0 || gM485EFixtureTextOut[0] != 'C' || gM485EFixtureTextOut[1] != 'A' ||
+      gM485EFixtureTextOut[2] != 'P' || gM485EFixtureTextOut[3] != 'L' ||
+      gM485EFixtureTextOut[4] != ' ' || gM485EFixtureTextOut[5] != 'A' ||
+      gM485EFixtureTextOut[6] != 'B' || gM485EFixtureTextOut[7] != 'I' ||
+      gM485EFixtureTextOut[8] != 0) failureCount++;
+  gM485EFixturePhysical[0] = -1.0;
+  result = M485E_Phase1_EchoF(12.5, gM485EFixturePhysical);
+  if (result != 0 || gM485EFixturePhysical[0] != 12.5) failureCount++;
+
+  result = M485E_Dll_FinalizeContext(gM485EContext);
+  if (result != 0) failureCount++;
+  result = M485E_Dll_GetLifecycleStatus(gM485EContext, 9, gM485EStatus);
+  if (result != -103) failureCount++;
+  result = M485E_Dll_InitializeContext(gM485EContext);
+  if (result != 0) failureCount++;
   result = M485E_Dll_FinalizeContext(gM485EContext);
   if (result != 0) failureCount++;
 

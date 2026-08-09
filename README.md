@@ -9,7 +9,8 @@ CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 현
 - x86 `__stdcall` 호출 규약
 - 요구사양서 Appendix A의 저수준 API 21개 ABI 등록
 - `registerCAPLDLL()` Context Handle 기반 최소 Initialize/Finalize 수명주기
-- scalar, `char[]`, `word[]`, `long[]`, CAPL `F` 입력 및 출력 경계 Probe
+- 생산 API의 scalar/배열/문자열 경계와 caller-owned 출력 보호 Probe
+- 생산 API와 분리된 시험 전용 `M485E.CaplAbiFixture.dll`의 `char[]`, `word[]`, `long[]`, `F[1]` 성공 왕복
 - 독립 실행형 `M485E.AbiProbe.exe`
 - CANalyzer에서 실행할 CAPL Probe 소스
 
@@ -39,27 +40,31 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 산출물:
 
 - `out/Win32/Release/M485E.dll`
+- `out/Win32/Release/M485E.CaplAbiFixture.dll` (Phase 1 시험 전용, 배포 대상 아님)
 - `out/Win32/Release/M485E.AbiProbe.exe`
 
 ## 독립 ABI Probe
 
 ```powershell
-.\out\Win32\Release\M485E.AbiProbe.exe .\out\Win32\Release\M485E.dll
+.\out\Win32\Release\M485E.AbiProbe.exe `
+  .\out\Win32\Release\M485E.dll `
+  .\out\Win32\Release\M485E.CaplAbiFixture.dll
 ```
 
 Probe는 다음을 검사합니다.
 
 - DLL이 현재 Win32 Process에서 로드되는지
 - `caplDllTable4`의 Version Entry와 종료 Entry
-- 21개 API 이름, 순서와 개수
-- 반환형, 파라미터형, 배열 차원 및 Function Pointer
-- Context Initialize/Finalize와 중복 초기화 거부
-- 문자열, `word[]`, `long[]`, `F` scalar 및 출력 Buffer 호출
+- 생산 API 21개의 이름, 순서, 개수와 종료 Entry
+- 반환형, 파라미터형, 배열 차원, 파라미터명 및 Function Pointer
+- Context의 0/중복/잘못된 Handle 거부, Finalize 후 호출과 재초기화
+- 작은 Capacity, Embedded NUL, 문자열 길이 불일치 검증
 - 실패 시 caller-owned 출력값을 변경하지 않는지
+- 시험 전용 Fixture의 `char[]`, `word[]`, `long[]`, `F[1]` 성공 왕복
 
 ## CANalyzer CAPL Probe
 
-[`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 Release DLL을 `#pragma library`로 로드하고 21개 API를 최소 호출합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
+[`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 생산 Release DLL과 시험 전용 Fixture를 `#pragma library`로 각각 로드합니다. 생산 API 21개의 반환 계약·Buffer 보호를 확인하고 Fixture로 배열과 `F[1]` 성공 왕복을 검사합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
 
 1. Release/Win32로 빌드합니다.
 2. CAPL Probe 파일을 CANalyzer Configuration의 Program Node에 연결합니다.
@@ -83,5 +88,6 @@ ctest --test-dir build-cmake -C Release --output-on-failure
 
 - `src/M485E.Dll`: 신규 구현
 - `tests/M485E.AbiProbe`: 신규 독립 ABI Probe
+- `tests/M485E.CaplAbiFixture`: Phase 1 CAPL ABI 성공 왕복 전용 시험 DLL
 - `tests/capl`: 신규 CANalyzer CAPL Probe
 - `src/Modbus485EmulatorDll`: 참고용 기존 Prototype(신규 Solution에서 제외)
