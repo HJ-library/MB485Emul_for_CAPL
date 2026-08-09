@@ -5,13 +5,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$dllSource = Join-Path $root "out\Win32\$Configuration\M485E.dll"
+$dllFileName = if ($Configuration -eq 'Release') { 'M485E.dll' } else { 'M485E.Debug.dll' }
+$dllSource = Join-Path $root "dist\$dllFileName"
 $contractSource = Join-Path $root 'generated\capl\M485E_Contracts.generated.cin'
 $dllDirectory = Join-Path $root 'Config\CAPL\DLL'
 $caplDirectory = Join-Path $root 'Config\CAPL\M485E'
 
 if (-not (Test-Path -LiteralPath $dllSource -PathType Leaf)) {
-    throw "Build output is missing: $dllSource"
+    throw "Distribution DLL is missing: $dllSource. Build $Configuration/Win32 first."
 }
 if (-not (Test-Path -LiteralPath $contractSource -PathType Leaf)) {
     throw "Generated CAPL contract is missing: $contractSource"

@@ -56,6 +56,18 @@ add_dependencies(M485E M485E.VerifyContracts)
 target_link_libraries(M485E PRIVATE M485E.Core)
 set_target_properties(M485E PROPERTIES OUTPUT_NAME M485E)
 
+set(M485E_DIST_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
+set(M485E_DIST_FILE_NAME
+    "$<IF:$<CONFIG:Release>,M485E.dll,M485E.$<CONFIG>.dll>")
+add_custom_command(TARGET M485E POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${M485E_DIST_DIRECTORY}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+          "$<TARGET_FILE:M485E>"
+          "${M485E_DIST_DIRECTORY}/${M485E_DIST_FILE_NAME}"
+  COMMENT "Copying M485E DLL to dist"
+  VERBATIM
+)
+
 add_library(M485E.CaplAbiFixture SHARED
   tests/M485E.CaplAbiFixture/M485E_CaplAbiFixture.cpp
 )

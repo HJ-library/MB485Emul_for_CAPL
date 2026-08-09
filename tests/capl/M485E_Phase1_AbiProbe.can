@@ -1,7 +1,7 @@
 /*@!Encoding:949*/
 includes
 {
-  #pragma library("..\\..\\out\\Win32\\Release\\M485E.dll")
+  #pragma library("..\\..\\dist\\M485E.dll")
   #pragma library("..\\..\\out\\Win32\\Release\\M485E.CaplAbiFixture.dll")
 }
 

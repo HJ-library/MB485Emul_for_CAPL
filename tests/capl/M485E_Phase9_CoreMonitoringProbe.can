@@ -1,7 +1,7 @@
 /*@!Encoding:949*/
 includes
 {
-  #pragma library("..\\..\\out\\Win32\\Release\\M485E.dll")
+  #pragma library("..\\..\\dist\\M485E.dll")
   #include "..\\..\\generated\\capl\\M485E_Contracts.generated.cin"
   #include "..\\..\\Config\\CAPL\\M485E\\M485_E_Core.cin"
   #include "..\\..\\Config\\CAPL\\M485E\\M485_E_Monitoring.cin"

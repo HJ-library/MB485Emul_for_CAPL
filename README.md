@@ -47,6 +47,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 자동 시험은 실제 COM 장치 대신 Fake Transport 또는 존재하지 않는 COM Port를 사용합니다. 실제 SystemBase Adapter의 제거·복구, Board RTU, CANalyzer CAPL Compile/Measurement와 Panel 동작은 [외부 검증 가이드](docs/05_Test/External_Verification_Guide.docx)에 따라 회사 환경에서 수행하고, 결과는 [외부 시험 결과서](docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx)에 기록합니다. 모든 외부 결과의 초기값은 `Not Tested`입니다.
 
+회사에서 순서대로 수행할 간단 체크리스트는
+[`examples/M485E_Test/COMPANY_TEST_CHECKLIST.md`](examples/M485E_Test/COMPANY_TEST_CHECKLIST.md)를 참조합니다.
+
 ## 필수 환경
 
 - Visual Studio Build Tools(Desktop development with C++)
@@ -70,7 +73,9 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 산출물:
 
-- `out/Win32/Release/M485E.dll`
+- `dist/M485E.dll` (Release, CANalyzer 배치용)
+- `dist/M485E.Debug.dll` (Debug, 개발 확인용)
+- `out/Win32/<Configuration>/M485E.dll` (빌드 상세 산출물)
 - `out/Win32/Release/M485E.CaplAbiFixture.dll` (Phase 1 시험 전용, 배포 대상 아님)
 - `out/Win32/Release/M485E.AbiProbe.exe`
 - `out/Win32/Release/M485E.ContractTests.exe`
@@ -81,7 +86,7 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 ```powershell
 .\out\Win32\Release\M485E.AbiProbe.exe `
-  .\out\Win32\Release\M485E.dll `
+  .\dist\M485E.dll `
   .\out\Win32\Release\M485E.CaplAbiFixture.dll
 ```
 
@@ -119,6 +124,11 @@ cmake -S . -B build-cmake -A Win32 `
 cmake --build build-cmake --config Release
 ctest --test-dir build-cmake -C Release --output-on-failure
 ```
+
+Visual Studio/MSBuild와 CMake 중 어느 방식으로 빌드해도 생산 DLL은 저장소 루트의
+`dist`로 자동 복사됩니다. `dist`에는 DLL만 배치하며 PDB, LIB, EXE 등 상세 산출물은
+기존 `out` 또는 CMake 빌드 디렉터리에 남습니다. Release는 `M485E.dll`, Debug는
+Release 파일을 덮어쓰지 않도록 `M485E.Debug.dll`이라는 이름을 사용합니다.
 
 CTest는 ABI, 계약 생성, 공개 계약, Core Unit/Boundary, DLL Integration 및 CAPL 소스 계약 검사를 실행합니다. CANalyzer 또는 실제 RS-485 장비를 사용하지 않으므로 해당 결과를 외부 검증 PASS로 해석하지 않습니다.
 
