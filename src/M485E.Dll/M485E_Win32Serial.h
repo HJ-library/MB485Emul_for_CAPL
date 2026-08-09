@@ -1,0 +1,40 @@
+#pragma once
+
+#include "M485E_PortWorker.h"
+
+#include <Windows.h>
+
+#include <cstdint>
+#include <mutex>
+#include <string>
+
+namespace m485e::platform
+{
+class Win32SerialTransport final : public core::ISerialTransport
+{
+ public:
+  Win32SerialTransport();
+  ~Win32SerialTransport() override;
+  Win32SerialTransport(const Win32SerialTransport&) = delete;
+  Win32SerialTransport& operator=(const Win32SerialTransport&) = delete;
+
+  std::int32_t Open(const std::string& port, const core::SerialSettings& settings,
+                    std::uint32_t& osError) noexcept;
+  void Close() noexcept;
+  bool IsOpen() const noexcept;
+
+  core::SerialReadResult ReadByte(std::uint32_t waitUs) noexcept override;
+  core::SerialWriteResult Write(const std::uint8_t* data, std::size_t size) noexcept override;
+  std::uint64_t NowUs() const noexcept override;
+  void Cancel() noexcept override;
+
+ private:
+  static core::SerialIoStatus ClassifyError(std::uint32_t error) noexcept;
+  HANDLE Handle() const noexcept;
+
+  mutable std::mutex mutex_;
+  HANDLE handle_ = INVALID_HANDLE_VALUE;
+  HANDLE readEvent_ = nullptr;
+  HANDLE writeEvent_ = nullptr;
+};
+}  // namespace m485e::platform

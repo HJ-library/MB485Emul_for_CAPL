@@ -542,7 +542,7 @@
 | IF-API-001 | `long M485E_Core_Initialize()` | `long M485E_Dll_InitializeContext(dword ContextHandle)` |
 | IF-API-002 | `long M485E_Core_Finalize()` | `long M485E_Dll_FinalizeContext(dword ContextHandle)` |
 | IF-API-003 | `long M485E_Core_SetCsvPath(long FileType, char RelativePath[])` | `long M485E_Dll_SetCsvPath(dword ContextHandle, long FileType, dword PathLength, char AbsolutePath[])` |
-| IF-API-004 | `long M485E_Core_SetPortConfig(long PortSlot, char Port[], long BaudRate, long DataBits, long Parity, long StopBits)` | `long M485E_Dll_SetPortConfig(dword ContextHandle, long PortSlot, dword PortLength, char Port[], long BaudRate, long DataBits, long Parity, long StopBits)` |
+| IF-API-004 | `long M485E_Core_SetPortConfig(long PortSlot, long ComPortNumber, long BaudRate, long DataBits, long Parity, long StopBits)` | `long M485E_Dll_SetPortConfig(dword ContextHandle, long PortSlot, dword PortLength, char Port[], long BaudRate, long DataBits, long Parity, long StopBits)` |
 | IF-API-005 | `long M485E_Core_RefreshCsv()` | `long M485E_Dll_RefreshCsv(dword ContextHandle)` |
 | IF-API-006 | `long M485E_Core_Connect()` | `long M485E_Dll_Connect(dword ContextHandle)` |
 | IF-API-007 | `long M485E_Core_Disconnect()` | `long M485E_Dll_Disconnect(dword ContextHandle)` |
@@ -627,7 +627,7 @@
 | IF-PORT-001 | CAPL Core는 `PortSlot`, `Port`, `BaudRate`, `DataBits`, `Parity`, `StopBits`를 입력받는 Port 단위 Serial Configuration API를 제공한다. |
 | IF-PORT-002 | Port 설정 API는 설정값을 DLL 메모리에 보관할 뿐 COM Port를 열지 않으며 실제 Open은 전체 Connect API가 수행한다. |
 | IF-PORT-003 | Connect API는 현재 로딩된 DeviceMap의 고유 Port 집합과 저장된 Port·PortSlot 설정 집합을 교차 검증한 뒤 Port Open을 시도한다. |
-| IF-PORT-004 | Serial Configuration API는 `IF-API-004`와 `IF-ABI-003`, `IF-ABI-005~007`의 `long PortSlot`, `char Port[]`, 명시적 `PortLength` 및 CAPL `long` 숫자 파라미터 계약을 따른다. 문자열 인코딩은 `TBD-021`에서 검증한다. |
+| IF-PORT-004 | CAPL Serial Configuration API는 `long PortSlot`과 `long ComPortNumber(1~999)`를 입력받고 Core가 `COM%d` 문자열로 변환한다. 저수준 DLL Export는 기존 `char Port[]`와 명시적 `PortLength` 계약을 유지하며 문자열 인코딩은 `TBD-021`에서 검증한다. |
 | IF-PORT-005 | CAPL Core와 DLL은 Port 설정 호출 순서로 Slot을 추정하지 않고 명시적으로 전달된 `PortSlot`만 사용한다. |
 
 #### 공통 반환 계약
@@ -1452,7 +1452,7 @@
 | TBD-042 ◆ | CSV는 UTF-8과 선택적 시작 BOM, CRLF/LF, RFC 4180 방식의 쉼표·큰따옴표 이스케이프를 지원한다. Cell 내부 줄바꿈은 금지하고 파일 끝의 빈 줄만 무시한다. | BOM 유무, CRLF/LF, Quote·쉼표·큰따옴표, 잘못된 UTF-8/Quote, Multiline Cell 거부 및 물리적 오류 행 Context 시험 |
 | TBD-044 ◆ | 공개 Core Signal 물리값 API는 CAPL `double`을 사용하고 저수준 Export는 CAPL-visible `float(F)`와 C++ `double`을 사용한다. Signed/Unsigned Raw가 경계 포함 `-2^53~2^53` 밖이면 Signal Read/Write 정밀도 오류를 반환하고 정확한 64bit Raw 접근은 Register `word[]` API를 사용한다. IEEE Double은 이 정수 제한에서 제외한다. | Core `double`과 Export `float(F)` 왕복, ±2^53 경계, 초과 Read/Write 거부, Register `word[4]` Round-trip 및 IEEE Double 비적용 시험 |
 | TBD-028 ◆ | 범용 `M485E_Core_ReadRegisters(Index, StartAddress, Quantity, OutRegisters[])`를 유지하고 상태 코드는 함수 반환값, Register 값은 caller-owned 출력 Buffer로 분리한다. Panel Wrapper도 범용 API를 사용하며 전역 결과 Buffer를 사용하지 않는다. | CANalyzer 배열 출력 ABI, 실패 시 Buffer 불변 및 Panel Wrapper 연동 시험 |
-| TBD-017 ◆ | Port별 Serial Configuration은 `PortSlot`, `Port`, `BaudRate`, `DataBits`, `Parity`, `StopBits`를 CAPL에서 입력받는다. Flow Control은 None으로 고정하고 RTU Timing은 DLL이 계산하며 Response Timeout은 공개 설정에서 제외한다. 두 Port·Slot 설정과 CSV 교차 검증이 성공해야 Connect를 시도한다. | PortSlot·Port 문자열 및 Enum ABI, 두 Port 설정 교차 검증, Timing 계산과 Connect 전 설정 누락 시험 |
+| TBD-017 ◆ | Port별 Serial Configuration은 `PortSlot`, `ComPortNumber(1~999)`, `BaudRate`, `DataBits`, `Parity`, `StopBits`를 CAPL에서 입력받는다. CAPL Core는 숫자를 `COM%d`로 변환하고 저수준 DLL은 문자열 Port ABI를 유지한다. Flow Control은 None으로 고정하고 RTU Timing은 DLL이 계산하며 Response Timeout은 공개 설정에서 제외한다. 두 Port·Slot 설정과 CSV 교차 검증이 성공해야 Connect를 시도한다. | ComPortNumber 경계, `COM%d` 변환, 저수준 문자열 ABI, 두 Port 설정 교차 검증, Timing 계산과 Connect 전 설정 누락 시험 |
 | TBD-045 ◆ | `DataBits`는 Modbus RTU에 맞춰 8만 허용한다. `BaudRate`는 양의 정수이며 고정 목록으로 제한하지 않고 Windows Serial Driver가 실제 지원 여부를 판단한다. 지원하지 않는 설정은 실패 Port와 OS 오류 Context를 반환한다. | DataBits와 BaudRate 경계, 일반·비표준 BaudRate, Driver 미지원 설정 및 Port별 오류 Context 시험 |
 | TBD-038 ◆ | Connect는 두 Port 전체 성공 또는 전체 실패 방식으로 처리한다. 한 Port 또는 Worker 준비가 실패하면 이미 열린 Port와 Worker를 모두 정리하고 Disconnected 상태를 유지하되 CSV Configuration, Register Memory 및 Port 설정은 보존하여 재시도를 허용한다. | 두 번째 Port/Worker 강제 실패, Handle·Thread 정리, 상태·데이터 보존, 실패 Context 및 재시도 시험 |
 | TBD-046 ◆ | 기존 `GetState`를 9개 필드의 Versioned `GetLifecycleStatus`로 교체하고 Lifecycle 완료 결과를 Error FIFO와 독립된 Latch에 보존한다. | CANalyzer 9.x `long[]` 출력 ABI, Generation Polling, Refresh 성공·실패와 Error FIFO Overflow 시험 |

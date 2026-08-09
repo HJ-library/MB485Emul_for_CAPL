@@ -1,0 +1,133 @@
+/*@!Encoding:949*/
+includes
+{
+  #pragma library("..\\..\\out\\Win32\\Release\\M485E.dll")
+  #include "..\\..\\generated\\capl\\M485E_Contracts.generated.cin"
+  #include "..\\..\\Config\\CAPL\\M485E\\M485_E_Core.cin"
+  #include "..\\..\\Config\\CAPL\\M485E\\M485_E_Monitoring.cin"
+}
+
+variables
+{
+  struct M485E_ProbePortConfig
+  {
+    long portSlot;
+    long comPortNumber;
+    long baudRate;
+    long dataBits;
+    long parity;
+    long stopBits;
+  };
+
+  char gM485EProbeDevicePath[128] = ".\\Config\\Maps\\DeviceMap.csv";
+  char gM485EProbeRulePath[128] = ".\\Config\\Maps\\ModbusRule.csv";
+  char gM485EProbeMapPath[128] = ".\\Config\\Maps\\Modbus485EmulMap.csv";
+  struct M485E_ProbePortConfig gM485EProbePortConfigs[2];
+  long gM485EProbeLifecycle[9];
+  msTimer tM485EProbeLifecycle;
+}
+
+void M485E_Probe_InitializePortConfigs()
+{
+  gM485EProbePortConfigs[0].portSlot = 0;
+  gM485EProbePortConfigs[0].comPortNumber = 11;
+  gM485EProbePortConfigs[0].baudRate = 115200;
+  gM485EProbePortConfigs[0].dataBits = 8;
+  gM485EProbePortConfigs[0].parity = M485E_PARITY_NONE;
+  gM485EProbePortConfigs[0].stopBits = 1;
+
+  gM485EProbePortConfigs[1].portSlot = 1;
+  gM485EProbePortConfigs[1].comPortNumber = 12;
+  gM485EProbePortConfigs[1].baudRate = 115200;
+  gM485EProbePortConfigs[1].dataBits = 8;
+  gM485EProbePortConfigs[1].parity = M485E_PARITY_NONE;
+  gM485EProbePortConfigs[1].stopBits = 1;
+}
+
+long M485E_Probe_ApplyPortConfigs()
+{
+  long configIndex;
+  long result;
+  for (configIndex = 0; configIndex < elcount(gM485EProbePortConfigs); configIndex++)
+  {
+    result = M485E_Core_SetPortConfig(
+        gM485EProbePortConfigs[configIndex].portSlot,
+        gM485EProbePortConfigs[configIndex].comPortNumber,
+        gM485EProbePortConfigs[configIndex].baudRate,
+        gM485EProbePortConfigs[configIndex].dataBits,
+        gM485EProbePortConfigs[configIndex].parity,
+        gM485EProbePortConfigs[configIndex].stopBits);
+    if (result != M485E_OK) return result;
+  }
+  return M485E_OK;
+}
+
+on preStart
+{
+  long result;
+  M485E_Probe_InitializePortConfigs();
+  result = M485E_Core_Initialize();
+  if (result != M485E_OK) write("M485E Phase 9 probe Initialize failed: %d", result);
+}
+
+on start
+{
+  long result;
+  M485E_Monitoring_ConfigureReadOption(0, 0, 1);
+  M485E_Monitoring_ConfigureReadOption(1, 0, 2);
+  M485E_Monitoring_ConfigureReadOption(2, 1, 1);
+  M485E_Monitoring_SetCandidate(0, 1);
+  M485E_Monitoring_SetCandidate(1, 1);
+  M485E_Monitoring_SetCandidate(2, 1);
+
+  result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485EProbeDevicePath);
+  if (result == M485E_OK)
+    result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485EProbeRulePath);
+  if (result == M485E_OK)
+    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485EProbeMapPath);
+  if (result == M485E_OK) result = M485E_Probe_ApplyPortConfigs();
+  if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+  write("M485E Phase 9 probe setup result: %d", result);
+  setTimer(tM485EProbeLifecycle, 20);
+}
+
+on timer tM485EProbeLifecycle
+{
+  long result;
+  result = M485E_Core_GetLifecycleStatus(gM485EProbeLifecycle);
+  if (result != M485E_OK)
+  {
+    write("M485E Phase 9 Lifecycle read failed: %d", result);
+    return;
+  }
+  if (gM485EProbeLifecycle[M485E_LS_ACTIVE_OPERATION] != M485E_OPERATION_NONE)
+  {
+    setTimer(tM485EProbeLifecycle, 20);
+    return;
+  }
+  if (gM485EProbeLifecycle[M485E_LS_LAST_COMPLETED_OPERATION] == M485E_OPERATION_REFRESH_CSV &&
+      gM485EProbeLifecycle[M485E_LS_LAST_RESULT] == M485E_OK)
+  {
+    result = M485E_Core_Connect();
+    write("M485E Phase 9 Connect accepted: %d", result);
+    setTimer(tM485EProbeLifecycle, 20);
+    return;
+  }
+  if (gM485EProbeLifecycle[M485E_LS_STATE] == M485E_STATE_CONNECTED)
+  {
+    result = M485E_Monitoring_Start();
+    write("M485E Phase 9 Core/Monitoring probe started: %d", result);
+  }
+  else
+  {
+    write("M485E Phase 9 external COM verification required: Connect result=%d",
+          gM485EProbeLifecycle[M485E_LS_LAST_RESULT]);
+  }
+}
+
+on stopMeasurement
+{
+  M485E_Monitoring_Stop();
+  M485E_Core_Disconnect();
+  M485E_Core_Finalize();
+}

@@ -1,0 +1,36 @@
+/*@!Encoding:949*/
+includes
+{
+  #include "..\..\generated\capl\M485E_Contracts.generated.cin"
+}
+
+on start
+{
+  long failureCount;
+
+  failureCount = 0;
+  if (M485E_OK != 0) failureCount++;
+  if (M485E_STATUS_NO_DATA != 1) failureCount++;
+  if (M485E_FILE_DEVICE_MAP != 1 || M485E_FILE_EMULATOR_MAP != 3) failureCount++;
+  if (M485E_STATE_UNINITIALIZED != 0 || M485E_STATE_ERROR != 6) failureCount++;
+  if (M485E_PORT_SLOT_COUNT != 2) failureCount++;
+  if (M485E_SM_QUANTITY + 1 != M485E_SNAPSHOT_META_COUNT) failureCount++;
+  if (M485E_LS_CONFIGURATION_VALID + 1 != M485E_LIFECYCLE_STATUS_COUNT) failureCount++;
+  if (M485E_EM_OS_ERROR + 1 != M485E_ERROR_META_COUNT) failureCount++;
+  if (M485E_ES_LAST_SEQUENCE + 1 != M485E_ERROR_QUEUE_STATS_COUNT) failureCount++;
+  if (M485E_CS_LAST_SEQUENCE + 1 != M485E_CHANGE_QUEUE_STATS_COUNT) failureCount++;
+  if (M485E_MAX_DIRECT_QUANTITY != 125 || M485E_MAX_RULES != 200) failureCount++;
+  if (M485E_ERROR_CODE_COUNT < 90) failureCount++;
+  if (M485E_ERR_INVALID_ARGUMENT != -100) failureCount++;
+  if (M485E_ERR_CSV_VALIDATION_FAILED != -1090) failureCount++;
+  if (M485E_ERR_INTERNAL_WORKER != -7005) failureCount++;
+
+  if (failureCount == 0)
+  {
+    write("M485E Phase 2 contract probe PASS");
+  }
+  else
+  {
+    write("M485E Phase 2 contract probe FAIL: %d", failureCount);
+  }
+}

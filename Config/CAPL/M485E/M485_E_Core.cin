@@ -1,0 +1,192 @@
+/*@!Encoding:949*/
+
+variables
+{
+  dword gM485E_ContextHandle;
+  long gM485E_CoreErrorMeta[20];
+  char gM485E_CoreErrorText[1024];
+}
+
+void M485E_Core_ReportSyncFailure(char operation[], long result)
+{
+  long errorResult;
+  if (result >= M485E_OK) return;
+  errorResult = M485E_Dll_GetLastSyncError(gM485E_ContextHandle,
+                                           elcount(gM485E_CoreErrorMeta),
+                                           gM485E_CoreErrorMeta,
+                                           elcount(gM485E_CoreErrorText),
+                                           gM485E_CoreErrorText);
+  if (errorResult == M485E_OK)
+    write("M485E %s failed: code=%d severity=%d subsystem=%d stage=%d detail=%s",
+          operation, result,
+          gM485E_CoreErrorMeta[M485E_EM_SEVERITY],
+          gM485E_CoreErrorMeta[M485E_EM_SUBSYSTEM],
+          gM485E_CoreErrorMeta[M485E_EM_STAGE], gM485E_CoreErrorText);
+  else
+    write("M485E %s failed: code=%d", operation, result);
+}
+
+long M485E_Core_PollOneErrorEvent()
+{
+  long result;
+  result = M485E_Dll_TryDequeueErrorEvent(gM485E_ContextHandle,
+                                          elcount(gM485E_CoreErrorMeta),
+                                          gM485E_CoreErrorMeta,
+                                          elcount(gM485E_CoreErrorText),
+                                          gM485E_CoreErrorText);
+  if (result == M485E_OK)
+    write("M485E async error: sequence=%d code=%d repeat=%d port=%d detail=%s",
+          gM485E_CoreErrorMeta[M485E_EM_SEQUENCE],
+          gM485E_CoreErrorMeta[M485E_EM_ERROR_CODE],
+          gM485E_CoreErrorMeta[M485E_EM_REPEAT_COUNT],
+          gM485E_CoreErrorMeta[M485E_EM_PORT_SLOT], gM485E_CoreErrorText);
+  return result;
+}
+
+long M485E_Core_Initialize()
+{
+  if (gM485E_ContextHandle == 0)
+  {
+    gM485E_ContextHandle = registerCAPLDLL();
+  }
+  if (gM485E_ContextHandle == 0) return M485E_ERR_INVALID_CONTEXT;
+  return M485E_Dll_InitializeContext(gM485E_ContextHandle);
+}
+
+long M485E_Core_Finalize()
+{
+  long result;
+  if (gM485E_ContextHandle == 0) return M485E_OK;
+  result = M485E_Dll_FinalizeContext(gM485E_ContextHandle);
+  if (result == M485E_OK) gM485E_ContextHandle = 0;
+  return result;
+}
+
+long M485E_Core_SetCsvPath(long fileType, char relativePath[])
+{
+  char absolutePath[1024];
+  if (getAbsFilePath(relativePath, absolutePath, elcount(absolutePath)) == -1)
+  {
+    write("M485E CSV path conversion failed: FileType=%d RelativePath=%s", fileType,
+          relativePath);
+    return M485E_ERR_CSV_PATH_INVALID;
+  }
+  return M485E_Dll_SetCsvPath(gM485E_ContextHandle, fileType, strlen(absolutePath),
+                              absolutePath);
+}
+
+long M485E_Core_SetPortConfig(long portSlot, long comPortNumber, long baudRate,
+                              long dataBits, long parity, long stopBits)
+{
+  char port[16];
+  if (comPortNumber < 1 || comPortNumber > 999)
+    return M485E_ERR_SERIAL_CONFIG_INVALID;
+  snprintf(port, elcount(port), "COM%d", comPortNumber);
+  return M485E_Dll_SetPortConfig(gM485E_ContextHandle, portSlot, strlen(port),
+                                 port, baudRate, dataBits, parity, stopBits);
+}
+
+long M485E_Core_RefreshCsv()
+{
+  return M485E_Dll_RefreshCsv(gM485E_ContextHandle);
+}
+
+long M485E_Core_Connect()
+{
+  return M485E_Dll_Connect(gM485E_ContextHandle);
+}
+
+long M485E_Core_Disconnect()
+{
+  return M485E_Dll_Disconnect(gM485E_ContextHandle);
+}
+
+long M485E_Core_GetLifecycleStatus(long outStatus[])
+{
+  return M485E_Dll_GetLifecycleStatus(gM485E_ContextHandle, elcount(outStatus), outStatus);
+}
+
+long M485E_Core_StartMonitoring()
+{
+  return M485E_Dll_StartMonitoring(gM485E_ContextHandle);
+}
+
+long M485E_Core_StopMonitoring()
+{
+  return M485E_Dll_StopMonitoring(gM485E_ContextHandle);
+}
+
+long M485E_Core_ReadRuleSnapshot(long index, long ruleId, long outMeta[],
+                                 word outRegisters[])
+{
+  return M485E_Dll_ReadRuleSnapshot(gM485E_ContextHandle, index, ruleId,
+                                    elcount(outMeta), outMeta,
+                                    elcount(outRegisters), outRegisters);
+}
+
+long M485E_Core_TryDequeueChangeSnapshot(long portSlot, long outMeta[],
+                                         word outRegisters[])
+{
+  return M485E_Dll_TryDequeueChangeSnapshot(gM485E_ContextHandle, portSlot,
+                                            elcount(outMeta), outMeta,
+                                            elcount(outRegisters), outRegisters);
+}
+
+long M485E_Core_GetChangeQueueStats(long portSlot, long outStats[])
+{
+  return M485E_Dll_GetChangeQueueStats(gM485E_ContextHandle, portSlot,
+                                       elcount(outStats), outStats);
+}
+
+long M485E_Core_ReadRegisters(long index, long startAddress, long quantity,
+                              word outRegisters[])
+{
+  return M485E_Dll_ReadRegisters(gM485E_ContextHandle, index, startAddress, quantity,
+                                 elcount(outRegisters), outRegisters);
+}
+
+long M485E_Core_WriteRegisters(long index, long startAddress, long quantity,
+                               word inRegisters[])
+{
+  return M485E_Dll_WriteRegisters(gM485E_ContextHandle, index, startAddress, quantity,
+                                  elcount(inRegisters), inRegisters);
+}
+
+long M485E_Core_ResetDevice(long index)
+{
+  return M485E_Dll_ResetDevice(gM485E_ContextHandle, index);
+}
+
+long M485E_Core_ReadSignal(long index, char signalName[], float& outPhysicalValue)
+{
+  float abiOutValue[1];
+  long result;
+  abiOutValue[0] = outPhysicalValue;
+  result = M485E_Dll_ReadSignal(gM485E_ContextHandle, index, strlen(signalName),
+                                signalName, abiOutValue);
+  if (result == M485E_OK) outPhysicalValue = abiOutValue[0];
+  return result;
+}
+
+long M485E_Core_WriteSignal(long index, char signalName[], float inPhysicalValue)
+{
+  return M485E_Dll_WriteSignal(gM485E_ContextHandle, index, strlen(signalName), signalName,
+                               inPhysicalValue);
+}
+
+long M485E_Core_GetLastSyncError(long outMeta[], char outText[])
+{
+  return M485E_Dll_GetLastSyncError(gM485E_ContextHandle, elcount(outMeta), outMeta,
+                                    elcount(outText), outText);
+}
+
+long M485E_Core_TryDequeueErrorEvent(long outMeta[], char outText[])
+{
+  return M485E_Dll_TryDequeueErrorEvent(gM485E_ContextHandle, elcount(outMeta), outMeta,
+                                        elcount(outText), outText);
+}
+
+long M485E_Core_GetErrorQueueStats(long outStats[])
+{
+  return M485E_Dll_GetErrorQueueStats(gM485E_ContextHandle, elcount(outStats), outStats);
+}

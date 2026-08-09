@@ -1,6 +1,6 @@
 # Modbus485Emulator
 
-CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 현재 신규 설계 기준의 Phase 1(CAPL DLL ABI 기반)이 구현되어 있습니다. 이전 `src/Modbus485EmulatorDll` 코드는 참고용 Prototype이며 신규 Solution에서 빌드하지 않습니다.
+CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 신규 설계의 Phase 1~8 C++ 구현과 자동 검증, Phase 9~10의 CAPL Core/Monitoring/UI Adapter 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다. 이전 `src/Modbus485EmulatorDll` 코드는 참고용 Prototype이며 신규 Solution에서 빌드하지 않습니다.
 
 ## Phase 1 범위
 
@@ -14,7 +14,38 @@ CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 현
 - 독립 실행형 `M485E.AbiProbe.exe`
 - CANalyzer에서 실행할 CAPL Probe 소스
 
-CSV, Register/Signal Runtime, RTU, Serial Worker, Monitoring과 UI의 실제 기능은 후속 Phase에서 구현합니다. Phase 1의 미구현 업무 API는 계약에 정의된 상태 오류 또는 `No Data`를 안전하게 반환하며 출력 Buffer를 부분 변경하지 않습니다.
+## Phase 2 범위
+
+- `spec/ErrorCodes.csv`: 공개 오류 코드, 상수명, 기본 Severity, CAPL Message Key의 단일 원본
+- `spec/PublicConstants.csv`: 상태, Enum, Metadata/Stats 인덱스와 공개 한도의 단일 원본
+- `tools/Generate-M485EContracts.ps1`: C++/CAPL 계약 생성 및 stale 결과 검사
+- `generated/cpp/M485E_Contracts.generated.h`: DLL과 C++ 시험이 사용하는 생성 계약
+- `generated/capl/M485E_Contracts.generated.cin`: CAPL Core가 사용할 생성 계약
+- 기존 90개 오류 계약과 183개 공개 상수의 변경·누락 회귀 검사
+- 기존 90개 오류 뒤에 신규 오류를 추가하는 호환 확장 지원
+- 잘못된 입력, 중복 코드·상수·Message Key, 잘못된 Severity 및 stale 생성 결과 시험
+
+계약 원본을 변경한 경우 다음 명령으로 생성 결과를 갱신하고 검증합니다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\tools\Generate-M485EContracts.ps1 -Mode Generate
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\tests\contracts\Test-M485EContractGeneration.ps1
+```
+
+## Phase 3~10 구현 범위
+
+- Phase 3: UTF-8/RFC4180 CSV Loader, 정식 Header/교차 검증, 256 Device·200 Rule·4,096 Signal·4MiB 한도, Last-good 원자 Refresh
+- Phase 4: Device별 16bit Register Memory, FC03/FC04 권한, Direct Read/Write, Signal 물리값 Codec, Init/Reset
+- Phase 5: CRC-16/Modbus, FC03/FC04/FC10, 표준 Exception 및 무응답 정책
+- Phase 6: Port별 Change Snapshot FIFO와 Error FIFO, 고정 용량 256, oldest-drop·병합·통계
+- Phase 7: Win32 Overlapped COM I/O, t1.5/t3.5 RTU Framing, Port Worker, 취소 가능한 I/O
+- Phase 8: 비동기 Refresh/Connect/Disconnect, 두 Port 전체 성공/전체 실패, 3초 간격 최대 10회 자동 재연결, 21개 Export의 실제 Core 연결
+- Phase 9: CAPL Core Wrapper, 1,000ms Monitoring Cycle, 10ms Output Pump, 두 Port Round-robin, Vector Extended CAN ID와 Header/Data Frame 생성
+- Phase 10: Manual Read/Write, 1초 AutoRead, Signal 물리값 제어, ReadSwitch/ReadOption System Variable Adapter와 외부 시험 패키지
+
+자동 시험은 실제 COM 장치 대신 Fake Transport 또는 존재하지 않는 COM Port를 사용합니다. 실제 SystemBase Adapter의 제거·복구, Board RTU, CANalyzer CAPL Compile/Measurement와 Panel 동작은 [외부 검증 가이드](docs/05_Test/External_Verification_Guide.docx)에 따라 회사 환경에서 수행하고, 결과는 [외부 시험 결과서](docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx)에 기록합니다. 모든 외부 결과의 초기값은 `Not Tested`입니다.
 
 ## 필수 환경
 
@@ -42,6 +73,9 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 - `out/Win32/Release/M485E.dll`
 - `out/Win32/Release/M485E.CaplAbiFixture.dll` (Phase 1 시험 전용, 배포 대상 아님)
 - `out/Win32/Release/M485E.AbiProbe.exe`
+- `out/Win32/Release/M485E.ContractTests.exe`
+- `out/Win32/Release/M485E.Core.Tests.exe`
+- `out/Win32/Release/M485E.IntegrationTests.exe`
 
 ## 독립 ABI Probe
 
@@ -71,7 +105,9 @@ Probe는 다음을 검사합니다.
 3. CAPL Compile이 성공하는지 확인합니다.
 4. Measurement를 시작하고 Write Window에 `M485E Phase 1 ABI probe PASS`가 출력되는지 확인합니다.
 
-Signal Read의 저수준 출력은 CAPL DLL Table에 1요소 `F[]`로 노출됩니다. C++ 구현은 `double*`를 사용하며 후속 CAPL Core Wrapper가 사용자-facing 단일 `double&` 출력으로 감춥니다. 이 방식은 상태 반환값과 물리값 출력을 분리하면서 DLL이 성공할 때만 출력값을 갱신하기 위한 ABI Adapter입니다.
+Signal Read의 저수준 출력은 CAPL DLL Table에 1요소 `F[]`로 노출됩니다. C++ 구현은 `double*`를 사용하며 CAPL Core Wrapper는 CAPL에서 8바이트 실수로 취급되는 `float&` 단일 출력으로 감춥니다. 이 방식은 상태 반환값과 물리값 출력을 분리하면서 DLL이 성공할 때만 출력값을 갱신하기 위한 ABI Adapter입니다.
+
+[`tests/capl/M485E_Phase2_ContractsProbe.can`](tests/capl/M485E_Phase2_ContractsProbe.can)은 generated CAPL include의 주요 상태값, Layout Count/Index, 공개 한도와 오류 코드가 CAPL에서 동일하게 해석되는지 검사합니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 컴파일러에서 경고 없이 컴파일되었습니다. 최종 CANalyzer 9.x SP8 환경에서는 다시 Compile한 뒤 Measurement에서 Write Window의 PASS 메시지를 확인합니다. `M485_E_Main.can`의 독립 컴파일은 System Variable 데이터베이스가 없는 문맥에서는 완료되지 않으므로 `M485E.vsysvar`를 Configuration에 등록한 실환경에서 검증합니다.
 
 ## CMake
 
@@ -84,10 +120,37 @@ cmake --build build-cmake --config Release
 ctest --test-dir build-cmake -C Release --output-on-failure
 ```
 
+CTest는 ABI, 계약 생성, 공개 계약, Core Unit/Boundary, DLL Integration 및 CAPL 소스 계약 검사를 실행합니다. CANalyzer 또는 실제 RS-485 장비를 사용하지 않으므로 해당 결과를 외부 검증 PASS로 해석하지 않습니다.
+
+## CANalyzer Config 패키지 준비
+
+Release/Win32 빌드 후 다음 명령으로 DLL과 생성된 CAPL 계약을 이동 가능한 `Config` 구조에 배치합니다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\tools\Prepare-M485EPackage.ps1 -Configuration Release
+```
+
+CANalyzer Program Node에는 `Config/CAPL/M485E/M485_E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하며, Panel은 `M485E::Connection::ConnectSwitch`와 나머지 System Variable에 연결합니다.
+
+CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[2]` 배열로 관리합니다. 각 원소의 `portSlot`, `comPortNumber`, `baudRate`, `dataBits`, `parity`, `stopBits`를 설정하며, 예를 들어 `comPortNumber = 11`은 Core에서 `COM11`로 변환된 뒤 기존 문자열 DLL ABI에 전달됩니다. COM 번호 허용 범위는 `1~999`이고 `DeviceMap.csv`의 Port 값은 Windows 이름 형식인 `COM11`을 유지합니다.
+
 ## 소스 구분
 
 - `src/M485E.Dll`: 신규 구현
+- `src/M485E.Core`: CSV, Register/Signal, RTU, Queue, Framing, Worker 순수 C++ 구현
 - `tests/M485E.AbiProbe`: 신규 독립 ABI Probe
 - `tests/M485E.CaplAbiFixture`: Phase 1 CAPL ABI 성공 왕복 전용 시험 DLL
+- `tests/M485E.ContractTests`: Phase 2 C++ 공개 계약 시험
+- `tests/contracts`: Phase 2 생성기 입력·경계·오류 처리 시험
+- `tests/M485E.Core.Tests`: Phase 3~7 Unit/Boundary/Fake Transport 시험
+- `tests/M485E.IntegrationTests`: Phase 3~8 DLL 통합 및 수명주기 시험
+- `spec`: 공개 계약 단일 원본 CSV
+- `generated`: C++/CAPL 생성 계약
+- `tools`: 계약 생성 및 검증 도구
 - `tests/capl`: 신규 CANalyzer CAPL Probe
+- `Config/CAPL/M485E`: CAPL Core/Monitoring/UI Adapter
+- `Config/System Variables`: Panel 연동용 System Variable 정의
+- `Config/Maps`: 이동 가능한 예제 CSV 세트
+- `docs/05_Test`: 회사 환경 외부 검증 가이드와 결과 기록서
 - `src/Modbus485EmulatorDll`: 참고용 기존 Prototype(신규 Solution에서 제외)

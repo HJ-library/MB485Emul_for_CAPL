@@ -1,3 +1,4 @@
+/*@!Encoding:949*/
 includes
 {
   #pragma library("..\\..\\out\\Win32\\Release\\M485E.dll")
@@ -30,7 +31,7 @@ on preStart
   gM485EContext = registerCAPLDLL();
 }
 
-on start
+void M485E_Test()
 {
   long result;
   long failureCount;
@@ -55,7 +56,7 @@ on start
   result = M485E_Dll_Connect(gM485EContext);
   if (result != -2002) failureCount++;
   result = M485E_Dll_Disconnect(gM485EContext);
-  if (result != -2000) failureCount++;
+  if (result != 0) failureCount++;
 
   for (index = 0; index < elcount(gM485EStatus); index++) gM485EStatus[index] = 0x5A5A5A5A;
   result = M485E_Dll_GetLifecycleStatus(gM485EContext, 8, gM485EStatus);

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<systemvariables version="4">
+  <namespace name="" comment="">
+    <namespace name="M485E" comment="Modbus485Emulator Panel adapter variables">
+      <namespace name="Connection" comment="Emulator lifecycle controls and status">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ConnectSwitch" comment="Connect or disconnect both configured Ports" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Refresh" comment="Momentary CSV refresh command; disconnected only" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="true" valueSequence="false" unit="" name="State" comment="Lifecycle State" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="true" valueSequence="false" unit="" name="LastResult" comment="Last completed lifecycle result" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="true" valueSequence="false" unit="" name="ConfigurationValid" comment="Last CSV refresh validity" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Last lifecycle command acceptance result" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      </namespace>
+      <namespace name="Monitoring" comment="CAN monitoring controls">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ReadSwitch" comment="Master monitoring switch" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Check_ReadOption" comment="Periodic Rule selection" bitcount="32" isSigned="true" encoding="65001" type="genericarray" arrayLength="200"><elementPrototype name="Prototype" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" /></variable>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Last monitoring command result" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      </namespace>
+      <namespace name="ManualRead" comment="Manual Register Read">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Index" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="StartAddress" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Quantity" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Data" comment="16-bit values stored in 32-bit elements" bitcount="32" isSigned="true" encoding="65001" type="genericarray" arrayLength="125"><elementPrototype name="Prototype" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" /></variable>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="AutoReadManual" comment="Repeat last accepted Read every second" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Send" comment="Momentary command" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      </namespace>
+      <namespace name="ManualWrite" comment="Manual Register Write">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Index" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="StartAddress" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Quantity" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Data" comment="16-bit values stored in 32-bit elements" bitcount="32" isSigned="true" encoding="65001" type="genericarray" arrayLength="125"><elementPrototype name="Prototype" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" /></variable>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Send" comment="Momentary command" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      </namespace>
+      <namespace name="SignalControl" comment="Physical Signal Read and Write">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Index" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SignalName" comment="Case-sensitive CSV SignalName" bitcount="0" isSigned="false" encoding="65001" type="string" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="PhysicalValue" comment="" bitcount="64" isSigned="true" encoding="65001" type="float" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Read" comment="Momentary command" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Write" comment="Momentary command" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      </namespace>
+    </namespace>
+  </namespace>
+</systemvariables>

@@ -1,0 +1,251 @@
+/*@!Encoding:949*/
+
+variables
+{
+  struct M485E_ReadOption
+  {
+    long configured;
+    long index;
+    long ruleId;
+    long candidateEnabled;
+    long appliedEnabled;
+    long pendingGeneration;
+  };
+
+  const long M485E_MONITORING_CYCLE_MS = 1000;
+  const long M485E_OUTPUT_PUMP_MS = 10;
+  const long M485E_MAX_FRAMES_PER_TICK = 66;
+  const long M485E_MAX_CHANGE_FRAMES_PER_TICK = 33;
+  const long M485E_MAX_READ_OPTIONS = 200;
+
+  struct M485E_ReadOption gM485E_ReadOptions[200];
+  long gM485E_ReadOptionCount;
+  long gM485E_MonitoringGeneration;
+  long gM485E_PeriodicCursor;
+  long gM485E_ChangeStartPort;
+  long gM485E_MonitoringEnabled;
+  long gM485E_ReadOptionCandidateDirty;
+  msTimer tM485E_MonitoringCycle;
+  msTimer tM485E_OutputPump;
+  message * gM485E_MonitoringMessage;
+  long gM485E_SnapshotMeta[11];
+  word gM485E_SnapshotRegisters[125];
+}
+
+long M485E_Monitoring_ConfigureReadOption(long slot, long index, long ruleId)
+{
+  if (slot < 0 || slot >= M485E_MAX_READ_OPTIONS || index < 0 || index > 255 ||
+      ruleId < 0 || ruleId > 255)
+    return M485E_ERR_READOPTION_INVALID;
+  gM485E_ReadOptions[slot].configured = 1;
+  gM485E_ReadOptions[slot].index = index;
+  gM485E_ReadOptions[slot].ruleId = ruleId;
+  if (slot >= gM485E_ReadOptionCount) gM485E_ReadOptionCount = slot + 1;
+  return M485E_OK;
+}
+
+long M485E_Monitoring_SetCandidate(long slot, long enabled)
+{
+  if (slot < 0 || slot >= gM485E_ReadOptionCount ||
+      gM485E_ReadOptions[slot].configured == 0)
+    return M485E_ERR_READOPTION_INVALID;
+  enabled = enabled != 0;
+  if (gM485E_ReadOptions[slot].candidateEnabled != enabled)
+  {
+    gM485E_ReadOptions[slot].candidateEnabled = enabled;
+    gM485E_ReadOptionCandidateDirty = 1;
+  }
+  return M485E_OK;
+}
+
+long M485E_Monitoring_ApplyCandidates()
+{
+  long slot;
+  long result;
+  if (gM485E_ReadOptionCandidateDirty == 0) return M485E_OK;
+  for (slot = 0; slot < gM485E_ReadOptionCount; slot++)
+  {
+    if (gM485E_ReadOptions[slot].configured != 0 &&
+        gM485E_ReadOptions[slot].candidateEnabled != 0)
+    {
+      result = M485E_Core_ReadRuleSnapshot(gM485E_ReadOptions[slot].index,
+                                           gM485E_ReadOptions[slot].ruleId,
+                                           gM485E_SnapshotMeta,
+                                           gM485E_SnapshotRegisters);
+      if (result != M485E_OK) return result;
+    }
+  }
+  for (slot = 0; slot < gM485E_ReadOptionCount; slot++)
+  {
+    gM485E_ReadOptions[slot].appliedEnabled =
+        gM485E_ReadOptions[slot].candidateEnabled;
+    if (gM485E_ReadOptions[slot].appliedEnabled == 0)
+      gM485E_ReadOptions[slot].pendingGeneration = 0;
+  }
+  gM485E_ReadOptionCandidateDirty = 0;
+  return M485E_OK;
+}
+
+long M485E_Monitoring_FrameCost(long quantity)
+{
+  return 1 + ((quantity + 3) / 4);
+}
+
+void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
+{
+  long arbitrationId;
+  long registerOffset;
+  long messageIndex;
+  long count;
+  long byteIndex;
+
+  arbitrationId = ((prefix & 0x01) << 24) |
+                  ((meta[M485E_SM_DEVICE_INDEX] & 0xFF) << 16) |
+                  ((meta[M485E_SM_RULE_ID] & 0xFF) << 8) | 1;
+  gM485E_MonitoringMessage.CAN = meta[M485E_SM_PORT_SLOT] + 1;
+  gM485E_MonitoringMessage.ID = mkExtId(arbitrationId);
+  gM485E_MonitoringMessage.DLC = 8;
+  gM485E_MonitoringMessage.byte(0) = meta[M485E_SM_DEVICE_INDEX];
+  gM485E_MonitoringMessage.byte(1) = meta[M485E_SM_SLAVE_ID];
+  gM485E_MonitoringMessage.byte(2) = meta[M485E_SM_FUNCTION_CODE];
+  gM485E_MonitoringMessage.byte(3) = meta[M485E_SM_SOURCE_TYPE];
+  gM485E_MonitoringMessage.byte(4) = (meta[M485E_SM_ADDRESS] >> 8) & 0xFF;
+  gM485E_MonitoringMessage.byte(5) = meta[M485E_SM_ADDRESS] & 0xFF;
+  gM485E_MonitoringMessage.byte(6) = (meta[M485E_SM_QUANTITY] >> 8) & 0xFF;
+  gM485E_MonitoringMessage.byte(7) = meta[M485E_SM_QUANTITY] & 0xFF;
+  output(gM485E_MonitoringMessage);
+
+  registerOffset = 0;
+  messageIndex = 2;
+  while (registerOffset < meta[M485E_SM_QUANTITY])
+  {
+    count = meta[M485E_SM_QUANTITY] - registerOffset;
+    if (count > 4) count = 4;
+    arbitrationId = ((prefix & 0x01) << 24) |
+                    ((meta[M485E_SM_DEVICE_INDEX] & 0xFF) << 16) |
+                    ((meta[M485E_SM_RULE_ID] & 0xFF) << 8) | messageIndex;
+    gM485E_MonitoringMessage.ID = mkExtId(arbitrationId);
+    gM485E_MonitoringMessage.DLC = count * 2;
+    for (byteIndex = 0; byteIndex < count; byteIndex++)
+    {
+      gM485E_MonitoringMessage.byte(byteIndex * 2) =
+          (registers[registerOffset + byteIndex] >> 8) & 0xFF;
+      gM485E_MonitoringMessage.byte(byteIndex * 2 + 1) =
+          registers[registerOffset + byteIndex] & 0xFF;
+    }
+    output(gM485E_MonitoringMessage);
+    registerOffset = registerOffset + count;
+    messageIndex++;
+  }
+}
+
+long M485E_Monitoring_TryOneChange()
+{
+  long offset;
+  long portSlot;
+  long result;
+  for (offset = 0; offset < 2; offset++)
+  {
+    portSlot = (gM485E_ChangeStartPort + offset) % 2;
+    result = M485E_Core_TryDequeueChangeSnapshot(portSlot, gM485E_SnapshotMeta,
+                                                 gM485E_SnapshotRegisters);
+    if (result == M485E_OK)
+    {
+      M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
+                                      gM485E_SnapshotRegisters, 1);
+      gM485E_ChangeStartPort = (portSlot + 1) % 2;
+      return M485E_Monitoring_FrameCost(gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
+    }
+  }
+  gM485E_ChangeStartPort = (gM485E_ChangeStartPort + 1) % 2;
+  return 0;
+}
+
+void M485E_Monitoring_PumpOnce()
+{
+  long usedFrames;
+  long changeFrames;
+  long checked;
+  long slot;
+  long result;
+  long cost;
+  if (gM485E_MonitoringEnabled == 0) return;
+
+  usedFrames = 0;
+  changeFrames = M485E_Monitoring_TryOneChange();
+  if (changeFrames <= M485E_MAX_CHANGE_FRAMES_PER_TICK)
+    usedFrames = changeFrames;
+
+  for (checked = 0; checked < gM485E_ReadOptionCount; checked++)
+  {
+    slot = (gM485E_PeriodicCursor + checked) % gM485E_ReadOptionCount;
+    if (gM485E_ReadOptions[slot].appliedEnabled != 0 &&
+        gM485E_ReadOptions[slot].pendingGeneration != 0)
+    {
+      result = M485E_Core_ReadRuleSnapshot(gM485E_ReadOptions[slot].index,
+                                           gM485E_ReadOptions[slot].ruleId,
+                                           gM485E_SnapshotMeta,
+                                           gM485E_SnapshotRegisters);
+      if (result == M485E_OK)
+      {
+        cost = M485E_Monitoring_FrameCost(gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
+        if (usedFrames + cost > M485E_MAX_FRAMES_PER_TICK) break;
+        M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
+                                        gM485E_SnapshotRegisters, 0);
+        usedFrames = usedFrames + cost;
+        gM485E_ReadOptions[slot].pendingGeneration = 0;
+        gM485E_PeriodicCursor = (slot + 1) % gM485E_ReadOptionCount;
+      }
+    }
+  }
+}
+
+void M485E_Monitoring_NewCycle()
+{
+  long slot;
+  long result;
+  if (gM485E_MonitoringEnabled == 0) return;
+  result = M485E_Monitoring_ApplyCandidates();
+  if (result != M485E_OK)
+  {
+    write("M485E ReadOption candidate rejected: %d", result);
+    return;
+  }
+  gM485E_MonitoringGeneration++;
+  if (gM485E_MonitoringGeneration <= 0) gM485E_MonitoringGeneration = 1;
+  for (slot = 0; slot < gM485E_ReadOptionCount; slot++)
+    if (gM485E_ReadOptions[slot].appliedEnabled != 0)
+      gM485E_ReadOptions[slot].pendingGeneration = gM485E_MonitoringGeneration;
+}
+
+long M485E_Monitoring_Start()
+{
+  long result;
+  result = M485E_Core_StartMonitoring();
+  if (result != M485E_OK) return result;
+  gM485E_MonitoringEnabled = 1;
+  M485E_Monitoring_NewCycle();
+  setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
+  setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);
+  return M485E_OK;
+}
+
+long M485E_Monitoring_Stop()
+{
+  gM485E_MonitoringEnabled = 0;
+  cancelTimer(tM485E_MonitoringCycle);
+  cancelTimer(tM485E_OutputPump);
+  return M485E_Core_StopMonitoring();
+}
+
+on timer tM485E_MonitoringCycle
+{
+  M485E_Monitoring_NewCycle();
+  setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
+}
+
+on timer tM485E_OutputPump
+{
+  M485E_Monitoring_PumpOnce();
+  setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);
+}

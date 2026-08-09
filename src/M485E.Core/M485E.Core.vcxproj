@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>18.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{0F9F2DAF-C045-4976-8F6A-E692B955DB8F}</ProjectGuid>
+    <RootNamespace>M485ECore</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType><UseDebugLibraries>true</UseDebugLibraries><PlatformToolset>v145</PlatformToolset><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType><UseDebugLibraries>false</UseDebugLibraries><PlatformToolset>v145</PlatformToolset><WholeProgramOptimization>true</WholeProgramOptimization><CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)out\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\M485E.CoreArtifacts2\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)generated\cpp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard><WarningLevel>Level4</WarningLevel><TreatWarningAsError>true</TreatWarningAsError><SDLCheck>true</SDLCheck><ConformanceMode>true</ConformanceMode>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="M485E_Configuration.cpp" />
+    <ClCompile Include="M485E_ConfigurationLoader.cpp" />
+    <ClCompile Include="M485E_Runtime.cpp" />
+    <ClCompile Include="M485E_ModbusRtu.cpp" />
+    <ClCompile Include="M485E_Queues.cpp" />
+    <ClCompile Include="M485E_RtuFraming.cpp" />
+    <ClCompile Include="M485E_PortWorker.cpp" />
+    <ClCompile Include="M485E_SignalCodec.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="M485E_Configuration.h" />
+    <ClInclude Include="M485E_ConfigurationLoader.h" />
+    <ClInclude Include="M485E_Runtime.h" />
+    <ClInclude Include="M485E_ModbusRtu.h" />
+    <ClInclude Include="M485E_Queues.h" />
+    <ClInclude Include="M485E_RtuFraming.h" />
+    <ClInclude Include="M485E_PortWorker.h" />
+    <ClInclude Include="M485E_SignalCodec.h" />
+  </ItemGroup>
+  <Target Name="ValidateGeneratedContracts" BeforeTargets="PrepareForBuild">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\..\tools\Generate-M485EContracts.ps1&quot; -Mode Check" />
+  </Target>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

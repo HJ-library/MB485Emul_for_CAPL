@@ -1,0 +1,93 @@
+/*@!Encoding:949*/
+includes
+{
+  #pragma library("..\\DLL\\M485E.dll")
+  #include "M485E_Contracts.generated.cin"
+  #include "M485_E_Core.cin"
+  #include "M485_E_Monitoring.cin"
+  #include "M485_E_UI.cin"
+}
+
+variables
+{
+  struct M485E_PortConfig
+  {
+    long portSlot;
+    long comPortNumber;
+    long baudRate;
+    long dataBits;
+    long parity;
+    long stopBits;
+  };
+
+  char gM485E_DeviceMapPath[128] = ".\\Config\\Maps\\DeviceMap.csv";
+  char gM485E_RuleMapPath[128] = ".\\Config\\Maps\\ModbusRule.csv";
+  char gM485E_EmulatorMapPath[128] = ".\\Config\\Maps\\Modbus485EmulMap.csv";
+  struct M485E_PortConfig gM485E_PortConfigs[2];
+}
+
+void M485E_Main_InitializePortConfigs()
+{
+  gM485E_PortConfigs[0].portSlot = 0;
+  gM485E_PortConfigs[0].comPortNumber = 11;
+  gM485E_PortConfigs[0].baudRate = 115200;
+  gM485E_PortConfigs[0].dataBits = 8;
+  gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
+  gM485E_PortConfigs[0].stopBits = 1;
+
+  gM485E_PortConfigs[1].portSlot = 1;
+  gM485E_PortConfigs[1].comPortNumber = 12;
+  gM485E_PortConfigs[1].baudRate = 115200;
+  gM485E_PortConfigs[1].dataBits = 8;
+  gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
+  gM485E_PortConfigs[1].stopBits = 1;
+}
+
+long M485E_Main_ApplyPortConfigs()
+{
+  long configIndex;
+  long result;
+  for (configIndex = 0; configIndex < elcount(gM485E_PortConfigs); configIndex++)
+  {
+    result = M485E_Core_SetPortConfig(
+        gM485E_PortConfigs[configIndex].portSlot,
+        gM485E_PortConfigs[configIndex].comPortNumber,
+        gM485E_PortConfigs[configIndex].baudRate,
+        gM485E_PortConfigs[configIndex].dataBits,
+        gM485E_PortConfigs[configIndex].parity,
+        gM485E_PortConfigs[configIndex].stopBits);
+    if (result != M485E_OK) return result;
+  }
+  return M485E_OK;
+}
+
+on preStart
+{
+  long result;
+  M485E_Main_InitializePortConfigs();
+  result = M485E_Core_Initialize();
+  if (result != M485E_OK) M485E_Core_ReportSyncFailure("Initialize", result);
+}
+
+on start
+{
+  long result;
+  result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
+  if (result == M485E_OK)
+    result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485E_RuleMapPath);
+  if (result == M485E_OK)
+    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485E_EmulatorMapPath);
+  if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
+  if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+  @sysvar::M485E::Connection::ResultCode = result;
+  M485E_Core_ReportSyncFailure("StartupConfiguration", result);
+  M485E_UI_Start();
+}
+
+on stopMeasurement
+{
+  M485E_UI_Stop();
+  M485E_Monitoring_Stop();
+  M485E_Core_Disconnect();
+  M485E_Core_Finalize();
+}

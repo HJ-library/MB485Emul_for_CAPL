@@ -221,7 +221,7 @@ int main(int argc, char** argv)
     return Fail("Port string call failed.");
   if (FunctionAt<OneDword>(table, "M485E_Dll_RefreshCsv")(handle) != -2002 ||
       FunctionAt<OneDword>(table, "M485E_Dll_Connect")(handle) != -2002 ||
-      FunctionAt<OneDword>(table, "M485E_Dll_Disconnect")(handle) != -2000)
+      FunctionAt<OneDword>(table, "M485E_Dll_Disconnect")(handle) != 0)
   {
     return Fail("Lifecycle Phase 1 guards failed.");
   }

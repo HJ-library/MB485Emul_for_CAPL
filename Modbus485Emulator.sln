@@ -8,6 +8,14 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.AbiProbe", "tests\M48
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.CaplAbiFixture", "tests\M485E.CaplAbiFixture\M485E.CaplAbiFixture.vcxproj", "{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.ContractTests", "tests\M485E.ContractTests\M485E.ContractTests.vcxproj", "{7F361B8E-3720-4E8E-A991-917A60F7ED2E}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.Core", "src\M485E.Core\M485E.Core.vcxproj", "{0F9F2DAF-C045-4976-8F6A-E692B955DB8F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.Core.Tests", "tests\M485E.Core.Tests\M485E.Core.Tests.vcxproj", "{2199F9ED-BE9A-44E8-9711-B9E2A8FDFE63}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "M485E.IntegrationTests", "tests\M485E.IntegrationTests\M485E.IntegrationTests.vcxproj", "{84717590-CFA0-4072-BF28-69036C681B54}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -26,5 +34,21 @@ Global
 		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Debug|Win32.Build.0 = Debug|Win32
 		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Release|Win32.ActiveCfg = Release|Win32
 		{B3C0DA2A-1D74-49CA-ABF3-4D153F286C40}.Release|Win32.Build.0 = Release|Win32
+		{7F361B8E-3720-4E8E-A991-917A60F7ED2E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{7F361B8E-3720-4E8E-A991-917A60F7ED2E}.Debug|Win32.Build.0 = Debug|Win32
+		{7F361B8E-3720-4E8E-A991-917A60F7ED2E}.Release|Win32.ActiveCfg = Release|Win32
+		{7F361B8E-3720-4E8E-A991-917A60F7ED2E}.Release|Win32.Build.0 = Release|Win32
+		{0F9F2DAF-C045-4976-8F6A-E692B955DB8F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0F9F2DAF-C045-4976-8F6A-E692B955DB8F}.Debug|Win32.Build.0 = Debug|Win32
+		{0F9F2DAF-C045-4976-8F6A-E692B955DB8F}.Release|Win32.ActiveCfg = Release|Win32
+		{0F9F2DAF-C045-4976-8F6A-E692B955DB8F}.Release|Win32.Build.0 = Release|Win32
+		{2199F9ED-BE9A-44E8-9711-B9E2A8FDFE63}.Debug|Win32.ActiveCfg = Debug|Win32
+		{2199F9ED-BE9A-44E8-9711-B9E2A8FDFE63}.Debug|Win32.Build.0 = Debug|Win32
+		{2199F9ED-BE9A-44E8-9711-B9E2A8FDFE63}.Release|Win32.ActiveCfg = Release|Win32
+		{2199F9ED-BE9A-44E8-9711-B9E2A8FDFE63}.Release|Win32.Build.0 = Release|Win32
+		{84717590-CFA0-4072-BF28-69036C681B54}.Debug|Win32.ActiveCfg = Debug|Win32
+		{84717590-CFA0-4072-BF28-69036C681B54}.Debug|Win32.Build.0 = Debug|Win32
+		{84717590-CFA0-4072-BF28-69036C681B54}.Release|Win32.ActiveCfg = Release|Win32
+		{84717590-CFA0-4072-BF28-69036C681B54}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 EndGlobal
