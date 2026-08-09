@@ -1,0 +1,91 @@
+includes
+{
+  #pragma library("..\\..\\out\\Win32\\Release\\M485E.dll")
+}
+
+variables
+{
+  dword gM485EContext;
+  long gM485EStatus[20];
+  word gM485ERegisters[125];
+  char gM485EText[1024];
+  float gM485EPhysicalValue[1];
+
+  char gM485EDeviceMapRelativePath[128] = ".\\Maps\\DeviceMap.csv";
+  char gM485EDeviceMapAbsolutePath[1024];
+  char gM485EPort[16] = "COM3";
+  char gM485ESignalName[32] = "Power12V";
+}
+
+on preStart
+{
+  gM485EContext = registerCAPLDLL();
+}
+
+on start
+{
+  long result;
+  long failureCount;
+
+  failureCount = 0;
+
+  result = M485E_Dll_InitializeContext(gM485EContext);
+  if (result != 0) failureCount++;
+
+  result = getAbsFilePath(gM485EDeviceMapRelativePath, gM485EDeviceMapAbsolutePath,
+                          elcount(gM485EDeviceMapAbsolutePath));
+  if (result < 0)
+  {
+    failureCount++;
+  }
+  else
+  {
+    result = M485E_Dll_SetCsvPath(gM485EContext, 1, strlen(gM485EDeviceMapAbsolutePath),
+                                  gM485EDeviceMapAbsolutePath);
+    if (result != 0) failureCount++;
+  }
+
+  result = M485E_Dll_SetPortConfig(gM485EContext, 0, strlen(gM485EPort), gM485EPort, 115200, 8, 0, 1);
+  if (result != 0) failureCount++;
+
+  M485E_Dll_RefreshCsv(gM485EContext);
+  M485E_Dll_Connect(gM485EContext);
+  M485E_Dll_Disconnect(gM485EContext);
+
+  result = M485E_Dll_GetLifecycleStatus(gM485EContext, elcount(gM485EStatus), gM485EStatus);
+  if (result != 0 || gM485EStatus[0] != 1 || gM485EStatus[1] != 9) failureCount++;
+
+  M485E_Dll_StartMonitoring(gM485EContext);
+  M485E_Dll_StopMonitoring(gM485EContext);
+  M485E_Dll_ReadRuleSnapshot(gM485EContext, 1, 1, elcount(gM485EStatus), gM485EStatus,
+                             elcount(gM485ERegisters), gM485ERegisters);
+  M485E_Dll_TryDequeueChangeSnapshot(gM485EContext, 0, elcount(gM485EStatus), gM485EStatus,
+                                     elcount(gM485ERegisters), gM485ERegisters);
+  M485E_Dll_GetChangeQueueStats(gM485EContext, 0, elcount(gM485EStatus), gM485EStatus);
+  M485E_Dll_ReadRegisters(gM485EContext, 1, 10000, 2, elcount(gM485ERegisters), gM485ERegisters);
+  M485E_Dll_WriteRegisters(gM485EContext, 1, 10000, 2, elcount(gM485ERegisters), gM485ERegisters);
+  M485E_Dll_ResetDevice(gM485EContext, 1);
+
+  gM485EPhysicalValue[0] = 123.25;
+  M485E_Dll_ReadSignal(gM485EContext, 1, strlen(gM485ESignalName), gM485ESignalName,
+                       gM485EPhysicalValue);
+  M485E_Dll_WriteSignal(gM485EContext, 1, strlen(gM485ESignalName), gM485ESignalName, 12.5);
+
+  M485E_Dll_GetLastSyncError(gM485EContext, elcount(gM485EStatus), gM485EStatus,
+                             elcount(gM485EText), gM485EText);
+  M485E_Dll_TryDequeueErrorEvent(gM485EContext, elcount(gM485EStatus), gM485EStatus,
+                                 elcount(gM485EText), gM485EText);
+  M485E_Dll_GetErrorQueueStats(gM485EContext, elcount(gM485EStatus), gM485EStatus);
+
+  result = M485E_Dll_FinalizeContext(gM485EContext);
+  if (result != 0) failureCount++;
+
+  if (failureCount == 0)
+  {
+    write("M485E Phase 1 ABI probe PASS");
+  }
+  else
+  {
+    write("M485E Phase 1 ABI probe FAIL: %d checks", failureCount);
+  }
+}

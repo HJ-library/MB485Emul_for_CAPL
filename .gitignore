@@ -8,5 +8,8 @@ out/
 *.pdb
 *.ilk
 *.dll
+!src/M485E.Dll/
+!src/M485E.Dll/**
 *.lib
 *.exp
+*.cbf

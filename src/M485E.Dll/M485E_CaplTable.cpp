@@ -1,0 +1,73 @@
+#include "M485E_DllApi.h"
+
+#include <cdll.h>
+
+namespace
+{
+constexpr char kCategory[] = "Modbus485Emulator";
+}
+
+CAPL_DLL_INFO4 gM485ECaplTable[] = {
+    {CDLL_VERSION_NAME, reinterpret_cast<CAPL_FARCALL>(CDLL_VERSION), "", "",
+     CAPL_DLL_CDECL, 0xabcd, CDLL_EXPORT},
+    {"M485E_Dll_InitializeContext", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_InitializeContext),
+     kCategory, "Initialize the emulator context", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_FinalizeContext", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_FinalizeContext),
+     kCategory, "Finalize the emulator context", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_SetCsvPath", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_SetCsvPath),
+     kCategory, "Set one absolute CSV path", 'L', 4, "DLDC", "\000\000\000\001",
+     {"ContextHandle", "FileType", "PathLength", "AbsolutePath"}},
+    {"M485E_Dll_SetPortConfig", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_SetPortConfig),
+     kCategory, "Set one serial port configuration", 'L', 8, "DLDCLLLL",
+     "\000\000\000\001\000\000\000\000",
+     {"ContextHandle", "PortSlot", "PortLength", "Port", "BaudRate", "DataBits", "Parity", "StopBits"}},
+    {"M485E_Dll_RefreshCsv", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_RefreshCsv),
+     kCategory, "Request CSV refresh", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_Connect", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_Connect),
+     kCategory, "Request emulator connection", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_Disconnect", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_Disconnect),
+     kCategory, "Request emulator disconnection", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_GetLifecycleStatus", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_GetLifecycleStatus),
+     kCategory, "Read lifecycle status V1", 'L', 3, "DDL", "\000\000\001",
+     {"ContextHandle", "StatusCapacity", "OutStatus"}},
+    {"M485E_Dll_StartMonitoring", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_StartMonitoring),
+     kCategory, "Start monitoring", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_StopMonitoring", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_StopMonitoring),
+     kCategory, "Stop monitoring", 'L', 1, "D", "", {"ContextHandle"}},
+    {"M485E_Dll_ReadRuleSnapshot", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_ReadRuleSnapshot),
+     kCategory, "Read one periodic Rule snapshot", 'L', 7, "DLLDLDW",
+     "\000\000\000\000\001\000\001",
+     {"ContextHandle", "Index", "RuleId", "MetaCapacity", "OutMeta", "DataCapacity", "OutRegisters"}},
+    {"M485E_Dll_TryDequeueChangeSnapshot", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_TryDequeueChangeSnapshot),
+     kCategory, "Dequeue one change snapshot", 'L', 6, "DLDLDW",
+     "\000\000\000\001\000\001",
+     {"ContextHandle", "PortSlot", "MetaCapacity", "OutMeta", "DataCapacity", "OutRegisters"}},
+    {"M485E_Dll_GetChangeQueueStats", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_GetChangeQueueStats),
+     kCategory, "Read change queue statistics V1", 'L', 4, "DLDL", "\000\000\000\001",
+     {"ContextHandle", "PortSlot", "StatsCapacity", "OutStats"}},
+    {"M485E_Dll_ReadRegisters", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_ReadRegisters),
+     kCategory, "Read direct registers", 'L', 6, "DLLLDW", "\000\000\000\000\000\001",
+     {"ContextHandle", "Index", "StartAddress", "Quantity", "OutCapacity", "OutRegisters"}},
+    {"M485E_Dll_WriteRegisters", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_WriteRegisters),
+     kCategory, "Write direct registers", 'L', 6, "DLLLDW", "\000\000\000\000\000\001",
+     {"ContextHandle", "Index", "StartAddress", "Quantity", "InCount", "InRegisters"}},
+    {"M485E_Dll_ResetDevice", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_ResetDevice),
+     kCategory, "Reset one device", 'L', 2, "DL", "", {"ContextHandle", "Index"}},
+    {"M485E_Dll_ReadSignal", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_ReadSignal),
+     kCategory, "Read one physical signal", 'L', 5, "DLDCF", "\000\000\000\001\001",
+     {"ContextHandle", "Index", "NameLength", "SignalName", "OutPhysicalValue"}},
+    {"M485E_Dll_WriteSignal", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_WriteSignal),
+     kCategory, "Write one physical signal", 'L', 5, "DLDCF", "\000\000\000\001\000",
+     {"ContextHandle", "Index", "NameLength", "SignalName", "InPhysicalValue"}},
+    {"M485E_Dll_GetLastSyncError", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_GetLastSyncError),
+     kCategory, "Read the last synchronous error", 'L', 5, "DDLDC", "\000\000\001\000\001",
+     {"ContextHandle", "MetaCapacity", "OutMeta", "TextCapacity", "OutText"}},
+    {"M485E_Dll_TryDequeueErrorEvent", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_TryDequeueErrorEvent),
+     kCategory, "Dequeue one asynchronous error", 'L', 5, "DDLDC", "\000\000\001\000\001",
+     {"ContextHandle", "MetaCapacity", "OutMeta", "TextCapacity", "OutText"}},
+    {"M485E_Dll_GetErrorQueueStats", reinterpret_cast<CAPL_FARCALL>(M485E_Dll_GetErrorQueueStats),
+     kCategory, "Read error queue statistics V1", 'L', 3, "DDL", "\000\000\001",
+     {"ContextHandle", "StatsCapacity", "OutStats"}},
+    {0, 0}};
+
+extern "C" __declspec(dllexport) CAPL_DLL_INFO4* caplDllTable4 = gM485ECaplTable;
