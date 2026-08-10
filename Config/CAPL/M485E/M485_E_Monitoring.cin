@@ -71,6 +71,13 @@ long M485E_Monitoring_GetReadOptionCount()
      return gM485E_MonitoringState.readOptionCount;
 }
 
+// CAPL 스케줄러가 실제로 실행 중인지 반환한다.
+// DLL 연결 상태와 별도 플래그로 관리하여 Disconnect 후 재연결 시 재시작 여부를 판단한다.
+long M485E_Monitoring_IsEnabled()
+{
+     return gM485E_MonitoringState.enabled;
+}
+
 // Panel에서 읽은 선택 상태를 candidate에 기록한다.
 // 값이 실제로 바뀐 경우에만 candidateDirty를 세워 다음 Cycle에 일괄 반영한다.
 // enabled는 0이면 비활성, 그 외 값은 활성으로 정규화한다.
@@ -334,6 +341,14 @@ long M485E_Monitoring_Start()
      gM485E_MonitoringState.enabled = 1;
      // Refresh 후 Device-to-Port 매핑이 바뀌었을 수 있으므로 활성 후보를 다시 검증한다.
      gM485E_MonitoringState.candidateDirty = 1;
+     result = M485E_Monitoring_ApplyCandidates();
+     if (result != M485E_OK)
+     {
+          // 잘못된 ReadOption으로 CAN 타이머만 실행되는 상태를 만들지 않는다.
+          gM485E_MonitoringState.enabled = 0;
+          M485E_Core_StopMonitoring();
+          return result;
+     }
      M485E_Monitoring_NewCycle();
      setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
      setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);

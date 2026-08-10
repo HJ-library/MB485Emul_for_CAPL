@@ -42,6 +42,8 @@ variables
      msTimer tM485E_UISync;
      msTimer tM485E_LifecycleStatus;
      long gM485E_UILifecycleStatus[9];
+     // Handle 값과 무관한 DLL 수명주기 상태 전이를 추적한다.
+     long gM485E_UILastLifecycleState = -1;
 }
 
 // SignalControl 시스템변수의 Index, SignalName, PhysicalValue를 한 번에 복사한다.
@@ -187,11 +189,34 @@ on sysvar_update sysvar::M485E::SignalControl::Write
      @this = 0;
 }
 
-// ReadSwitch가 켜지면 CAN Monitoring을 시작하고 꺼지면 중지한다.
+// Check_ReadOption 전체를 CAPL 후보 상태로 복사한다.
+// ReadSwitch ON 직전에도 호출하여 100ms UI 동기화 Timer를 기다리지 않게 한다.
+long M485E_UI_SyncReadOptions()
+{
+     long index;
+     long result;
+     long readOptionCount;
+     sysGetVariableLongArray(sysvar::M485E::Monitoring::Check_ReadOption,
+          gM485E_ReadOptionValues, elcount(gM485E_ReadOptionValues));
+     readOptionCount = M485E_Monitoring_GetReadOptionCount();
+     for (index = 0; index < readOptionCount; index++)
+     {
+          result = M485E_Monitoring_SetCandidate(index, gM485E_ReadOptionValues[index]);
+          if (result != M485E_OK) return result;
+     }
+     return M485E_OK;
+}
+
+// ReadSwitch가 켜지면 최신 ReadOption으로 CAN Monitoring을 시작하고 꺼지면 중지한다.
+// 아직 Connected가 아니면 Start 결과를 표시하고, 연결 완료 상태 전이에서 한 번 재시도한다.
 on sysvar_update sysvar::M485E::Monitoring::ReadSwitch
 {
      long result;
-     if (@this != 0) result = M485E_Monitoring_Start();
+     if (@this != 0)
+     {
+          result = M485E_UI_SyncReadOptions();
+          if (result == M485E_OK) result = M485E_Monitoring_Start();
+     }
      else result = M485E_Monitoring_Stop();
      @sysvar::M485E::Monitoring::ResultCode = result;
      M485E_Core_ReportSyncFailure("Monitoring", result);
@@ -200,6 +225,8 @@ on sysvar_update sysvar::M485E::Monitoring::ReadSwitch
 // UI 관련 세 타이머를 시작한다. 실제 Serial 연결 여부와는 독립적으로 상태를 동기화한다.
 void M485E_UI_Start()
 {
+     gM485E_UILastLifecycleState = -1;
+     M485E_UI_SyncReadOptions();
      setTimer(tM485E_ManualAutoRead, 1000);
      setTimer(tM485E_UISync, 100);
      setTimer(tM485E_LifecycleStatus, 100);
@@ -218,13 +245,7 @@ on timer tM485E_ManualAutoRead
 // Panel에서 여러 CheckBox가 같은 시점에 바뀌어도 다음 Cycle에는 한 묶음으로 반영된다.
 on timer tM485E_UISync
 {
-     long index;
-     long readOptionCount;
-     sysGetVariableLongArray(sysvar::M485E::Monitoring::Check_ReadOption,
-          gM485E_ReadOptionValues, elcount(gM485E_ReadOptionValues));
-     readOptionCount = M485E_Monitoring_GetReadOptionCount();
-     for (index = 0; index < readOptionCount; index++)
-          M485E_Monitoring_SetCandidate(index, gM485E_ReadOptionValues[index]);
+     M485E_UI_SyncReadOptions();
      setTimer(tM485E_UISync, 100);
 }
 
@@ -233,15 +254,42 @@ on timer tM485E_UISync
 on timer tM485E_LifecycleStatus
 {
      long result;
+     long monitoringResult;
+     long currentState;
+     long previousState;
      result = M485E_Core_GetLifecycleStatus(gM485E_UILifecycleStatus);
      if (result == M485E_OK)
      {
+          currentState = gM485E_UILifecycleStatus[M485E_LS_STATE];
+          previousState = gM485E_UILastLifecycleState;
           @sysvar::M485E::Connection::State =
-               gM485E_UILifecycleStatus[M485E_LS_STATE];
+               currentState;
           @sysvar::M485E::Connection::LastResult =
                gM485E_UILifecycleStatus[M485E_LS_LAST_RESULT];
           @sysvar::M485E::Connection::ConfigurationValid =
                gM485E_UILifecycleStatus[M485E_LS_CONFIGURATION_VALID];
+          // Disconnect는 DLL Snapshot Queue를 중지하므로 CAPL Timer 상태도 함께 내린다.
+          if (currentState != M485E_STATE_CONNECTED &&
+               M485E_Monitoring_IsEnabled() != 0)
+          {
+               monitoringResult = M485E_Monitoring_Stop();
+               @sysvar::M485E::Monitoring::ResultCode = monitoringResult;
+               M485E_Core_ReportSyncFailure("MonitoringStop", monitoringResult);
+          }
+          // ReadSwitch가 미리 ON이었거나 연결 중 -5000이 발생한 경우, Connected 진입 때
+          // 최신 후보를 다시 읽고 정확히 한 번 Monitoring을 시작한다.
+          if (currentState == M485E_STATE_CONNECTED &&
+               previousState != M485E_STATE_CONNECTED &&
+               @sysvar::M485E::Monitoring::ReadSwitch != 0 &&
+               M485E_Monitoring_IsEnabled() == 0)
+          {
+               monitoringResult = M485E_UI_SyncReadOptions();
+               if (monitoringResult == M485E_OK)
+                    monitoringResult = M485E_Monitoring_Start();
+               @sysvar::M485E::Monitoring::ResultCode = monitoringResult;
+               M485E_Core_ReportSyncFailure("MonitoringStart", monitoringResult);
+          }
+          gM485E_UILastLifecycleState = currentState;
      }
      M485E_Core_PollOneErrorEvent();
      setTimer(tM485E_LifecycleStatus, 100);

@@ -31,9 +31,7 @@ struct RtuResult
   RtuDisposition disposition = RtuDisposition::Discard;
   std::vector<std::uint8_t> response;
   std::int32_t diagnosticStatus = 0;
-  std::uint8_t deviceIndex = 0;
-  std::vector<std::size_t> changedRuleIndices;
-  std::vector<std::vector<std::uint16_t>> changedRuleValues;
+  std::vector<DeviceRegisterWriteResult> deviceWrites;
 };
 
 class ModbusRtuEngine final
@@ -53,6 +51,8 @@ class ModbusRtuEngine final
                         const std::vector<std::uint8_t>& request) const;
   RtuResult ProcessWrite(std::uint8_t deviceIndex, std::uint8_t slaveId,
                          const std::vector<std::uint8_t>& request);
+  RtuResult ProcessBroadcastWrite(std::uint8_t portSlot,
+                                  const std::vector<std::uint8_t>& request);
   static RtuResult Exception(std::uint8_t deviceIndex, std::uint8_t slaveId,
                              std::uint8_t functionCode, std::uint8_t exceptionCode);
 

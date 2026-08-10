@@ -26,6 +26,18 @@ struct RegisterWriteResult
   std::vector<std::vector<std::uint16_t>> changedRuleValues;
 };
 
+struct DeviceRegisterWriteResult
+{
+  std::uint8_t deviceIndex = 0;
+  RegisterWriteResult write;
+};
+
+struct BroadcastRegisterWriteResult
+{
+  std::int32_t status = 0;
+  std::vector<DeviceRegisterWriteResult> deviceWrites;
+};
+
 /**
  * @brief Owns the mutable register image for every configured Device Index.
  * @note Configuration is immutable and shared, while each DeviceRuntime has its
@@ -52,6 +64,14 @@ class RuntimeModel final
   RegisterWriteResult WriteRegisters(std::uint8_t index, std::uint16_t address,
                                      const std::vector<std::uint16_t>& values,
                                      WriteSource source);
+  /**
+   * @brief Atomically applies one FC10 broadcast to every configured Slave on a Port.
+   * @note Every target is validated and all change snapshots are prepared before any
+   *       Register image is modified. A failure therefore leaves all targets unchanged.
+   */
+  BroadcastRegisterWriteResult WriteBroadcastRegisters(
+      std::uint8_t portSlot, std::uint16_t address,
+      const std::vector<std::uint16_t>& values);
   RegisterWriteResult ResetDevice(std::uint8_t index);
   /** @brief Decodes a case-sensitive SignalName from one device register image. */
   std::int32_t ReadSignal(std::uint8_t index, std::string_view signalName,
@@ -84,6 +104,10 @@ class RuntimeModel final
   static std::vector<std::vector<std::uint16_t>> CaptureRuleValues(
       const ActiveConfiguration& configuration, const RegisterImage& image,
       const std::vector<std::size_t>& ruleIndices);
+  static std::vector<std::vector<std::uint16_t>> CaptureRuleValuesAfterWrite(
+      const ActiveConfiguration& configuration, const RegisterImage& image,
+      const std::vector<std::size_t>& ruleIndices, std::uint16_t writeAddress,
+      const std::vector<std::uint16_t>& writeValues);
 
   std::shared_ptr<const ActiveConfiguration> configuration_;
   std::array<std::unique_ptr<DeviceRuntime>, 256> devices_{};

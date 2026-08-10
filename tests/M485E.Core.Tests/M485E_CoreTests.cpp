@@ -379,6 +379,14 @@ void TestRuntimeRegisterAndSignalOperations()
               built.configuration->rules[direct.changedRuleIndices[0]].ruleId == 1 &&
               built.configuration->rules[direct.changedRuleIndices[1]].ruleId == 2,
           "changed Rule de-duplication or ordering failed");
+  const auto directOnly = runtime.WriteRegisters(0, 200, {0x1234U},
+                                                 m485e::core::WriteSource::Direct);
+  Require(directOnly.status == M485E_OK && directOnly.changed,
+          "Direct debug Write incorrectly required FC03 Rule permission");
+  const auto rtuDenied = runtime.WriteRegisters(0, 200, {0x5678U},
+                                                m485e::core::WriteSource::Rtu);
+  Require(rtuDenied.status == M485E_ERR_REGISTER_ACCESS_DENIED,
+          "RTU FC10 Write bypassed FC03 Rule permission");
 
   double physical = -1.0;
   Require(runtime.WriteSignal(0, "Power12V", 25.5).status == M485E_OK &&
@@ -479,7 +487,8 @@ void TestModbusRtuEngine()
   result = engine.Process(0, Rtu({1, 0x10, 0x27, 0x10, 0, 2, 4,
                                   0x12, 0x34, 0x56, 0x78}));
   Require(result.response.size() == 8 && result.response[1] == 0x10 &&
-              !result.changedRuleIndices.empty(),
+              result.deviceWrites.size() == 1U &&
+              !result.deviceWrites[0].write.changedRuleIndices.empty(),
           "FC10 normal response failed");
   std::vector<std::uint16_t> registers;
   Require(runtime.ReadRegisters(0, 10000, 2, registers) == M485E_OK &&
@@ -509,9 +518,59 @@ void TestModbusRtuEngine()
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
               result.response.empty(),
           "unknown Slave was not ignored");
-  result = engine.Process(0, Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0, 1}));
-  Require(result.disposition == m485e::core::RtuDisposition::Ignore,
-          "Broadcast request was not ignored");
+  Fixture broadcastFixture;
+  const std::string broadcastDevices = std::string(kDeviceHeader) +
+                                       "0,COM11,1,First,signals.csv\n"
+                                       "1,COM11,2,Second,signals.csv\n"
+                                       "2,COM12,1,Other Port,signals.csv\n";
+  const std::string broadcastRules = std::string(kRuleHeader) +
+                                     "0,1,0x03,10000,2,First Broadcast Target\n"
+                                     "1,1,0x03,10000,2,Second Broadcast Target\n"
+                                     "2,1,0x03,10000,2,Other Port Target\n";
+  const auto broadcastBuilt = ConfigurationLoader{}.Build(broadcastFixture.Write(
+      broadcastDevices, broadcastRules, ValidSignals()));
+  Require(broadcastBuilt.Succeeded(), "Broadcast fixture build failed");
+  m485e::core::RuntimeModel broadcastRuntime(broadcastBuilt.configuration);
+  m485e::core::ModbusRtuEngine broadcastEngine(broadcastRuntime);
+  result = broadcastEngine.Process(
+      0, Rtu({0, 0x10, 0x27, 0x10, 0, 2, 4, 0x11, 0x11, 0x22, 0x22}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.response.empty() && result.deviceWrites.size() == 2U,
+          "FC10 Broadcast was not applied silently to every Port-local Slave");
+  for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
+  {
+    Require(broadcastRuntime.ReadRegisters(index, 10000, 2, registers) == M485E_OK &&
+                registers == std::vector<std::uint16_t>({0x1111U, 0x2222U}),
+            "FC10 Broadcast did not update every Port-local Register image");
+  }
+  Require(broadcastRuntime.ReadRegisters(2, 10000, 2, registers) == M485E_OK &&
+              registers == std::vector<std::uint16_t>({0x4148U, 0x0000U}),
+          "FC10 Broadcast leaked into a different physical Port");
+  result = broadcastEngine.Process(0, Rtu({0, 0x03, 0x27, 0x10, 0, 1}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.response.empty() && result.deviceWrites.empty(),
+          "Broadcast Read was not a silent no-op");
+
+  Fixture atomicBroadcastFixture;
+  const std::string asymmetricRules = std::string(kRuleHeader) +
+                                      "0,1,0x03,10000,2,Writable Range\n"
+                                      "1,1,0x03,10000,1,Shorter Writable Range\n";
+  const auto atomicBroadcastBuilt = ConfigurationLoader{}.Build(
+      atomicBroadcastFixture.Write(OnePortDevices(), asymmetricRules, ValidSignals()));
+  Require(atomicBroadcastBuilt.Succeeded(), "Atomic Broadcast fixture build failed");
+  m485e::core::RuntimeModel atomicBroadcastRuntime(atomicBroadcastBuilt.configuration);
+  m485e::core::ModbusRtuEngine atomicBroadcastEngine(atomicBroadcastRuntime);
+  result = atomicBroadcastEngine.Process(
+      0, Rtu({0, 0x10, 0x27, 0x11, 0, 1, 2, 0xAB, 0xCD}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.response.empty() && result.deviceWrites.empty(),
+          "invalid FC10 Broadcast was not silent");
+  for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
+  {
+    Require(atomicBroadcastRuntime.ReadRegisters(index, 10001, 1, registers) == M485E_OK &&
+                registers[0] == 0x0000U,
+            "failed FC10 Broadcast partially modified a target Device");
+  }
 
   Fixture addressZeroFixture;
   const auto addressZeroBuilt = ConfigurationLoader{}.Build(addressZeroFixture.Write(
@@ -606,6 +665,16 @@ void TestSnapshotAndDiagnosticQueues()
   Require(errors.TryDequeue(512, output) == M485E_OK && output.repeatCount == 2 &&
               std::string(output.text.data()) == "bad CRC",
           "Error Event dequeue failed");
+  errors.Push(event, "first detail");
+  errors.Push(event, "second detail");
+  errorStats = errors.GetStats();
+  Require(errorStats.pending == 2 && errorStats.coalescedCount == 1,
+          "Error Events with different text were incorrectly coalesced");
+  Require(errors.TryDequeue(512, output) == M485E_OK &&
+              std::string(output.text.data()) == "first detail" &&
+              errors.TryDequeue(512, output) == M485E_OK &&
+              std::string(output.text.data()) == "second detail",
+          "Error Event text ordering was not preserved");
   for (int index = 0; index < 257; ++index)
   {
     event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED - index;
@@ -721,6 +790,14 @@ void TestRtuTimingAndStreamFraming()
   batch = parser.PushBytes(maximumWrite.data(), maximumWrite.size());
   Require(batch.frames.size() == 1U && batch.frames[0] == maximumWrite,
           "maximum FC10 request was not recovered");
+
+  std::vector<std::uint8_t> oversizedStream(65536U, 0x55U);
+  oversizedStream.insert(oversizedStream.end(), readRequest.begin(), readRequest.end());
+  parser.Reset();
+  batch = parser.PushBytes(oversizedStream.data(), oversizedStream.size());
+  Require(!batch.frames.empty() && batch.frames.back() == readRequest &&
+              batch.discardedSegments != 0U,
+          "oversized RTU input was not bounded and resynchronized");
 }
 
 class FakeSerialTransport final : public m485e::core::ISerialTransport
@@ -761,6 +838,8 @@ class FakeSerialTransport final : public m485e::core::ISerialTransport
   m485e::core::SerialWriteResult Write(const std::uint8_t* data,
                                        const std::size_t size) noexcept override
   {
+    // Intentionally complete only two bytes per call. This verifies that PortWorker
+    // continues a legal partial Win32 Write instead of truncating the RTU response.
     const std::size_t chunk = std::min<std::size_t>(2, size);
     std::lock_guard<std::mutex> lock(mutex_);
     output_.insert(output_.end(), data, data + chunk);
@@ -814,8 +893,53 @@ void TestPortWorkerWithPartialIoAndCancellation()
   worker.Stop();
   Require(response.size() == 7 && response[0] == 1 && response[1] == 3 &&
               response[2] == 2 && response[3] == 0x41 && response[4] == 0x48 &&
+              m485e::core::ModbusCrc16::IsValid(response) &&
               fatalCount.load() == 0 && !worker.IsRunning(),
           "Port Worker partial Write, cancellation, or RTU response failed");
+}
+
+void TestPortWorkerBroadcastWrite()
+{
+  Fixture fixture;
+  const std::string rules = std::string(kRuleHeader) +
+                            "0,1,0x03,10000,1,First Broadcast Target\n"
+                            "1,1,0x03,10000,1,Second Broadcast Target\n";
+  const auto built = ConfigurationLoader{}.Build(
+      fixture.Write(OnePortDevices(), rules, ValidSignals()));
+  Require(built.Succeeded(), "Worker Broadcast fixture build failed");
+  m485e::core::RuntimeModel runtime(built.configuration);
+  m485e::core::SnapshotQueueService snapshots(built.configuration);
+  snapshots.StartMonitoring();
+  m485e::core::ErrorQueue errors;
+  FakeSerialTransport transport(
+      Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0xA5, 0x5A}), 1U, true);
+  std::atomic<int> fatalCount{0};
+  m485e::core::PortWorker worker(
+      0, m485e::core::CalculateRtuTiming(
+             {115200, 8, m485e::core::SerialParity::None, 1}),
+      transport, runtime, snapshots, errors,
+      [&fatalCount](std::uint8_t, std::int32_t, std::uint32_t) { ++fatalCount; });
+  Require(worker.Start() == M485E_OK, "Broadcast Port Worker did not start");
+  bool updated = false;
+  std::vector<std::uint16_t> first;
+  std::vector<std::uint16_t> second;
+  for (int attempt = 0; attempt < 1000; ++attempt)
+  {
+    const bool firstUpdated = runtime.ReadRegisters(0, 10000, 1, first) == M485E_OK &&
+                              first[0] == 0xA55AU;
+    const bool secondUpdated = runtime.ReadRegisters(1, 10000, 1, second) == M485E_OK &&
+                               second[0] == 0xA55AU;
+    if (firstUpdated && secondUpdated)
+    {
+      updated = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  worker.Stop();
+  Require(updated && transport.Output().empty() &&
+              snapshots.GetStats(0).pending == 2U && fatalCount.load() == 0,
+          "Port Worker did not apply Broadcast silently or queue both changes");
 }
 }  // namespace
 
@@ -836,6 +960,7 @@ int main()
     TestMonitoringStopIsAnEnqueueBarrier();
     TestRtuTimingAndStreamFraming();
     TestPortWorkerWithPartialIoAndCancellation();
+    TestPortWorkerBroadcastWrite();
     std::cout << "M485E Phase 3-7 home-testable core tests PASS.\n";
     return 0;
   }

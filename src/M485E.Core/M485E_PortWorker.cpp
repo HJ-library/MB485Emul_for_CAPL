@@ -104,16 +104,12 @@ bool PortWorker::ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept
   if (result.diagnosticStatus != M485E_OK)
     Report(result.diagnosticStatus, M485E_STAGE_PARSE, 0,
            "Modbus RTU frame was discarded or failed internally.");
-  if (!result.changedRuleIndices.empty())
+  for (auto& deviceWrite : result.deviceWrites)
   {
-    // The protocol engine already committed the FC10 write. Repackage its captured
+    // The protocol engine already committed the FC10 write. Forward its captured
     // Rule values so monitoring observes exactly that committed state.
-    RegisterWriteResult write;
-    write.status = M485E_OK;
-    write.changed = true;
-    write.changedRuleIndices = std::move(result.changedRuleIndices);
-    write.changedRuleValues = std::move(result.changedRuleValues);
-    snapshots_.RecordChange(result.deviceIndex, WriteSource::Rtu, write);
+    snapshots_.RecordChange(deviceWrite.deviceIndex, WriteSource::Rtu,
+                            deviceWrite.write);
   }
   if (result.disposition != RtuDisposition::Response) return true;
   // Read completion is later than the physical final byte, so waiting one t3.5
@@ -128,12 +124,12 @@ bool PortWorker::IsAddressedFrame(const std::vector<std::uint8_t>& frame) const 
 {
   if (frame.empty()) return false;
   const std::uint8_t slaveId = frame[0];
-  // Slave ID 0 is the Modbus broadcast identifier. V1 intentionally leaves
-  // broadcast unsupported; register Address 0 remains a normal address.
-  if (slaveId == 0U || slaveId > 247U) return false;
+  // Slave ID 0 is a Port-local Broadcast target. It is deliberately independent
+  // from Register Address 0, which remains a normal FC03/FC04/FC10 address.
+  if (slaveId > 247U) return false;
   const auto configuration = runtime_.Configuration();
-  return portSlot_ < configuration->activePortCount &&
-         configuration->deviceBySlave[portSlot_][slaveId] >= 0;
+  if (portSlot_ >= configuration->activePortCount) return false;
+  return slaveId == 0U || configuration->deviceBySlave[portSlot_][slaveId] >= 0;
 }
 
 void PortWorker::Run() noexcept

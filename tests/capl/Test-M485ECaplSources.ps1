@@ -116,12 +116,20 @@ Require-Match $monitoring 'gM485E_ReadOptions\[slot\]\.portSlot\s*==\s*portSlot'
     'Periodic Monitoring must filter each ReadOption by its resolved PortSlot.'
 Require-Match $monitoring 'M485E_Monitoring_GetReadOptionCount' `
     'Monitoring ReadOption count accessor is missing.'
+Require-Match $monitoring 'long\s+M485E_Monitoring_IsEnabled\s*\(' `
+    'Monitoring enabled-state accessor is missing.'
+Require-Match $monitoring 'result\s*=\s*M485E_Monitoring_ApplyCandidates\s*\(\s*\)' `
+    'Monitoring Start must validate the current ReadOption candidate set.'
+Require-Match $monitoring 'M485E_Core_StopMonitoring\s*\(\s*\)' `
+    'Monitoring Start must roll back the DLL state when candidate validation fails.'
 
 Require-Match $ui 'AutoReadManual' 'Manual AutoRead adapter is missing.'
 Require-Match $ui 'M485E_Core_ReadSignal' 'Signal Read adapter is missing.'
 Require-Match $ui 'M485E_Core_WriteSignal' 'Signal Write adapter is missing.'
 Require-Match $ui 'struct\s+M485E_SignalRequest' 'Signal request struct is missing.'
 Require-Match $ui 'M485E_UI_LoadSignalRequest' 'Signal request loader is missing.'
+Require-Match $ui 'long\s+M485E_UI_SyncReadOptions\s*\(' `
+    'UI bulk ReadOption synchronization helper is missing.'
 Require-Match $ui 'readOptionCount\s*=\s*M485E_Monitoring_GetReadOptionCount\s*\(' `
     'UI must read the Monitoring ReadOption count through its accessor.'
 Require-Match $ui 'M485E_Core_ReadSignal\s*\(\s*gM485E_SignalRequest\.index,\s*gM485E_SignalRequest\.signalName,\s*gM485E_SignalRequest\.physicalValue\s*\)' `
@@ -131,6 +139,10 @@ Require-Match $ui 'M485E_Core_WriteSignal\s*\(\s*gM485E_SignalRequest\.index,\s*
 Require-Match $core 'M485E_Core_ReadSignal\s*\([^\)]*float&\s+outPhysicalValue\)' `
     'CAPL Signal Read wrapper must expose one caller-owned physical value by reference.'
 Require-Match $ui 'Check_ReadOption' 'ReadOption system variable adapter is missing.'
+Require-Match $ui 'currentState\s*==\s*M485E_STATE_CONNECTED[\s\S]*previousState\s*!=\s*M485E_STATE_CONNECTED[\s\S]*Monitoring::ReadSwitch\s*!=\s*0' `
+    'UI must restart requested Monitoring exactly once when Connection enters Connected.'
+Require-Match $ui 'currentState\s*!=\s*M485E_STATE_CONNECTED[\s\S]*M485E_Monitoring_IsEnabled\s*\(\s*\)' `
+    'UI must stop CAPL Monitoring timers after Connection leaves Connected.'
 Require-Match $ui 'sysSetVariableLongArray\s*\(\s*sysvar::M485E::ManualRead::Data' `
     'Manual Read must write the int array through sysSetVariableLongArray.'
 Require-Match $ui 'sysGetVariableLongArray\s*\(\s*sysvar::M485E::ManualWrite::Data' `

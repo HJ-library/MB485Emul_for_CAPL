@@ -3,6 +3,9 @@
 이 문서만 위에서부터 따라가면 `M485E.dll` 로드, CSV Refresh, 수동 Register/Signal 조작,
 실제 RS-485 연결과 가상 CAN Monitoring까지 순서대로 확인할 수 있다.
 
+회사 Configuration에 System Variable DB를 이미 등록했고 CAPL 수정과 Panel 제작 항목만
+필요하면 [`CAPL_PANEL_IMPLEMENTATION_GUIDE.md`](CAPL_PANEL_IMPLEMENTATION_GUIDE.md)를 먼저 본다.
+
 처음부터 Origin 기반 대용량 예제를 적용하지 않는다. 먼저 작은 기본 Map으로 DLL과 CAPL
 연동을 확인한 뒤 `examples/M485E_Test` Map으로 전환한다.
 

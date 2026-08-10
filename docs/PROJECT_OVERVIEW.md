@@ -95,8 +95,9 @@ Core가 Write Window 메시지로 정리한다.
 5. CRC 유효 요청 뒤 계산된 t3.5 Guard를 보장하고 FC03·FC04는 Register를 읽어 응답하며, FC10은 Register를 쓴 뒤 정상 응답한다.
 6. FC10에서 값이 실제로 바뀌면 변경 범위와 겹치는 모든 Rule의 Change Snapshot을 Port Queue에 넣는다.
 
-미등록 Slave와 Slave ID 0 Broadcast는 응답하지 않는다. Register Address 0은 별개의 정상
-주소다. 등록 Slave의 미지원 Function이나
+미등록 Slave에는 응답하지 않는다. Slave ID 0의 FC10 Broadcast는 수신 Port에 구성된 모든
+Device를 전체 검증 후 원자 적용하고 응답은 보내지 않으며, Broadcast FC03/FC04는 무응답·무적용이다.
+Register Address 0은 Slave ID 0과 별개의 정상 주소다. 등록 Slave의 미지원 Function이나
 잘못된 Address·Quantity는 Modbus Exception으로 응답한다. 한 Port의 처리 지연이 다른
 Port를 막지 않도록 Port별 Worker와 Framing 상태를 분리한다.
 
