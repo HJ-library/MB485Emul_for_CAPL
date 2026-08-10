@@ -86,9 +86,9 @@ $requiredFiles = @(
     'tests\capl\M485E_Phase2_ContractsProbe.can',
     'tests\capl\M485E_Phase9_CoreMonitoringProbe.can',
     'Config\CAPL\M485E\M485_E_Main.can',
-    'Config\Maps\DeviceMap.csv',
-    'Config\Maps\ModbusRule.csv',
-    'Config\Maps\Modbus485EmulMap.csv'
+    'Config\Maps\M485E_DeviceMap.csv',
+    'Config\Maps\M485E_FrameRule.csv',
+    'Config\Maps\M485E_RegisterMap.csv'
 )
 foreach ($relativePath in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf)) {

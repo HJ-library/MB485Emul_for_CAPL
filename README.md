@@ -2,6 +2,9 @@
 
 CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 신규 설계의 Phase 1~8 C++ 구현과 자동 검증, Phase 9~10의 CAPL Core/Monitoring/UI Adapter 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다. 이전 `src/Modbus485EmulatorDll` 코드는 참고용 Prototype이며 신규 Solution에서 빌드하지 않습니다.
 
+프로젝트가 어떻게 동작하는지 먼저 보려면 [Modbus485Emulator 한눈에 보기](docs/PROJECT_OVERVIEW.md)를 참조하세요.
+회사 PC에서 처음 적용할 때는 [회사 PC 적용 및 첫 시험 가이드](examples/M485E_Test/START_HERE_COMPANY_TEST.md)를 위에서부터 따라가세요.
+
 ## Phase 1 범위
 
 - Win32/x86 `M485E.dll`
@@ -143,7 +146,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 CANalyzer Program Node에는 `Config/CAPL/M485E/M485_E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하며, Panel은 `M485E::Connection::ConnectSwitch`와 나머지 System Variable에 연결합니다.
 
-CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[2]` 배열로 관리합니다. 각 원소의 `portSlot`, `comPortNumber`, `baudRate`, `dataBits`, `parity`, `stopBits`를 설정하며, 예를 들어 `comPortNumber = 11`은 Core에서 `COM11`로 변환된 뒤 기존 문자열 DLL ABI에 전달됩니다. COM 번호 허용 범위는 `1~999`이고 `DeviceMap.csv`의 Port 값은 Windows 이름 형식인 `COM11`을 유지합니다.
+CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[2]` 배열로 관리합니다. 각 원소의 `portSlot`, `comPortNumber`, `baudRate`, `dataBits`, `parity`, `stopBits`를 설정하며, 예를 들어 `comPortNumber = 11`은 Core에서 `COM11`로 변환된 뒤 기존 문자열 DLL ABI에 전달됩니다. COM 번호 허용 범위는 `1~999`이고 `M485E_DeviceMap.csv`의 Port 값은 Windows 이름 형식인 `COM11`을 유지합니다.
 
 ## 소스 구분
 

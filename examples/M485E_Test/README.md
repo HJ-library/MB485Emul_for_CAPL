@@ -6,22 +6,24 @@
 이 파일들은 회사 환경에서 실제 Address DB와 비교하기 위한 초안이다. 특히 아래의
 `확인 필요 항목`을 검토하기 전에는 실제 장비 시험용 최종 DB로 사용하지 않는다.
 
-회사에서 DLL, CAPL, System Variable, Board, 가상 CAN을 순서대로 확인할 때는
-[`COMPANY_TEST_CHECKLIST.md`](COMPANY_TEST_CHECKLIST.md)를 먼저 따른다.
+회사에서 처음 적용할 때는 [`START_HERE_COMPANY_TEST.md`](START_HERE_COMPANY_TEST.md)를
+먼저 따른다. DLL, CAPL, System Variable, CSV와 최소 Panel을 한 순서로 설명한다. 이후
+상세 검증은 [`COMPANY_TEST_CHECKLIST.md`](COMPANY_TEST_CHECKLIST.md)를 따른다.
 
 ## 파일 구성
 
 | 파일 | 용도 |
 |---|---|
-| `DeviceMap.csv` | Origin.can의 두 Port와 일곱 Slave를 Device Index로 매핑 |
-| `ModbusRule.csv` | 확인 가능한 장치별 Register 범위를 Monitoring Rule로 구성 |
-| `Modbus485EmulMap.csv` | 확인 가능한 Address를 16-bit Unsigned Signal 예제로 구성 |
+| `START_HERE_COMPANY_TEST.md` | 회사 PC 적용과 첫 시험을 한 순서로 정리한 시작 문서 |
+| `M485E_DeviceMap.csv` | Origin.can의 두 Port와 일곱 Slave를 Device Index로 매핑 |
+| `M485E_FrameRule.csv` | 확인 가능한 장치별 Register 범위를 Monitoring Rule로 구성 |
+| `M485E_RegisterMap.csv` | 확인 가능한 Address를 16-bit Unsigned Signal 예제로 구성 |
 | `M485E_SystemVariables.csv` | Panel에 필요한 기존 및 제안 System Variable 목록 |
 | `M485E_Test_Reference.xlsx` | 네 CSV 내용을 Excel에서 함께 검토하기 위한 참고용 Workbook |
 | `Panel/M485E_CANalyzer_Panel_Mockup.png` | M485E Read/Write 및 장치별 탭 Panel 시안 |
 
-DLL이 직접 사용하는 파일은 `DeviceMap.csv`, `ModbusRule.csv`,
-`Modbus485EmulMap.csv` 세 개다. Excel 파일과 System Variable 목록은 검토용이다.
+DLL이 직접 사용하는 파일은 `M485E_DeviceMap.csv`, `M485E_FrameRule.csv`,
+`M485E_RegisterMap.csv` 세 개다. Excel 파일과 System Variable 목록은 검토용이다.
 
 ## Device Index 예제
 
@@ -36,7 +38,7 @@ DLL이 직접 사용하는 파일은 `DeviceMap.csv`, `ModbusRule.csv`,
 | 6 | COM12 | 7 | Gas Detector-2 |
 
 `COM11`, `COM12`는 현재 Modbus485Emulator 예제 설정에 맞춘 임시값이다.
-회사 PC의 실제 COM 번호에 맞게 `DeviceMap.csv`와 CAPL Port 설정을 함께 변경한다.
+회사 PC의 실제 COM 번호에 맞게 `M485E_DeviceMap.csv`와 CAPL Port 설정을 함께 변경한다.
 
 ## Origin.can에서 확인된 내용
 

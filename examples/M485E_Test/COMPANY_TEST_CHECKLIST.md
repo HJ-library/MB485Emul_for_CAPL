@@ -1,5 +1,8 @@
 # Modbus485Emulator 회사 실환경 시험 체크리스트
 
+처음 적용하는 경우 이 체크리스트보다
+[`START_HERE_COMPANY_TEST.md`](START_HERE_COMPANY_TEST.md)를 먼저 따른다.
+
 이 문서는 CANalyzer 9.x SP8, SystemBase Multi USB-485, 실제 Board 환경에서 위에서부터
 한 항목씩 확인하기 위한 작업 순서다. 앞 단계가 실패하면 다음 단계로 넘어가지 말고
 Write Window의 오류 코드와 실제 동작을 기록한다.
@@ -53,7 +56,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 현재 CAPL 기본값은 COM11, COM12와 115200/8/N/1이다. 실제 설정과 다르면
 `Config/CAPL/M485E/M485_E_Main.can`의 `gM485E_PortConfigs[0..1]`을 수정한다.
-`DeviceMap.csv`의 `Port`도 같은 COM 이름으로 맞춰야 한다.
+`M485E_DeviceMap.csv`의 `Port`도 같은 COM 이름으로 맞춰야 한다.
 
 ## 4. 시험 1 - 자동 검증 재실행
 

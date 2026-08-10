@@ -7,7 +7,7 @@
 <text x='365.0' y='337.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>RS-485</text>
 <line x1='650' y1='345.0' x2='740' y2='345.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
 <rect x='625.0' y='321.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
-<text x='695.0' y='337.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>COM 0/1</text>
+<text x='695.0' y='337.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>Port Slot 0/1</text>
 <line x1='1090' y1='180.0' x2='1010' y2='345.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
 <rect x='980.0' y='238.5' width='140' height='22' rx='5' fill='#FFFFFF'/>
 <text x='1050.0' y='254.5' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>21 APIs</text>

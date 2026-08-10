@@ -116,7 +116,7 @@ def update_design():
         document.add_paragraph(
             "Main.can은 PortSlot별 COM 번호를 CAPL long으로 관리한다. "
             "M485E_Core_SetPortConfig는 ComPortNumber 1~999를 검증한 뒤 snprintf로 COM%d 문자열을 "
-            "생성하여 기존 M485E_Dll_SetPortConfig 문자열 ABI에 전달한다. DeviceMap.csv의 Port 칼럼과 "
+            "생성하여 기존 M485E_Dll_SetPortConfig 문자열 ABI에 전달한다. M485E_DeviceMap.csv의 Port 칼럼과 "
             "Win32 Serial 계층은 COM11 같은 Windows Port 이름을 계속 사용한다."
         )
         document.add_paragraph(

@@ -20,9 +20,9 @@ variables
     long stopBits;
   };
 
-  char gM485E_DeviceMapPath[128] = ".\\Config\\Maps\\DeviceMap.csv";
-  char gM485E_RuleMapPath[128] = ".\\Config\\Maps\\ModbusRule.csv";
-  char gM485E_EmulatorMapPath[128] = ".\\Config\\Maps\\Modbus485EmulMap.csv";
+  char gM485E_DeviceMapPath[128] = ".\\Config\\Maps\\M485E_DeviceMap.csv";
+  char gM485E_FrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
+  char gM485E_RegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
   struct M485E_PortConfig gM485E_PortConfigs[2];
 }
 
@@ -74,9 +74,9 @@ on start
   long result;
   result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
   if (result == M485E_OK)
-    result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485E_RuleMapPath);
+    result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485E_FrameRulePath);
   if (result == M485E_OK)
-    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485E_EmulatorMapPath);
+    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485E_RegisterMapPath);
   if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
   if (result == M485E_OK) result = M485E_Core_RefreshCsv();
   @sysvar::M485E::Connection::ResultCode = result;

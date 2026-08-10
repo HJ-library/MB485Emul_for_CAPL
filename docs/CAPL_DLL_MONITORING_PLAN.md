@@ -1,5 +1,11 @@
 # CAPL DLL Monitoring Plan
 
+> [!WARNING]
+> 이 문서는 초기 Prototype 단계의 비정규 참고 자료이며 현행 구현·요구사항 판단 기준이 아니다.
+> 주기, 초기 Snapshot, CAN 부하 보호, Byte Order 등 일부 내용은 현재 확정 설계와 충돌한다.
+> 현행 기준은 `REQUIREMENTS_SPEC.md`, 정식 SRS/기능사양/개발설계서와
+> `PROJECT_OVERVIEW.md`를 따른다.
+
 이 문서는 CANalyzer 9.x CAPL에서 사용할 x86 CAPL DLL 기반 Modbus485 Emulator의 1차 설계 계획입니다.
 
 ## 1. Target Environment
@@ -24,9 +30,9 @@ CAPL / Panel / RTU Master
         v
 CAPL DLL x86
         |
-        +-- DeviceMap.csv
-        +-- ModbusRule.csv
-        +-- Modbus485EmulMap.csv
+        +-- M485E_DeviceMap.csv
+        +-- M485E_FrameRule.csv
+        +-- M485E_RegisterMap.csv
         |
         +-- Register Map
         |
@@ -47,7 +53,7 @@ RS-485 포트와 CAN 채널은 1:1로 매핑합니다. 실제 송출은 CANalyze
 
 | Message Type | CAN ID Pattern | Meaning |
 | --- | --- | --- |
-| Cyclic Monitoring | `0x80IIRRMM` | ModbusRule.csv에 정의된 주기로 반복 송출 |
+| Cyclic Monitoring | `0x80IIRRMM` | M485E_FrameRule.csv에 정의된 주기로 반복 송출 |
 | Change Trigger Snapshot | `0x81IIRRMM` | Register 값 변경 시 즉시 Snapshot 송출 |
 
 | Field | Width | Description |
@@ -139,7 +145,7 @@ Data payload layout:
 
 | Condition | CAN ID Prefix | SourceType | Timing |
 | --- | --- | --- | --- |
-| Cyclic Monitoring | `0x80` | `0x00` | ModbusRule.csv에 정의된 주기로 반복 송출 |
+| Cyclic Monitoring | `0x80` | `0x00` | M485E_FrameRule.csv에 정의된 주기로 반복 송출 |
 | RTU Write Trigger Snapshot | `0x81` | `0x01` | 외부 Modbus Master 쓰기 요청 처리 직후 즉시 송출 |
 | Direct Write Trigger Snapshot | `0x81` | `0x02` | Panel/CAPL 직접 변경 직후 즉시 송출 |
 | Default Reset Snapshot | `0x81` | `0x03` | Reset 처리 직후 즉시 송출 |
@@ -165,11 +171,11 @@ Critical Overload 상태에서도 RTU 에뮬레이션은 유지합니다. 보호
 
 | CSV File | Purpose |
 | --- | --- |
-| DeviceMap.csv | Device Index, COM Port, Slave ID 매핑 |
-| ModbusRule.csv | Monitoring Rule 및 Register read range 정의 |
-| Modbus485EmulMap.csv | Register Map과 signal metadata 정의 |
+| M485E_DeviceMap.csv | Device Index, COM Port, Slave ID 매핑 |
+| M485E_FrameRule.csv | Monitoring Rule 및 Register read range 정의 |
+| M485E_RegisterMap.csv | Register Map과 signal metadata 정의 |
 
-## 12. DeviceMap.csv
+## 12. M485E_DeviceMap.csv
 
 | Column | Type | Required | Description |
 | --- | --- | --- | --- |
@@ -187,11 +193,11 @@ Validation rules:
 | Unique Slave per Port | 같은 `Port` 안에서 `Slave ID` 중복 불가 |
 | Valid Slave ID | Slave ID는 Modbus RTU 범위에 맞게 관리 |
 
-## 13. ModbusRule.csv
+## 13. M485E_FrameRule.csv
 
 | Column | Type | Required | Description |
 | --- | --- | --- | --- |
-| Index | integer | Yes | DeviceMap.csv의 `Index` |
+| Index | integer | Yes | M485E_DeviceMap.csv의 `Index` |
 | Rule_ID | integer | Yes | CAN ID 생성 규칙의 `RR` |
 | Function Code | hex/integer | Yes | `0x03` Holding Register 또는 `0x04` Input Register |
 | Address | integer | Yes | 시작 주소 |
@@ -202,19 +208,19 @@ Validation rules:
 
 | Rule | Description |
 | --- | --- |
-| Existing Device | `Index`는 DeviceMap.csv에 존재해야 함 |
+| Existing Device | `Index`는 M485E_DeviceMap.csv에 존재해야 함 |
 | Function Code Range | `Function Code`는 `0x03` 또는 `0x04` |
 | Quantity Range | Quantity는 1 이상 |
 | CAN Message Count | `ceil(Quantity / 4)`개의 Data Message 생성 |
 | Message Index Range | Header `0x01`, Data `0x02`부터 순차 증가 |
 
-> Open item: 주기 송출 조건을 위해 ModbusRule.csv에 cycle time 컬럼이 필요합니다. 현재 컬럼 목록에는 주기 값이 없으므로 `Cycle_ms` 컬럼 추가 여부를 결정해야 합니다.
+> Open item: 주기 송출 조건을 위해 M485E_FrameRule.csv에 cycle time 컬럼이 필요합니다. 현재 컬럼 목록에는 주기 값이 없으므로 `Cycle_ms` 컬럼 추가 여부를 결정해야 합니다.
 
-## 14. Modbus485EmulMap.csv
+## 14. M485E_RegisterMap.csv
 
 | Column | Type | Required | Description |
 | --- | --- | --- | --- |
-| Index | integer | Yes | DeviceMap.csv의 `Index` |
+| Index | integer | Yes | M485E_DeviceMap.csv의 `Index` |
 | Address | integer | Yes | Signal 시작 Register 주소 |
 | SignalName | string | Yes | Signal 이름 |
 | Length | integer | Yes | Frame size |
@@ -233,7 +239,7 @@ Validation rules:
 
 | Rule | Description |
 | --- | --- |
-| Existing Device | `Index`는 DeviceMap.csv에 존재해야 함 |
+| Existing Device | `Index`는 M485E_DeviceMap.csv에 존재해야 함 |
 | Address Mapping | Address는 Register Map 범위 안에 있어야 함 |
 | Byte Order Alias | `BigEndian`, `Motorola`, `LittleEndian`, `Intel` 표기 허용 |
 | Init Value Range | Init Value가 Min/Max 범위를 벗어나면 warning 또는 error 처리 |
@@ -256,7 +262,7 @@ Validation rules:
 | Topic | Question |
 | --- | --- |
 | CAPL DLL template | CANalyzer 9.x에서 일반 native DLL import로 충분한지, Vector CAPL DLL template/export table이 필요한지 확인 필요 |
-| Cycle time column | ModbusRule.csv에 주기 송출을 위한 `Cycle_ms` 컬럼 추가 필요 여부 |
+| Cycle time column | M485E_FrameRule.csv에 주기 송출을 위한 `Cycle_ms` 컬럼 추가 필요 여부 |
 | CAN channel ID | RS-485 Port와 Virtual CAN Channel 번호를 어떤 CSV에서 관리할지 결정 필요 |
 | RTU physical layer | DLL이 COM Port를 직접 열지, CAPL이 Serial/RS-485 이벤트를 전달할지 결정 필요 |
 | Bus load calculation | CANalyzer bus statistics를 CAPL에서 전달받을지, DLL 내부에서 송출량 기반 추정치를 사용할지 결정 필요 |
