@@ -29,6 +29,9 @@ variables
      char gM485E_FrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
      char gM485E_RegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
      struct M485E_PortConfig gM485E_PortConfigs[2];
+     // Port Slot 0/1이 출력할 CANalyzer 가상 CAN 채널 번호이다.
+     // 회사 Configuration의 채널 배치가 다르면 아래 두 값만 변경한다.
+     long gM485E_VirtualCanChannels[2];
 }
 
 // 두 포트의 기본 통신 조건을 채운다.
@@ -48,6 +51,9 @@ void M485E_Main_InitializePortConfigs()
      gM485E_PortConfigs[1].dataBits = 8;
      gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
      gM485E_PortConfigs[1].stopBits = 1;
+
+     gM485E_VirtualCanChannels[0] = 1;
+     gM485E_VirtualCanChannels[1] = 2;
 }
 
 // 준비된 포트 설정 배열을 앞에서부터 DLL에 등록한다.

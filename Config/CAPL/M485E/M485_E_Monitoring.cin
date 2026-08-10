@@ -129,7 +129,8 @@ void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
      arbitrationId = ((prefix & 0x01) << 24) |
           ((meta[M485E_SM_DEVICE_INDEX] & 0xFF) << 16) |
           ((meta[M485E_SM_RULE_ID] & 0xFF) << 8) | 1;
-     gM485E_MonitoringMessage.CAN = meta[M485E_SM_PORT_SLOT] + 1;
+     gM485E_MonitoringMessage.CAN =
+          gM485E_VirtualCanChannels[meta[M485E_SM_PORT_SLOT]];
      gM485E_MonitoringMessage.ID = mkExtId(arbitrationId);
      gM485E_MonitoringMessage.DLC = 8;
      gM485E_MonitoringMessage.byte(0) = meta[M485E_SM_DEVICE_INDEX];

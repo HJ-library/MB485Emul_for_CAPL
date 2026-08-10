@@ -41,6 +41,17 @@ Require-Match $main 'gM485E_PortConfigs\[0\]\.comPortNumber\s*=\s*11' `
     'Main Port 0 must use numeric COM port 11.'
 Require-Match $main 'gM485E_PortConfigs\[1\]\.comPortNumber\s*=\s*12' `
     'Main Port 1 must use numeric COM port 12.'
+Require-Match $main 'long\s+gM485E_VirtualCanChannels\s*\[\s*2\s*\]' `
+    'Main must own the two-Port virtual CAN channel mapping.'
+Require-Match $main 'gM485E_VirtualCanChannels\[0\]\s*=\s*1' `
+    'Main Port Slot 0 must map to virtual CAN channel 1 by default.'
+Require-Match $main 'gM485E_VirtualCanChannels\[1\]\s*=\s*2' `
+    'Main Port Slot 1 must map to virtual CAN channel 2 by default.'
+Require-Match $monitoring 'gM485E_MonitoringMessage\.CAN\s*=\s*gM485E_VirtualCanChannels\s*\[\s*meta\s*\[\s*M485E_SM_PORT_SLOT\s*\]\s*\]' `
+    'Monitoring must select the virtual CAN channel through the Main mapping.'
+if ($monitoring -match 'M485E_SM_PORT_SLOT\s*\]\s*\+\s*1') {
+    throw 'Monitoring must not hard-code virtual CAN channel as PortSlot + 1.'
+}
 Require-Match $main 'configIndex\s*<\s*elcount\(gM485E_PortConfigs\)' `
     'Main must apply every configured Port by iterating the structure array.'
 Require-Match $monitoring 'M485E_MONITORING_CYCLE_MS\s*=\s*1000' 'Monitoring cycle contract changed.'
