@@ -17,13 +17,16 @@
 | `START_HERE_COMPANY_TEST.md` | 회사 PC 적용과 첫 시험을 한 순서로 정리한 시작 문서 |
 | `M485E_DeviceMap.csv` | Origin.can의 두 Port와 일곱 Slave를 Device Index로 매핑 |
 | `M485E_FrameRule.csv` | 확인 가능한 장치별 Register 범위를 Monitoring Rule로 구성 |
-| `M485E_RegisterMap.csv` | 확인 가능한 Address를 16-bit Unsigned Signal 예제로 구성 |
+| `M485E_Chiller_RegisterMap.csv` | Chiller Register/Signal 템플릿 |
+| `M485E_E_HVAC_RegisterMap.csv` | E-HVAC Register/Signal 템플릿 |
+| `M485E_B_HVAC_RegisterMap.csv` | B-HVAC 3대가 공유하는 Register/Signal 템플릿 |
+| `M485E_Gas_RegisterMap.csv` | Gas Detector 2대가 공유하는 Register/Signal 템플릿 |
 | `M485E_SystemVariables.csv` | Panel에 필요한 기존 및 제안 System Variable 목록 |
 | `M485E_Test_Reference.xlsx` | 네 CSV 내용을 Excel에서 함께 검토하기 위한 참고용 Workbook |
 | `Panel/M485E_CANalyzer_Panel_Mockup.png` | M485E Read/Write 및 장치별 탭 Panel 시안 |
 
-DLL이 직접 사용하는 파일은 `M485E_DeviceMap.csv`, `M485E_FrameRule.csv`,
-`M485E_RegisterMap.csv` 세 개다. Excel 파일과 System Variable 목록은 검토용이다.
+DLL은 `M485E_DeviceMap.csv`, `M485E_FrameRule.csv`와 DeviceMap의 `CSV_DB_Name`이
+참조하는 네 Register Map을 사용한다. Excel 파일과 System Variable 목록은 검토용이다.
 
 ## Device Index 예제
 
@@ -111,7 +114,7 @@ Panel은 다음 세 영역으로 나눈다.
 4. Chiller의 누락된 Parameters 및 Parameters Setting Address를 추가한다.
 5. Gas Reset Address가 `40200`인지 `40201`인지 실제 Board 요청 Frame으로 확인한다.
 6. 실제 COM 번호에 맞게 DeviceMap과 CAPL Port 설정을 변경한다.
-7. 세 CSV를 Disconnect 상태에서 Refresh하고 CSV 오류가 없는지 확인한다.
+7. DeviceMap, FrameRule 및 참조 Register Map을 Disconnect 상태에서 Refresh하고 CSV 오류가 없는지 확인한다.
 8. Manual Read/Write로 각 Device Index를 시험한다.
 9. 장치 탭 Panel Adapter를 구현한 후 Signal Physical Value 및 Monitoring을 시험한다.
 

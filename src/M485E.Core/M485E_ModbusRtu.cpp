@@ -46,6 +46,7 @@ std::uint16_t ModbusCrc16::Compute(const std::uint8_t* data, const std::size_t s
 void ModbusCrc16::Append(std::vector<std::uint8_t>& frame)
 {
   const std::uint16_t crc = Compute(frame.data(), frame.size());
+  // Modbus RTU transmits the CRC low byte first, unlike its big-endian data fields.
   frame.push_back(static_cast<std::uint8_t>(crc & 0xFFU));
   frame.push_back(static_cast<std::uint8_t>(crc >> 8U));
 }
@@ -82,9 +83,12 @@ RtuResult ModbusRtuEngine::Process(const std::uint8_t portSlot,
     if (request.size() < 4U || request.size() > 256U || !ModbusCrc16::IsValid(request))
       return {RtuDisposition::Discard, {}, M485E_ERR_RTU_FRAME_DISCARDED, 0, {}, {}};
     const std::uint8_t slaveId = request[0];
-    if (slaveId == 0U || slaveId > 247U || portSlot >= 2U)
-      return {RtuDisposition::Ignore, {}, M485E_OK, 0, {}, {}};
     const auto configuration = runtime_.Configuration();
+    // Invalid or unconfigured slave addresses are ignored silently. Responding would
+    // create bus contention with the slave that actually owns the request.
+    if (slaveId == 0U || slaveId > 247U ||
+        portSlot >= configuration->activePortCount)
+      return {RtuDisposition::Ignore, {}, M485E_OK, 0, {}, {}};
     const std::int16_t devicePosition = configuration->deviceBySlave[portSlot][slaveId];
     if (devicePosition < 0) return {RtuDisposition::Ignore, {}, M485E_OK, 0, {}, {}};
     const std::uint8_t deviceIndex =
@@ -97,6 +101,8 @@ RtuResult ModbusRtuEngine::Process(const std::uint8_t portSlot,
   }
   catch (...)
   {
+    // A valid addressed request receives Server Device Failure when possible; only a
+    // frame too short to identify the request is discarded without a response.
     if (request.size() >= 2U)
     {
       auto result = Exception(0, request[0], request[1], kServerDeviceFailure);
@@ -169,6 +175,7 @@ RtuResult ModbusRtuEngine::ProcessWrite(const std::uint8_t deviceIndex,
   result.deviceIndex = deviceIndex;
   result.changedRuleIndices = write.changedRuleIndices;
   result.changedRuleValues = write.changedRuleValues;
+  // FC10 success echoes Slave, Function, Address, and Quantity only.
   result.response.assign(request.begin(), request.begin() + 6U);
   ModbusCrc16::Append(result.response);
   return result;

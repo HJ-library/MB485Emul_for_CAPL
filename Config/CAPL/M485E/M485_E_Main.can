@@ -1,93 +1,154 @@
 /*@!Encoding:949*/
 includes
 {
-  #pragma library("..\\DLL\\M485E.dll")
-  #include "M485E_Contracts.generated.cin"
-  #include "M485_E_Core.cin"
-  #include "M485_E_Monitoring.cin"
-  #include "M485_E_UI.cin"
+     // DLL은 Main.can 기준 상위 CAPL/Dll 폴더에서 로드한다.
+     // generated 파일은 DLL ABI 상수이고 나머지 cin 파일은 역할별 CAPL 모듈이다.
+     #pragma library("..\\Dll\\M485E.dll")
+     #include "M485E_Contracts.generated.cin"
+     #include "M485_E_Core.cin"
+     #include "M485_E_Monitoring.cin"
+     #include "M485_E_UI.cin"
 }
 
 variables
 {
-  struct M485E_PortConfig
-  {
-    long portSlot;
-    long comPortNumber;
-    long baudRate;
-    long dataBits;
-    long parity;
-    long stopBits;
-  };
+     // 하나의 RS-485 포트를 설정하는 CAPL 내부 자료형이다.
+     // portSlot은 DLL 내부 슬롯(0~3), comPortNumber는 Windows COM 번호이다.
+     struct M485E_PortConfig
+     {
+          long portSlot;
+          long comPortNumber;
+          long baudRate;
+          long dataBits;
+          long parity;
+          long stopBits;
+     };
 
-  char gM485E_DeviceMapPath[128] = ".\\Config\\Maps\\M485E_DeviceMap.csv";
-  char gM485E_FrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
-  char gM485E_RegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
-  struct M485E_PortConfig gM485E_PortConfigs[2];
+     // 아래 상대 경로는 CANalyzer 구성 파일 기준으로 절대 경로로 변환되어 DLL에 전달된다.
+     char gM485E_DeviceMapPath[128] = ".\\Maps\\M485E\\M485E_Device.csv";
+     char gM485E_FrameRulePath[128] = ".\\Maps\\M485E\\M485E_FrameRule.csv";
+     struct M485E_PortConfig gM485E_PortConfigs[4];
+     // DeviceMap의 고유 Port 수와 같은 값으로 설정한다. 현재 예제는 한 Port를 사용한다.
+     long gM485E_ActivePortCount = 1;
+     // Port Slot 0~3이 출력할 CANalyzer 가상 CAN 채널 번호이다.
+     long gM485E_VirtualCanChannels[4];
 }
 
+// 최대 네 포트의 기본 통신 조건과 가상 CAN 채널을 채운다.
+// 회사 환경의 COM 번호나 통신 속도가 다르면 이 함수의 값만 변경한다.
 void M485E_Main_InitializePortConfigs()
 {
-  gM485E_PortConfigs[0].portSlot = 0;
-  gM485E_PortConfigs[0].comPortNumber = 11;
-  gM485E_PortConfigs[0].baudRate = 115200;
-  gM485E_PortConfigs[0].dataBits = 8;
-  gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
-  gM485E_PortConfigs[0].stopBits = 1;
+     gM485E_PortConfigs[0].portSlot = 0;
+     gM485E_PortConfigs[0].comPortNumber = 11;
+     gM485E_PortConfigs[0].baudRate = 115200;
+     gM485E_PortConfigs[0].dataBits = 8;
+     gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[0].stopBits = 1;
 
-  gM485E_PortConfigs[1].portSlot = 1;
-  gM485E_PortConfigs[1].comPortNumber = 12;
-  gM485E_PortConfigs[1].baudRate = 115200;
-  gM485E_PortConfigs[1].dataBits = 8;
-  gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
-  gM485E_PortConfigs[1].stopBits = 1;
+     gM485E_PortConfigs[1].portSlot = 1;
+     gM485E_PortConfigs[1].comPortNumber = 12;
+     gM485E_PortConfigs[1].baudRate = 115200;
+     gM485E_PortConfigs[1].dataBits = 8;
+     gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[1].stopBits = 1;
+
+     gM485E_PortConfigs[2].portSlot = 2;
+     gM485E_PortConfigs[2].comPortNumber = 13;
+     gM485E_PortConfigs[2].baudRate = 115200;
+     gM485E_PortConfigs[2].dataBits = 8;
+     gM485E_PortConfigs[2].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[2].stopBits = 1;
+
+     gM485E_PortConfigs[3].portSlot = 3;
+     gM485E_PortConfigs[3].comPortNumber = 14;
+     gM485E_PortConfigs[3].baudRate = 115200;
+     gM485E_PortConfigs[3].dataBits = 8;
+     gM485E_PortConfigs[3].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[3].stopBits = 1;
+
+     gM485E_VirtualCanChannels[0] = 1;
+     gM485E_VirtualCanChannels[1] = 2;
+     gM485E_VirtualCanChannels[2] = 3;
+     gM485E_VirtualCanChannels[3] = 4;
 }
 
+// 준비된 포트 설정 배열을 앞에서부터 DLL에 등록한다.
+// 하나라도 실패하면 즉시 해당 오류 코드를 반환하며 뒤 포트는 적용하지 않는다.
+// 반환: M485E_OK 또는 최초로 실패한 Port 설정의 오류 코드.
 long M485E_Main_ApplyPortConfigs()
 {
-  long configIndex;
-  long result;
-  for (configIndex = 0; configIndex < elcount(gM485E_PortConfigs); configIndex++)
-  {
-    result = M485E_Core_SetPortConfig(
-        gM485E_PortConfigs[configIndex].portSlot,
-        gM485E_PortConfigs[configIndex].comPortNumber,
-        gM485E_PortConfigs[configIndex].baudRate,
-        gM485E_PortConfigs[configIndex].dataBits,
-        gM485E_PortConfigs[configIndex].parity,
-        gM485E_PortConfigs[configIndex].stopBits);
-    if (result != M485E_OK) return result;
-  }
-  return M485E_OK;
+     long configIndex;
+     long result;
+     if (gM485E_ActivePortCount < 1 ||
+          gM485E_ActivePortCount > elcount(gM485E_PortConfigs))
+          return M485E_ERR_PORT_CONFIG_INCOMPLETE;
+     for (configIndex = 0; configIndex < gM485E_ActivePortCount; configIndex++)
+     {
+          result = M485E_Core_SetPortConfig(
+               gM485E_PortConfigs[configIndex].portSlot,
+               gM485E_PortConfigs[configIndex].comPortNumber,
+               gM485E_PortConfigs[configIndex].baudRate,
+               gM485E_PortConfigs[configIndex].dataBits,
+               gM485E_PortConfigs[configIndex].parity,
+               gM485E_PortConfigs[configIndex].stopBits);
+          if (result != M485E_OK) return result;
+     }
+     return M485E_OK;
 }
 
+// 측정 시작 준비 단계: 포트 기본값을 만들고 현재 CAPL Program Node를 DLL에 등록한다.
+// Vector 공식 Sample과 같이 registerCAPLDLL은 이벤트 핸들러에서 직접 호출한다.
+// CSV 로딩, DLL Context 초기화와 실제 Serial 연결은 아직 수행하지 않는다.
 on preStart
 {
-  long result;
-  M485E_Main_InitializePortConfigs();
-  result = M485E_Core_Initialize();
-  if (result != M485E_OK) M485E_Core_ReportSyncFailure("Initialize", result);
+     M485E_Main_InitializePortConfigs();
+     gM485E_ContextRegistered = 0;
+     gM485E_ContextInitialized = 0;
+     gM485E_ContextHandle = registerCAPLDLL();
+     gM485E_ContextRegistered = 1;
+     write("M485E DLL registration: stage=preStart handle=%d", gM485E_ContextHandle);
 }
 
+// 측정 시작 단계: DLL Context 초기화, CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
+// Vector Handle 0도 정상값이므로 preStart에서 등록한 값을 그대로 초기화에 사용한다.
+// Context 초기화 실패 시 후속 API를 호출하지 않아 연쇄 오류를 막는다.
+// 이 단계에서는 Serial 포트를 열지 않으며 ConnectSwitch가 올라올 때 연결한다.
+// 마지막으로 UI 동기화용 타이머를 시작한다.
+// Refresh는 비동기 요청이므로 최종 완료 여부는 LifecycleStatus 타이머가 갱신한다.
 on start
 {
-  long result;
-  result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
-  if (result == M485E_OK)
-    result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485E_FrameRulePath);
-  if (result == M485E_OK)
-    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485E_RegisterMapPath);
-  if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
-  if (result == M485E_OK) result = M485E_Core_RefreshCsv();
-  @sysvar::M485E::Connection::ResultCode = result;
-  M485E_Core_ReportSyncFailure("StartupConfiguration", result);
-  M485E_UI_Start();
+     long result;
+
+     result = M485E_Core_Initialize();
+     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
+          result);
+
+     if (result != M485E_OK)
+     {
+          @sysvar::M485E::Connection::ResultCode = result;
+          M485E_Core_ReportSyncFailure("Initialize", result);
+     }
+     else
+     {
+          result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
+          if (result == M485E_OK)
+               result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
+                    gM485E_FrameRulePath);
+          if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
+          if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+          write("M485E startup configuration: result=%d", result);
+          @sysvar::M485E::Connection::ResultCode = result;
+          M485E_Core_ReportSyncFailure("StartupConfiguration", result);
+          M485E_UI_Start();
+     }
 }
 
+// 측정 종료 단계: 타이머와 모니터링을 먼저 멈춘 뒤 포트를 닫고 Context를 해제한다.
+// 역순 종료를 지켜 DLL 작업이 남은 상태에서 Context가 파기되지 않게 한다.
 on stopMeasurement
 {
-  M485E_UI_Stop();
-  M485E_Monitoring_Stop();
-  M485E_Core_Disconnect();
-  M485E_Core_Finalize();
+     M485E_UI_Stop();
+     M485E_Monitoring_Stop();
+     M485E_Core_Disconnect();
+     M485E_Core_Finalize();
 }

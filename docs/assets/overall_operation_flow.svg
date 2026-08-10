@@ -11,16 +11,16 @@
 <text x='1190.0' y='392.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>Start/Stop</text>
 <rect x='80' y='300' width='190' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
 <text x='175.0' y='338.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>preStart</text>
-<text x='175.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Initialize</text>
+<text x='175.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Register DLL</text>
 <rect x='330' y='300' width='190' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
-<text x='425.0' y='338.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Set Paths</text>
-<text x='425.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Set Ports</text>
+<text x='425.0' y='338.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Initialize Context</text>
+<text x='425.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Set Paths / Ports</text>
 <rect x='580' y='300' width='190' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
 <text x='675.0' y='338.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Refresh CSV</text>
 <text x='675.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Atomic Apply</text>
 <rect x='830' y='300' width='190' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
 <text x='925.0' y='338.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Connect</text>
-<text x='925.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>2 Ports</text>
+<text x='925.0' y='363.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>1~4 Ports</text>
 <rect x='1080' y='200' width='220' height='130' rx='14' fill='#E8F5E9' stroke='#2F855A' stroke-width='2.5'/>
 <text x='1190.0' y='241.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Run</text>
 <text x='1190.0' y='266.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>RTU Slave</text>

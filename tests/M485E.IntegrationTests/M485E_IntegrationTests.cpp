@@ -42,16 +42,16 @@ class Fixture final
     std::filesystem::create_directories(root_);
     Write("DeviceMap.csv",
           "Index,Port,Slave_ID,Device_Name,CSV_DB_Name\n"
-          "0,COM11,1,Device A,\n1,COM12,1,Device B,\n");
+          "0,COM11,1,Device A,Map.csv\n1,COM12,1,Device B,Map.csv\n");
     Write("Rule.csv",
           "Index,Rule_ID,Function_Code,Address,Quantity,Request_Name\n"
           "0,1,0x03,10000,4,Holding\n0,2,0x04,10002,2,Input\n"
           "1,1,0x03,200,2,Other\n");
     Write("Map.csv",
-          "Index,Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_Value,Value_Table,Min,Max\n"
-          "0,10000,Power12V,IEEE Float,4,BigEndian,0,32,1,0,V,12.5,,,\n"
-          "0,10002,Flag,Unsigned,4,BigEndian,30,1,1,0,,1,,,\n"
-          "1,200,Value,Unsigned,4,BigEndian,0,16,1,0,,7,,,\n");
+          "Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_Value,Value_Table,Min,Max\n"
+          "10000,Power12V,IEEE Float,4,BigEndian,0,32,1,0,V,12.5,,,\n"
+          "10002,Flag,Unsigned,4,BigEndian,30,1,1,0,,1,,,\n"
+          "200,Value,Unsigned,4,BigEndian,0,16,1,0,,7,,,\n");
   }
   ~Fixture() { std::filesystem::remove_all(root_); }
   std::string Path(const char* name) const { return (root_ / name).string(); }
@@ -109,8 +109,8 @@ int main(int argc, char** argv)
     Fixture fixture;
     constexpr std::uint32_t handle = 0x484F4D45U;
     Require(initialize(handle) == M485E_OK, "Initialize failed");
-    const std::array<std::string, 3> paths{fixture.Path("DeviceMap.csv"),
-                                          fixture.Path("Rule.csv"), fixture.Path("Map.csv")};
+    const std::array<std::string, 2> paths{fixture.Path("DeviceMap.csv"),
+                                          fixture.Path("Rule.csv")};
     for (std::size_t index = 0; index < paths.size(); ++index)
       Require(setPath(handle, static_cast<std::int32_t>(index + 1U),
                       static_cast<std::uint32_t>(paths[index].size()), paths[index].c_str()) ==
@@ -144,6 +144,10 @@ int main(int argc, char** argv)
                 readSignal(handle, 0, 8, "Power12V", &physical) == M485E_OK &&
                 physical == 25.5,
             "DLL Signal Write failed");
+    double secondPhysical = 0.0;
+    Require(readSignal(handle, 1, 8, "Power12V", &secondPhysical) == M485E_OK &&
+                secondPhysical == 12.5,
+            "shared Register Map did not create independent Device memory");
     Require(reset(handle, 0) == M485E_OK &&
                 readSignal(handle, 0, 8, "Power12V", &physical) == M485E_OK &&
                 physical == 12.5,
@@ -163,6 +167,37 @@ int main(int argc, char** argv)
     Require(lifecycle[M485E_LS_STATE] == M485E_STATE_DISCONNECTED &&
                 lifecycle[M485E_LS_LAST_RESULT] == M485E_ERR_SERIAL_OPEN_FAILED,
             "failed two-Port Connect did not roll back atomically");
+
+    // A later one-Port refresh must ignore the stale Slot 1 configuration because
+    // V1 has no separate API for clearing a previously configured inactive slot.
+    fixture.Write("DeviceMap.csv",
+                  "Index,Port,Slave_ID,Device_Name,CSV_DB_Name\n"
+                  "0,COM11,1,Device A,Map.csv\n");
+    fixture.Write("Rule.csv",
+                  "Index,Rule_ID,Function_Code,Address,Quantity,Request_Name\n"
+                  "0,1,0x03,10000,4,Holding\n");
+    Require(refresh(handle) == M485E_OK, "one-Port Refresh was not accepted");
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+              "one-Port Refresh status polling failed");
+      if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    Require(lifecycle[M485E_LS_LAST_RESULT] == M485E_OK,
+            "one-Port Refresh failed");
+    Require(connect(handle) == M485E_OK,
+            "one-Port Connect was rejected by an inactive stale PortSlot");
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+              "one-Port Connect status polling failed");
+      if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    Require(lifecycle[M485E_LS_STATE] == M485E_STATE_DISCONNECTED &&
+                lifecycle[M485E_LS_LAST_RESULT] == M485E_ERR_SERIAL_OPEN_FAILED,
+            "failed one-Port Connect did not reach the Serial Open stage");
     Require(finalize(handle) == M485E_OK, "Finalize failed");
     FreeLibrary(module);
     std::cout << "M485E DLL Phase 3-8 home integration tests PASS.\n";

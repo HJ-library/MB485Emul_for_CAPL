@@ -40,8 +40,10 @@ add_dependencies(M485E.Core M485E.VerifyContracts)
 
 add_library(M485E SHARED
   src/M485E.Dll/dllmain.cpp
+  src/M485E.Dll/M485E.def
   src/M485E.Dll/M485E_CaplTable.cpp
   src/M485E.Dll/M485E_DllApi.cpp
+  src/M485E.Dll/M485E_ViaRegistration.cpp
   src/M485E.Dll/M485E_Win32Serial.cpp
   src/M485E.Dll/M485E_Connection.cpp
 )

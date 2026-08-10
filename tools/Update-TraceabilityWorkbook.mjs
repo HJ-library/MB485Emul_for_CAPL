@@ -81,7 +81,7 @@ const rows = [
   ["TC-P5-AUTO-001", "5", "Automated", "CRC16, FC03/04/10, silent discard, exception vectors", "M485E.Core.Tests", "PASS", "EV-004~EV-007"],
   ["TC-P6-AUTO-001", "6", "Automated", "Snapshot/Error queues, immutable payload, overflow/coalesce/stats", "M485E.Core.Tests", "PASS", "EV-008~EV-010"],
   ["TC-P7-AUTO-001", "7", "Automated", "RTU timing/framing, partial I/O, cancellation, worker response", "M485E.Core.Tests + FakeSerialTransport", "PASS", "EV-003~EV-007, EV-014"],
-  ["TC-P8-AUTO-001", "8", "Automated", "Async refresh/connect, two-Port rollback, 21 API integration, finalize", "M485E.IntegrationTests", "PASS", "EV-002, EV-003, EV-014, EV-015"],
+  ["TC-P8-AUTO-001", "8", "Automated", "Async refresh/connect, 1~4 active-Port rollback, 21 API integration, finalize", "M485E.IntegrationTests", "PASS", "EV-002, EV-003, EV-014, EV-015"],
   ["TC-P9-STATIC-001", "9", "Static", "CAPL Core wrappers, 1s/10ms pump policy, 66/33 budget, Extended CAN", "Test-M485ECaplSources.ps1", "PASS", "EV-008~EV-011, EV-016"],
   ["TC-P10-STATIC-001", "10", "Static", "UI System Variable adapter, manual/auto read, write, signal control", "Test-M485ECaplSources.ps1", "PASS", "EV-011~EV-013, EV-016"],
   ["TC-REG-AUTO-001", "1~10", "Automated", "Win32 Debug/Release, /W4 /WX, ABI, contract, core, integration", "MSBuild + CMake + CTest", "PASS", "EV-001~EV-016"],

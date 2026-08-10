@@ -93,14 +93,14 @@ try {
     finally {
         $sha256.Dispose()
     }
-    if ($baselineHash -cne '7744d9476a1eeaa649f3ee9cf8d106a0d1809bbacb6ad4dabe5c892c9e6ccb80') {
+    if ($baselineHash -cne 'b2830518109061aeda9c5b593ffac21f0bd783025eaf03a322947f5de7cae551') {
         throw "A released Phase 2 baseline error definition was changed or reordered."
     }
 
-    if ($constantRows.Count -lt 183) {
+    if ($constantRows.Count -lt 185) {
         throw "The Phase 2 public constant baseline is incomplete."
     }
-    $constantBaselineText = (($constantRows | Select-Object -First 183 | ForEach-Object {
+    $constantBaselineText = (($constantRows | Select-Object -First 185 | ForEach-Object {
         '{0}|{1}|{2}|{3}' -f $_.Group, $_.Symbol, $_.Value, $_.Meaning
     }) -join "`n")
     $constantSha256 = [Security.Cryptography.SHA256]::Create()
@@ -112,7 +112,7 @@ try {
     finally {
         $constantSha256.Dispose()
     }
-    if ($constantBaselineHash -cne 'b2ca59375a261df01dd5a39575ee73fb203646d2e35d2fd051490a0b67a6a8de') {
+    if ($constantBaselineHash -cne '7b0242ada23fc5eb73d019c57d4e55bd33cac703b608067411ffff3df06b3c58') {
         throw "A Phase 2 public constant definition was changed or reordered."
     }
 

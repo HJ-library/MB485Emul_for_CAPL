@@ -19,10 +19,11 @@ variables
     long stopBits;
   };
 
-  char gM485EProbeDevicePath[128] = ".\\Config\\Maps\\M485E_DeviceMap.csv";
-  char gM485EProbeFrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
-  char gM485EProbeRegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
-  struct M485E_ProbePortConfig gM485EProbePortConfigs[2];
+  char gM485EProbeDevicePath[128] = ".\\Maps\\M485E\\M485E_Device.csv";
+  char gM485EProbeFrameRulePath[128] = ".\\Maps\\M485E\\M485E_FrameRule.csv";
+  struct M485E_ProbePortConfig gM485EProbePortConfigs[4];
+  long gM485E_ActivePortCount = 1;
+  long gM485E_VirtualCanChannels[4];
   long gM485EProbeLifecycle[9];
   msTimer tM485EProbeLifecycle;
 }
@@ -42,13 +43,32 @@ void M485E_Probe_InitializePortConfigs()
   gM485EProbePortConfigs[1].dataBits = 8;
   gM485EProbePortConfigs[1].parity = M485E_PARITY_NONE;
   gM485EProbePortConfigs[1].stopBits = 1;
+
+  gM485EProbePortConfigs[2].portSlot = 2;
+  gM485EProbePortConfigs[2].comPortNumber = 13;
+  gM485EProbePortConfigs[2].baudRate = 115200;
+  gM485EProbePortConfigs[2].dataBits = 8;
+  gM485EProbePortConfigs[2].parity = M485E_PARITY_NONE;
+  gM485EProbePortConfigs[2].stopBits = 1;
+
+  gM485EProbePortConfigs[3].portSlot = 3;
+  gM485EProbePortConfigs[3].comPortNumber = 14;
+  gM485EProbePortConfigs[3].baudRate = 115200;
+  gM485EProbePortConfigs[3].dataBits = 8;
+  gM485EProbePortConfigs[3].parity = M485E_PARITY_NONE;
+  gM485EProbePortConfigs[3].stopBits = 1;
+
+  gM485E_VirtualCanChannels[0] = 1;
+  gM485E_VirtualCanChannels[1] = 2;
+  gM485E_VirtualCanChannels[2] = 3;
+  gM485E_VirtualCanChannels[3] = 4;
 }
 
 long M485E_Probe_ApplyPortConfigs()
 {
   long configIndex;
   long result;
-  for (configIndex = 0; configIndex < elcount(gM485EProbePortConfigs); configIndex++)
+  for (configIndex = 0; configIndex < gM485E_ActivePortCount; configIndex++)
   {
     result = M485E_Core_SetPortConfig(
         gM485EProbePortConfigs[configIndex].portSlot,
@@ -64,15 +84,23 @@ long M485E_Probe_ApplyPortConfigs()
 
 on preStart
 {
-  long result;
   M485E_Probe_InitializePortConfigs();
-  result = M485E_Core_Initialize();
-  if (result != M485E_OK) write("M485E Phase 9 probe Initialize failed: %d", result);
+  gM485E_ContextRegistered = 0;
+  gM485E_ContextInitialized = 0;
+  gM485E_ContextHandle = registerCAPLDLL();
+  gM485E_ContextRegistered = 1;
 }
 
 on start
 {
   long result;
+  result = M485E_Core_Initialize();
+  if (result != M485E_OK)
+  {
+    write("M485E Phase 9 probe Initialize failed: %d", result);
+    return;
+  }
+
   M485E_Monitoring_ConfigureReadOption(0, 0, 1);
   M485E_Monitoring_ConfigureReadOption(1, 0, 2);
   M485E_Monitoring_ConfigureReadOption(2, 1, 1);
@@ -83,8 +111,6 @@ on start
   result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485EProbeDevicePath);
   if (result == M485E_OK)
     result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485EProbeFrameRulePath);
-  if (result == M485E_OK)
-    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485EProbeRegisterMapPath);
   if (result == M485E_OK) result = M485E_Probe_ApplyPortConfigs();
   if (result == M485E_OK) result = M485E_Core_RefreshCsv();
   write("M485E Phase 9 probe setup result: %d", result);

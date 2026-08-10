@@ -1,0 +1,9 @@
+root = true
+
+# CAPL files use CP949, so do not set EditorConfig's charset option.
+# Use five spaces instead of literal tab characters.
+[*.{can,cin}]
+indent_style = space
+indent_size = 5
+tab_width = 5
+insert_final_newline = true

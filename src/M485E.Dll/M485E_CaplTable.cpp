@@ -7,6 +7,9 @@ namespace
 constexpr char kCategory[] = "Modbus485Emulator";
 }
 
+// Vector reads this null-terminated table to bind CAPL declarations to exported
+// __stdcall functions. Type strings and array-direction flags are part of the ABI;
+// changing them requires matching CAPL, probe, and documentation changes.
 CAPL_DLL_INFO4 gM485ECaplTable[] = {
     {CDLL_VERSION_NAME, reinterpret_cast<CAPL_FARCALL>(CDLL_VERSION), "", "",
      CAPL_DLL_CDECL, 0xabcd, CDLL_EXPORT},
@@ -70,4 +73,5 @@ CAPL_DLL_INFO4 gM485ECaplTable[] = {
      {"ContextHandle", "StatsCapacity", "OutStats"}},
     {0, 0}};
 
+// The symbol name is fixed by Vector's CAPL DLL loader.
 extern "C" __declspec(dllexport) CAPL_DLL_INFO4* caplDllTable4 = gM485ECaplTable;

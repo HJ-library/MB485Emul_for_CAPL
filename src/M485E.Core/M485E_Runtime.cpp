@@ -17,6 +17,8 @@ RuntimeModel::RuntimeModel(std::shared_ptr<const ActiveConfiguration> configurat
   if (!configuration_) throw std::invalid_argument("configuration");
   for (const auto& device : configuration_->devices)
   {
+    // Always copy the template image. Devices that share CSV_DB_Name must still
+    // evolve independently at runtime.
     auto runtime = std::make_unique<DeviceRuntime>();
     runtime->current = *device.initialImage;
     for (const std::size_t signalIndex : device.signalIndices)
@@ -120,6 +122,7 @@ std::vector<std::size_t> RuntimeModel::FindChangedRules(
   }
   std::sort(changed.begin(), changed.end(), [&configuration](const std::size_t left,
                                                               const std::size_t right) {
+    // Stable Rule_ID order makes one write produce deterministic snapshot ordering.
     return configuration.rules[left].ruleId < configuration.rules[right].ruleId;
   });
   return changed;
@@ -172,6 +175,8 @@ RegisterWriteResult RuntimeModel::WriteRegisters(const std::uint8_t index,
   }
   if (changedAddresses.none()) return {M485E_OK, false, {}, {}};
   std::copy(values.begin(), values.end(), devices_[index]->current.values.begin() + address);
+  // Rule values are captured while the same device lock is held so a concurrent RTU
+  // or Panel write cannot make the change notification describe a newer state.
   auto changedRules = FindChangedRules(*configuration_, *device, changedAddresses);
   auto changedValues = CaptureRuleValues(*configuration_, devices_[index]->current, changedRules);
   return {M485E_OK, true, std::move(changedRules), std::move(changedValues)};

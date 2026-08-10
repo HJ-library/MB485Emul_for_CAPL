@@ -1,9 +1,9 @@
 Status,Namespace,Name,Full_Name,Type,Array_Length,Read_Only,Default,Panel_Control,Device_Index,Signal_Source,Description
 Existing,M485E::Connection,ConnectSwitch,M485E::Connection::ConnectSwitch,int32,,No,0,Toggle,,,Connect or disconnect both configured ports
-Existing,M485E::Connection,Refresh,M485E::Connection::Refresh,int32,,No,0,Button,,,Refresh all three CSV files while disconnected
-Existing,M485E::Connection,State,M485E::Connection::State,int32,,Yes,0,Indicator,,,Lifecycle state
-Existing,M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,Yes,0,Numeric display,,,Last completed lifecycle result
-Existing,M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,Yes,0,LED,,,CSV validation state
+Existing,M485E::Connection,Refresh,M485E::Connection::Refresh,int32,,No,0,Button,,,"Refresh DeviceMap, FrameRule, and referenced Register Maps while disconnected"
+Existing,M485E::Connection,State,M485E::Connection::State,int32,,No,0,Indicator,,,Lifecycle state; CAPL output displayed read-only on Panel
+Existing,M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,No,0,Numeric display,,,Last completed lifecycle result; CAPL output displayed read-only on Panel
+Existing,M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,No,0,LED,,,CSV validation state; CAPL output displayed read-only on Panel
 Existing,M485E::Connection,ResultCode,M485E::Connection::ResultCode,int32,,No,0,Numeric display,,,Last lifecycle command result
 Existing,M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,No,0,Toggle,,,Master monitoring switch
 Existing,M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,No,0,Rule checkboxes,,,Periodic Rule selection array
@@ -27,51 +27,51 @@ Existing,M485E::SignalControl,PhysicalValue,M485E::SignalControl::PhysicalValue,
 Existing,M485E::SignalControl,Read,M485E::SignalControl::Read,int32,,No,0,Button,,,Selected Signal Read command
 Existing,M485E::SignalControl,Write,M485E::SignalControl::Write,int32,,No,0,Button,,,Selected Signal Write command
 Existing,M485E::SignalControl,ResultCode,M485E::SignalControl::ResultCode,int32,,No,0,Numeric display,,,Selected Signal result
-Proposed - adapter required,M485E_Test::Chiller,SelectedSignal,M485E_Test::Chiller::SelectedSignal,string,,No,,Signal selector,0,M485E_RegisterMap.csv,Chiller selected SignalName
-Proposed - adapter required,M485E_Test::Chiller,SelectedAddress,M485E_Test::Chiller::SelectedAddress,int32,,Yes,0,Address display,0,M485E_RegisterMap.csv,Chiller selected literal address
-Proposed - adapter required,M485E_Test::Chiller,PhysicalValue,M485E_Test::Chiller::PhysicalValue,float64,,No,0,Value input/display,0,M485E_RegisterMap.csv,Chiller selected physical value
+Proposed - adapter required,M485E_Test::Chiller,SelectedSignal,M485E_Test::Chiller::SelectedSignal,string,,No,,Signal selector,0,M485E_Chiller_RegisterMap.csv,Chiller selected SignalName
+Proposed - adapter required,M485E_Test::Chiller,SelectedAddress,M485E_Test::Chiller::SelectedAddress,int32,,Yes,0,Address display,0,M485E_Chiller_RegisterMap.csv,Chiller selected literal address
+Proposed - adapter required,M485E_Test::Chiller,PhysicalValue,M485E_Test::Chiller::PhysicalValue,float64,,No,0,Value input/display,0,M485E_Chiller_RegisterMap.csv,Chiller selected physical value
 Proposed - adapter required,M485E_Test::Chiller,Read,M485E_Test::Chiller::Read,int32,,No,0,Button,0,M485E::SignalControl,Chiller Signal Read trigger
 Proposed - adapter required,M485E_Test::Chiller,Write,M485E_Test::Chiller::Write,int32,,No,0,Button,0,M485E::SignalControl,Chiller Signal Write trigger
 Proposed - adapter required,M485E_Test::Chiller,ResultCode,M485E_Test::Chiller::ResultCode,int32,,Yes,0,Numeric display,0,M485E::SignalControl,Chiller Signal operation result
 Proposed - adapter required,M485E_Test::Chiller,RuleEnable,M485E_Test::Chiller::RuleEnable,int32[],1,No,0,Rule checkboxes,0,M485E::Monitoring::Check_ReadOption,Chiller monitoring Rule selection
-Proposed - adapter required,M485E_Test::E_HVAC,SelectedSignal,M485E_Test::E_HVAC::SelectedSignal,string,,No,,Signal selector,1,M485E_RegisterMap.csv,E-HVAC selected SignalName
-Proposed - adapter required,M485E_Test::E_HVAC,SelectedAddress,M485E_Test::E_HVAC::SelectedAddress,int32,,Yes,0,Address display,1,M485E_RegisterMap.csv,E-HVAC selected literal address
-Proposed - adapter required,M485E_Test::E_HVAC,PhysicalValue,M485E_Test::E_HVAC::PhysicalValue,float64,,No,0,Value input/display,1,M485E_RegisterMap.csv,E-HVAC selected physical value
+Proposed - adapter required,M485E_Test::E_HVAC,SelectedSignal,M485E_Test::E_HVAC::SelectedSignal,string,,No,,Signal selector,1,M485E_E_HVAC_RegisterMap.csv,E-HVAC selected SignalName
+Proposed - adapter required,M485E_Test::E_HVAC,SelectedAddress,M485E_Test::E_HVAC::SelectedAddress,int32,,Yes,0,Address display,1,M485E_E_HVAC_RegisterMap.csv,E-HVAC selected literal address
+Proposed - adapter required,M485E_Test::E_HVAC,PhysicalValue,M485E_Test::E_HVAC::PhysicalValue,float64,,No,0,Value input/display,1,M485E_E_HVAC_RegisterMap.csv,E-HVAC selected physical value
 Proposed - adapter required,M485E_Test::E_HVAC,Read,M485E_Test::E_HVAC::Read,int32,,No,0,Button,1,M485E::SignalControl,E-HVAC Signal Read trigger
 Proposed - adapter required,M485E_Test::E_HVAC,Write,M485E_Test::E_HVAC::Write,int32,,No,0,Button,1,M485E::SignalControl,E-HVAC Signal Write trigger
 Proposed - adapter required,M485E_Test::E_HVAC,ResultCode,M485E_Test::E_HVAC::ResultCode,int32,,Yes,0,Numeric display,1,M485E::SignalControl,E-HVAC Signal operation result
 Proposed - adapter required,M485E_Test::E_HVAC,RuleEnable,M485E_Test::E_HVAC::RuleEnable,int32[],6,No,0,Rule checkboxes,1,M485E::Monitoring::Check_ReadOption,E-HVAC monitoring Rule selection
-Proposed - adapter required,M485E_Test::B_HVAC_1,SelectedSignal,M485E_Test::B_HVAC_1::SelectedSignal,string,,No,,Signal selector,2,M485E_RegisterMap.csv,B-HVAC-1 selected SignalName
-Proposed - adapter required,M485E_Test::B_HVAC_1,SelectedAddress,M485E_Test::B_HVAC_1::SelectedAddress,int32,,Yes,0,Address display,2,M485E_RegisterMap.csv,B-HVAC-1 selected literal address
-Proposed - adapter required,M485E_Test::B_HVAC_1,PhysicalValue,M485E_Test::B_HVAC_1::PhysicalValue,float64,,No,0,Value input/display,2,M485E_RegisterMap.csv,B-HVAC-1 selected physical value
+Proposed - adapter required,M485E_Test::B_HVAC_1,SelectedSignal,M485E_Test::B_HVAC_1::SelectedSignal,string,,No,,Signal selector,2,M485E_B_HVAC_RegisterMap.csv,B-HVAC-1 selected SignalName
+Proposed - adapter required,M485E_Test::B_HVAC_1,SelectedAddress,M485E_Test::B_HVAC_1::SelectedAddress,int32,,Yes,0,Address display,2,M485E_B_HVAC_RegisterMap.csv,B-HVAC-1 selected literal address
+Proposed - adapter required,M485E_Test::B_HVAC_1,PhysicalValue,M485E_Test::B_HVAC_1::PhysicalValue,float64,,No,0,Value input/display,2,M485E_B_HVAC_RegisterMap.csv,B-HVAC-1 selected physical value
 Proposed - adapter required,M485E_Test::B_HVAC_1,Read,M485E_Test::B_HVAC_1::Read,int32,,No,0,Button,2,M485E::SignalControl,B-HVAC-1 Signal Read trigger
 Proposed - adapter required,M485E_Test::B_HVAC_1,Write,M485E_Test::B_HVAC_1::Write,int32,,No,0,Button,2,M485E::SignalControl,B-HVAC-1 Signal Write trigger
 Proposed - adapter required,M485E_Test::B_HVAC_1,ResultCode,M485E_Test::B_HVAC_1::ResultCode,int32,,Yes,0,Numeric display,2,M485E::SignalControl,B-HVAC-1 Signal operation result
 Proposed - adapter required,M485E_Test::B_HVAC_1,RuleEnable,M485E_Test::B_HVAC_1::RuleEnable,int32[],5,No,0,Rule checkboxes,2,M485E::Monitoring::Check_ReadOption,B-HVAC-1 monitoring Rule selection
-Proposed - adapter required,M485E_Test::B_HVAC_2,SelectedSignal,M485E_Test::B_HVAC_2::SelectedSignal,string,,No,,Signal selector,3,M485E_RegisterMap.csv,B-HVAC-2 selected SignalName
-Proposed - adapter required,M485E_Test::B_HVAC_2,SelectedAddress,M485E_Test::B_HVAC_2::SelectedAddress,int32,,Yes,0,Address display,3,M485E_RegisterMap.csv,B-HVAC-2 selected literal address
-Proposed - adapter required,M485E_Test::B_HVAC_2,PhysicalValue,M485E_Test::B_HVAC_2::PhysicalValue,float64,,No,0,Value input/display,3,M485E_RegisterMap.csv,B-HVAC-2 selected physical value
+Proposed - adapter required,M485E_Test::B_HVAC_2,SelectedSignal,M485E_Test::B_HVAC_2::SelectedSignal,string,,No,,Signal selector,3,M485E_B_HVAC_RegisterMap.csv,B-HVAC-2 selected SignalName
+Proposed - adapter required,M485E_Test::B_HVAC_2,SelectedAddress,M485E_Test::B_HVAC_2::SelectedAddress,int32,,Yes,0,Address display,3,M485E_B_HVAC_RegisterMap.csv,B-HVAC-2 selected literal address
+Proposed - adapter required,M485E_Test::B_HVAC_2,PhysicalValue,M485E_Test::B_HVAC_2::PhysicalValue,float64,,No,0,Value input/display,3,M485E_B_HVAC_RegisterMap.csv,B-HVAC-2 selected physical value
 Proposed - adapter required,M485E_Test::B_HVAC_2,Read,M485E_Test::B_HVAC_2::Read,int32,,No,0,Button,3,M485E::SignalControl,B-HVAC-2 Signal Read trigger
 Proposed - adapter required,M485E_Test::B_HVAC_2,Write,M485E_Test::B_HVAC_2::Write,int32,,No,0,Button,3,M485E::SignalControl,B-HVAC-2 Signal Write trigger
 Proposed - adapter required,M485E_Test::B_HVAC_2,ResultCode,M485E_Test::B_HVAC_2::ResultCode,int32,,Yes,0,Numeric display,3,M485E::SignalControl,B-HVAC-2 Signal operation result
 Proposed - adapter required,M485E_Test::B_HVAC_2,RuleEnable,M485E_Test::B_HVAC_2::RuleEnable,int32[],5,No,0,Rule checkboxes,3,M485E::Monitoring::Check_ReadOption,B-HVAC-2 monitoring Rule selection
-Proposed - adapter required,M485E_Test::B_HVAC_3,SelectedSignal,M485E_Test::B_HVAC_3::SelectedSignal,string,,No,,Signal selector,4,M485E_RegisterMap.csv,B-HVAC-3 selected SignalName
-Proposed - adapter required,M485E_Test::B_HVAC_3,SelectedAddress,M485E_Test::B_HVAC_3::SelectedAddress,int32,,Yes,0,Address display,4,M485E_RegisterMap.csv,B-HVAC-3 selected literal address
-Proposed - adapter required,M485E_Test::B_HVAC_3,PhysicalValue,M485E_Test::B_HVAC_3::PhysicalValue,float64,,No,0,Value input/display,4,M485E_RegisterMap.csv,B-HVAC-3 selected physical value
+Proposed - adapter required,M485E_Test::B_HVAC_3,SelectedSignal,M485E_Test::B_HVAC_3::SelectedSignal,string,,No,,Signal selector,4,M485E_B_HVAC_RegisterMap.csv,B-HVAC-3 selected SignalName
+Proposed - adapter required,M485E_Test::B_HVAC_3,SelectedAddress,M485E_Test::B_HVAC_3::SelectedAddress,int32,,Yes,0,Address display,4,M485E_B_HVAC_RegisterMap.csv,B-HVAC-3 selected literal address
+Proposed - adapter required,M485E_Test::B_HVAC_3,PhysicalValue,M485E_Test::B_HVAC_3::PhysicalValue,float64,,No,0,Value input/display,4,M485E_B_HVAC_RegisterMap.csv,B-HVAC-3 selected physical value
 Proposed - adapter required,M485E_Test::B_HVAC_3,Read,M485E_Test::B_HVAC_3::Read,int32,,No,0,Button,4,M485E::SignalControl,B-HVAC-3 Signal Read trigger
 Proposed - adapter required,M485E_Test::B_HVAC_3,Write,M485E_Test::B_HVAC_3::Write,int32,,No,0,Button,4,M485E::SignalControl,B-HVAC-3 Signal Write trigger
 Proposed - adapter required,M485E_Test::B_HVAC_3,ResultCode,M485E_Test::B_HVAC_3::ResultCode,int32,,Yes,0,Numeric display,4,M485E::SignalControl,B-HVAC-3 Signal operation result
 Proposed - adapter required,M485E_Test::B_HVAC_3,RuleEnable,M485E_Test::B_HVAC_3::RuleEnable,int32[],5,No,0,Rule checkboxes,4,M485E::Monitoring::Check_ReadOption,B-HVAC-3 monitoring Rule selection
-Proposed - adapter required,M485E_Test::Gas_1,SelectedSignal,M485E_Test::Gas_1::SelectedSignal,string,,No,,Signal selector,5,M485E_RegisterMap.csv,Gas Detector-1 selected SignalName
-Proposed - adapter required,M485E_Test::Gas_1,SelectedAddress,M485E_Test::Gas_1::SelectedAddress,int32,,Yes,0,Address display,5,M485E_RegisterMap.csv,Gas Detector-1 selected literal address
-Proposed - adapter required,M485E_Test::Gas_1,PhysicalValue,M485E_Test::Gas_1::PhysicalValue,float64,,No,0,Value input/display,5,M485E_RegisterMap.csv,Gas Detector-1 selected physical value
+Proposed - adapter required,M485E_Test::Gas_1,SelectedSignal,M485E_Test::Gas_1::SelectedSignal,string,,No,,Signal selector,5,M485E_Gas_RegisterMap.csv,Gas Detector-1 selected SignalName
+Proposed - adapter required,M485E_Test::Gas_1,SelectedAddress,M485E_Test::Gas_1::SelectedAddress,int32,,Yes,0,Address display,5,M485E_Gas_RegisterMap.csv,Gas Detector-1 selected literal address
+Proposed - adapter required,M485E_Test::Gas_1,PhysicalValue,M485E_Test::Gas_1::PhysicalValue,float64,,No,0,Value input/display,5,M485E_Gas_RegisterMap.csv,Gas Detector-1 selected physical value
 Proposed - adapter required,M485E_Test::Gas_1,Read,M485E_Test::Gas_1::Read,int32,,No,0,Button,5,M485E::SignalControl,Gas Detector-1 Signal Read trigger
 Proposed - adapter required,M485E_Test::Gas_1,Write,M485E_Test::Gas_1::Write,int32,,No,0,Button,5,M485E::SignalControl,Gas Detector-1 Signal Write trigger
 Proposed - adapter required,M485E_Test::Gas_1,ResultCode,M485E_Test::Gas_1::ResultCode,int32,,Yes,0,Numeric display,5,M485E::SignalControl,Gas Detector-1 Signal operation result
 Proposed - adapter required,M485E_Test::Gas_1,RuleEnable,M485E_Test::Gas_1::RuleEnable,int32[],6,No,0,Rule checkboxes,5,M485E::Monitoring::Check_ReadOption,Gas Detector-1 monitoring Rule selection
-Proposed - adapter required,M485E_Test::Gas_2,SelectedSignal,M485E_Test::Gas_2::SelectedSignal,string,,No,,Signal selector,6,M485E_RegisterMap.csv,Gas Detector-2 selected SignalName
-Proposed - adapter required,M485E_Test::Gas_2,SelectedAddress,M485E_Test::Gas_2::SelectedAddress,int32,,Yes,0,Address display,6,M485E_RegisterMap.csv,Gas Detector-2 selected literal address
-Proposed - adapter required,M485E_Test::Gas_2,PhysicalValue,M485E_Test::Gas_2::PhysicalValue,float64,,No,0,Value input/display,6,M485E_RegisterMap.csv,Gas Detector-2 selected physical value
+Proposed - adapter required,M485E_Test::Gas_2,SelectedSignal,M485E_Test::Gas_2::SelectedSignal,string,,No,,Signal selector,6,M485E_Gas_RegisterMap.csv,Gas Detector-2 selected SignalName
+Proposed - adapter required,M485E_Test::Gas_2,SelectedAddress,M485E_Test::Gas_2::SelectedAddress,int32,,Yes,0,Address display,6,M485E_Gas_RegisterMap.csv,Gas Detector-2 selected literal address
+Proposed - adapter required,M485E_Test::Gas_2,PhysicalValue,M485E_Test::Gas_2::PhysicalValue,float64,,No,0,Value input/display,6,M485E_Gas_RegisterMap.csv,Gas Detector-2 selected physical value
 Proposed - adapter required,M485E_Test::Gas_2,Read,M485E_Test::Gas_2::Read,int32,,No,0,Button,6,M485E::SignalControl,Gas Detector-2 Signal Read trigger
 Proposed - adapter required,M485E_Test::Gas_2,Write,M485E_Test::Gas_2::Write,int32,,No,0,Button,6,M485E::SignalControl,Gas Detector-2 Signal Write trigger
 Proposed - adapter required,M485E_Test::Gas_2,ResultCode,M485E_Test::Gas_2::ResultCode,int32,,Yes,0,Numeric display,6,M485E::SignalControl,Gas Detector-2 Signal operation result

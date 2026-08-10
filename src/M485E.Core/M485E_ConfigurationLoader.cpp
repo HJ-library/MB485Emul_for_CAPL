@@ -40,10 +40,10 @@ constexpr std::array<const char*, 5> kDeviceHeader = {
     "Index", "Port", "Slave_ID", "Device_Name", "CSV_DB_Name"};
 constexpr std::array<const char*, 6> kRuleHeader = {
     "Index", "Rule_ID", "Function_Code", "Address", "Quantity", "Request_Name"};
-constexpr std::array<const char*, 15> kSignalHeader = {
-    "Index",      "Address",   "SignalName", "Type",       "Length",
-    "Byte_Order", "Start_Bit", "Size",       "Scale",      "Offset",
-    "Unit",       "Init_Value", "Value_Table", "Min",       "Max"};
+constexpr std::array<const char*, 14> kSignalHeader = {
+    "Address",    "SignalName", "Type",        "Length", "Byte_Order",
+    "Start_Bit",  "Size",       "Scale",       "Offset", "Unit",
+    "Init_Value", "Value_Table", "Min",         "Max"};
 
 struct ParsedCsv
 {
@@ -67,6 +67,8 @@ bool IsContinuationByte(const unsigned char value) noexcept
 
 bool IsValidUtf8(const std::string& bytes) noexcept
 {
+  // Reject embedded NUL as well as malformed UTF-8. CAPL and filesystem APIs use
+  // NUL-terminated strings, so accepting it here would make diagnostics ambiguous.
   std::size_t position = 0;
   while (position < bytes.size())
   {
@@ -126,6 +128,8 @@ std::string TrimAscii(std::string value)
 
 bool ParseCsvLine(const std::string& line, std::vector<std::string>& cells)
 {
+  // This parser deliberately supports RFC-style escaped quotes but not multiline
+  // fields. Row numbers must remain identical to physical file rows in diagnostics.
   cells.clear();
   std::string cell;
   bool quoted = false;
@@ -209,6 +213,8 @@ ConfigurationBuildResult ReadCsv(const std::string& path, const CsvFileType type
   {
     bytes.erase(0, 3);
   }
+  // A BOM is permitted only at byte zero. A later BOM normally means multiple
+  // concatenated files and would make an otherwise valid cell compare incorrectly.
   if (bytes.find("\xEF\xBB\xBF") != std::string::npos || !IsValidUtf8(bytes))
   {
     return Failure(M485E_ERR_CSV_INVALID_ENCODING, type, 0, 0,
@@ -379,7 +385,7 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
     }
     std::vector<std::string> cells = csv.rows[rowIndex];
     for (auto& cell : cells) cell = TrimAscii(std::move(cell));
-    const auto required = Required(cells, {0, 1, 2}, CsvFileType::DeviceMap,
+    const auto required = Required(cells, {0, 1, 2, 4}, CsvFileType::DeviceMap,
                                    static_cast<std::uint32_t>(rowIndex + 1));
     if (required.error.code != 0) return required;
     std::uint32_t index = 0;
@@ -404,6 +410,8 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
                      static_cast<std::uint32_t>(rowIndex + 1), 3,
                      "Port and Slave_ID pair is duplicated.");
 
+    // The first appearance order of each Port becomes PortSlot 0..3. Connect later
+    // verifies that CAPL supplied the same port names for those stable slots.
     auto port = std::find(ports.begin(), ports.end(), cells[1]);
     if (port == ports.end())
     {
@@ -411,7 +419,7 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
       if (ports.size() > M485E_PORT_SLOT_COUNT)
         return Failure(M485E_ERR_PORT_CONFIG_INCOMPLETE, CsvFileType::DeviceMap,
                        static_cast<std::uint32_t>(rowIndex + 1), 2,
-                       "DeviceMap contains more than two unique Ports.");
+                       "DeviceMap contains more than four unique Ports.");
       port = std::prev(ports.end());
     }
     const std::size_t portIndex = static_cast<std::size_t>(std::distance(ports.begin(), port));
@@ -425,11 +433,12 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
         static_cast<std::int16_t>(configuration.devices.size());
     configuration.devices.push_back(std::move(device));
   }
-  if (ports.size() != M485E_PORT_SLOT_COUNT)
+  if (ports.empty())
   {
     return Failure(M485E_ERR_PORT_CONFIG_INCOMPLETE, CsvFileType::DeviceMap, 0, 2,
-                   "DeviceMap must contain exactly two unique Ports.");
+                   "DeviceMap must contain at least one Port.");
   }
+  configuration.activePortCount = static_cast<std::uint8_t>(ports.size());
   for (std::size_t index = 0; index < ports.size(); ++index)
   {
     configuration.uniquePorts[index] = ports[index];
@@ -498,6 +507,8 @@ ConfigurationBuildResult ParseRules(const ParsedCsv& csv, ActiveConfiguration& c
         static_cast<std::uint32_t>(rowIndex + 1)});
     auto& device = configuration.devices[configuration.deviceByIndex[index]];
     device.ruleIndices.push_back(ruleIndex);
+    // Rules define protocol visibility. Signal frames may allocate additional
+    // registers for direct debug access, but they do not implicitly grant FC03/04.
     for (std::uint32_t offset = 0; offset < quantity; ++offset)
     {
       const std::size_t registerAddress = address + offset;
@@ -509,7 +520,8 @@ ConfigurationBuildResult ParseRules(const ParsedCsv& csv, ActiveConfiguration& c
   return {};
 }
 
-ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, ActiveConfiguration& configuration)
+ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, DeviceConfiguration& device,
+                                      ActiveConfiguration& configuration)
 {
   if (csv.rows.size() - 1U > M485E_MAX_SIGNALS)
     return Failure(M485E_ERR_LIMIT_EXCEEDED, CsvFileType::EmulatorMap,
@@ -523,32 +535,27 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, ActiveConfiguration&
     if (csv.rows[rowIndex].size() != kSignalHeader.size())
       return Failure(M485E_ERR_CSV_COLUMN_COUNT, CsvFileType::EmulatorMap,
                      static_cast<std::uint32_t>(rowIndex + 1), 0,
-                     "Modbus485EmulMap row column count is invalid.");
+                     "Register Map row column count is invalid.");
     std::vector<std::string> cells = csv.rows[rowIndex];
     for (auto& cell : cells) cell = TrimAscii(std::move(cell));
-    const auto required = Required(cells, {0, 1, 2, 3, 4, 5, 6, 7, 8, 11},
+    const auto required = Required(cells, {0, 1, 2, 3, 4, 5, 6, 7, 10},
                                    CsvFileType::EmulatorMap,
                                    static_cast<std::uint32_t>(rowIndex + 1));
     if (required.error.code != 0) return required;
-    if (!Fits(cells[2], M485E_MAX_SIGNAL_NAME_LENGTH) ||
-        !Fits(cells[10], M485E_MAX_UNIT_LENGTH) ||
-        !Fits(cells[12], M485E_MAX_VALUE_TABLE_LENGTH))
+    if (!Fits(cells[1], M485E_MAX_SIGNAL_NAME_LENGTH) ||
+        !Fits(cells[9], M485E_MAX_UNIT_LENGTH) ||
+        !Fits(cells[11], M485E_MAX_VALUE_TABLE_LENGTH))
       return Failure(M485E_ERR_LIMIT_EXCEEDED, CsvFileType::EmulatorMap,
                      static_cast<std::uint32_t>(rowIndex + 1), 0,
                      "Signal string exceeds its byte limit.");
 
-    std::uint32_t index = 0, address = 0, length = 0, startBit = 0, size = 0;
-    if (!ParseUnsigned(cells[0], M485E_MAX_DEVICE_INDEX, index) ||
-        !ParseUnsigned(cells[1], M485E_MAX_REGISTER_ADDRESS, address) ||
-        !ParseUnsigned(cells[4], 8, length) || !ParseUnsigned(cells[6], 63, startBit) ||
-        !ParseUnsigned(cells[7], 64, size))
+    std::uint32_t address = 0, length = 0, startBit = 0, size = 0;
+    if (!ParseUnsigned(cells[0], M485E_MAX_REGISTER_ADDRESS, address) ||
+        !ParseUnsigned(cells[3], 8, length) || !ParseUnsigned(cells[5], 63, startBit) ||
+        !ParseUnsigned(cells[6], 64, size))
       return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
                      static_cast<std::uint32_t>(rowIndex + 1), 0,
                      "Signal integer value is invalid.");
-    if (configuration.deviceByIndex[index] < 0)
-      return Failure(M485E_ERR_CSV_REFERENCE_NOT_FOUND, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 1,
-                     "Signal references an unknown Device Index.");
     if ((length != 2U && length != 4U && length != 6U && length != 8U) || size == 0U ||
         startBit + size > length * 8U || address + (length / 2U) - 1U > 65535U)
       return Failure(M485E_ERR_CSV_SIGNAL_FRAME, CsvFileType::EmulatorMap,
@@ -556,75 +563,80 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, ActiveConfiguration&
                      "Signal Length, Start_Bit, Size, or Address range is invalid.");
 
     SignalType type;
-    if (cells[3] == "Signed") type = SignalType::Signed;
-    else if (cells[3] == "Unsigned") type = SignalType::Unsigned;
-    else if (cells[3] == "IEEE Float") type = SignalType::IeeeFloat;
-    else if (cells[3] == "IEEE Double") type = SignalType::IeeeDouble;
+    if (cells[2] == "Signed") type = SignalType::Signed;
+    else if (cells[2] == "Unsigned") type = SignalType::Unsigned;
+    else if (cells[2] == "IEEE Float") type = SignalType::IeeeFloat;
+    else if (cells[2] == "IEEE Double") type = SignalType::IeeeDouble;
     else
       return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 4, "Signal Type is invalid.");
+                     static_cast<std::uint32_t>(rowIndex + 1), 3, "Signal Type is invalid.");
     ByteOrder order;
-    if (cells[5] == "BigEndian") order = ByteOrder::BigEndian;
-    else if (cells[5] == "LittleEndian") order = ByteOrder::LittleEndian;
+    if (cells[4] == "BigEndian") order = ByteOrder::BigEndian;
+    else if (cells[4] == "LittleEndian") order = ByteOrder::LittleEndian;
     else
       return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 6,
+                     static_cast<std::uint32_t>(rowIndex + 1), 5,
                      "Byte_Order is invalid.");
     if ((type == SignalType::IeeeFloat && size != 32U) ||
         (type == SignalType::IeeeDouble && size != 64U))
       return Failure(M485E_ERR_CSV_SIGNAL_FRAME, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 8,
+                     static_cast<std::uint32_t>(rowIndex + 1), 7,
                      "IEEE Float/Double Size must be 32/64.");
 
     double scale = 0.0, offset = 0.0, init = 0.0;
-    if (!ParseReal(cells[8], scale) || (!cells[9].empty() && !ParseReal(cells[9], offset)) ||
-        !ParseReal(cells[11], init))
+    if (!ParseReal(cells[7], scale) || (!cells[8].empty() && !ParseReal(cells[8], offset)) ||
+        !ParseReal(cells[10], init))
       return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
                      static_cast<std::uint32_t>(rowIndex + 1), 0,
                      "Signal floating-point value is invalid.");
     if ((type == SignalType::Signed || type == SignalType::Unsigned) && scale == 0.0)
       return Failure(M485E_ERR_CSV_SIGNAL_PARAMETER, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 9,
+                     static_cast<std::uint32_t>(rowIndex + 1), 8,
                      "Signed/Unsigned Scale must be non-zero.");
     if ((type == SignalType::IeeeFloat || type == SignalType::IeeeDouble) &&
         (scale != 1.0 || offset != 0.0))
       return Failure(M485E_ERR_CSV_SIGNAL_PARAMETER, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 9,
+                     static_cast<std::uint32_t>(rowIndex + 1), 8,
                      "IEEE Scale and Offset must be 1 and 0.");
     std::optional<double> minimum;
     std::optional<double> maximum;
     double parsed = 0.0;
+    if (!cells[12].empty())
+    {
+      if (!ParseReal(cells[12], parsed))
+        return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
+                       static_cast<std::uint32_t>(rowIndex + 1), 13, "Min is invalid.");
+      minimum = parsed;
+    }
     if (!cells[13].empty())
     {
       if (!ParseReal(cells[13], parsed))
         return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
-                       static_cast<std::uint32_t>(rowIndex + 1), 14, "Min is invalid.");
-      minimum = parsed;
-    }
-    if (!cells[14].empty())
-    {
-      if (!ParseReal(cells[14], parsed))
-        return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
-                       static_cast<std::uint32_t>(rowIndex + 1), 15, "Max is invalid.");
+                       static_cast<std::uint32_t>(rowIndex + 1), 14, "Max is invalid.");
       maximum = parsed;
     }
     if (minimum && maximum && *minimum > *maximum)
       return Failure(M485E_ERR_CSV_SIGNAL_PARAMETER, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 14, "Min must not exceed Max.");
+                     static_cast<std::uint32_t>(rowIndex + 1), 13, "Min must not exceed Max.");
     if ((minimum && init < *minimum) || (maximum && init > *maximum))
       return Failure(M485E_ERR_CSV_INIT_VALUE, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 12,
+                     static_cast<std::uint32_t>(rowIndex + 1), 11,
                      "Init_Value is outside Min/Max.");
 
-    const std::string signalKey = std::to_string(index) + "\n" + cells[2];
+    const std::string signalKey = cells[1];
     if (!signalNames.insert(signalKey).second)
       return Failure(M485E_ERR_CSV_DUPLICATE_SIGNAL, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 3,
+                     static_cast<std::uint32_t>(rowIndex + 1), 2,
                      "SignalName is duplicated for the Device.");
 
-    SignalDefinition signal{static_cast<std::uint8_t>(index),
+    if (configuration.signals.size() >= M485E_MAX_SIGNALS)
+      return Failure(M485E_ERR_LIMIT_EXCEEDED, CsvFileType::EmulatorMap,
+                     static_cast<std::uint32_t>(rowIndex + 1), 0,
+                     "Instantiated Signal count exceeds 4096.");
+
+    SignalDefinition signal{device.definition.index,
                             static_cast<std::uint16_t>(address),
-                            cells[2],
+                            cells[1],
                             type,
                             static_cast<std::uint8_t>(length),
                             order,
@@ -632,29 +644,34 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, ActiveConfiguration&
                             static_cast<std::uint8_t>(size),
                             scale,
                             offset,
-                            cells[10],
+                            cells[9],
                             init,
-                            cells[12],
+                            cells[11],
                             minimum,
                             maximum,
                             static_cast<std::uint32_t>(rowIndex + 1)};
+    // Signals may share one exact Address+Length frame when their bit masks do not
+    // overlap. Byte_Order is a frame property, so mixed order within it is rejected.
     const auto frameKey = FrameKey(signal);
     const auto orderEntry = frameOrder.emplace(frameKey, order);
     if (!orderEntry.second && orderEntry.first->second != order)
       return Failure(M485E_ERR_CSV_BYTE_ORDER_CONFLICT, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 6,
+                     static_cast<std::uint32_t>(rowIndex + 1), 5,
                      "Signals sharing a Frame must use one Byte_Order.");
     const std::uint64_t mask = SignalMask(signal);
     if ((usedBits[frameKey] & mask) != 0U)
       return Failure(M485E_ERR_CSV_SIGNAL_OVERLAP, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 7,
+                     static_cast<std::uint32_t>(rowIndex + 1), 6,
                      "Signal bits overlap within the Frame.");
     usedBits[frameKey] |= mask;
     const auto signalIndex = configuration.signals.size();
     configuration.signals.push_back(std::move(signal));
-    configuration.devices[configuration.deviceByIndex[index]].signalIndices.push_back(signalIndex);
+    device.signalIndices.push_back(signalIndex);
   }
 
+  // Distinct frame definitions may not overlap register addresses even if their bit
+  // masks happen not to overlap. This prevents two different frame interpretations
+  // from rewriting each other's backing words.
   struct FrameRange
   {
     std::uint8_t index;
@@ -664,10 +681,11 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, ActiveConfiguration&
     std::uint32_t row;
   };
   std::vector<FrameRange> ranges;
-  ranges.reserve(configuration.signals.size());
+  ranges.reserve(device.signalIndices.size());
   std::unordered_set<std::uint64_t> seenFrames;
-  for (const auto& signal : configuration.signals)
+  for (const auto signalIndex : device.signalIndices)
   {
+    const auto& signal = configuration.signals[signalIndex];
     const auto key = FrameKey(signal);
     if (seenFrames.insert(key).second)
       ranges.push_back(FrameRange{signal.index, signal.address,
@@ -682,20 +700,39 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, ActiveConfiguration&
     if (ranges[position - 1].index == ranges[position].index &&
         ranges[position].start <= ranges[position - 1].end)
       return Failure(M485E_ERR_CSV_FRAME_OVERLAP, CsvFileType::EmulatorMap,
-                     ranges[position].row, 2, "Different Signal Frames overlap Registers.");
+                     ranges[position].row, 1, "Different Signal Frames overlap Registers.");
   }
 
-  for (const auto& signal : configuration.signals)
+  for (const auto signalIndex : device.signalIndices)
   {
-    auto& device = configuration.devices[configuration.deviceByIndex[signal.index]];
+    const auto& signal = configuration.signals[signalIndex];
     for (std::uint32_t offsetIndex = 0; offsetIndex < signal.length / 2U; ++offsetIndex)
       device.initialImage->allocated.set(signal.address + offsetIndex);
+    // Encode through the runtime codec so refresh validation and later Panel writes
+    // use exactly the same Type, Scale, Offset, and byte-order rules.
     const std::int32_t status = m485e::core::SignalCodec::Encode(signal, signal.initValue,
                                                                 *device.initialImage);
     if (status != M485E_OK)
       return Failure(M485E_ERR_CSV_INIT_VALUE, CsvFileType::EmulatorMap,
-                     signal.sourceRow, 12, "Init_Value could not be encoded into the Signal Frame.");
+                     signal.sourceRow, 11, "Init_Value could not be encoded into the Signal Frame.");
   }
+  return {};
+}
+
+ConfigurationBuildResult ResolveRegisterMapPath(const std::filesystem::path& deviceMapPath,
+                                                const DeviceDefinition& device,
+                                                std::filesystem::path& resolved)
+{
+  const std::filesystem::path relative = std::filesystem::u8path(device.csvDbName);
+  if (relative.empty() || relative.is_absolute() || relative.has_root_name() ||
+      relative.has_root_directory())
+    return Failure(M485E_ERR_CSV_PATH_INVALID, CsvFileType::DeviceMap, device.sourceRow, 5,
+                   "CSV_DB_Name must be a relative Register Map path.");
+  for (const auto& component : relative)
+    if (component == "..")
+      return Failure(M485E_ERR_CSV_PATH_INVALID, CsvFileType::DeviceMap, device.sourceRow, 5,
+                     "CSV_DB_Name must not escape the DeviceMap directory.");
+  resolved = (deviceMapPath.parent_path() / relative).lexically_normal();
   return {};
 }
 }  // namespace
@@ -706,18 +743,14 @@ ConfigurationBuildResult ConfigurationLoader::Build(const CsvPaths& paths) const
 {
   try
   {
-    ParsedCsv deviceCsv, ruleCsv, signalCsv;
+    ParsedCsv deviceCsv, ruleCsv;
     auto result = ReadCsv(paths.values[0], CsvFileType::DeviceMap, deviceCsv);
     if (result.error.code != 0) return result;
     result = ReadCsv(paths.values[1], CsvFileType::ModbusRule, ruleCsv);
     if (result.error.code != 0) return result;
-    result = ReadCsv(paths.values[2], CsvFileType::EmulatorMap, signalCsv);
-    if (result.error.code != 0) return result;
     result = ValidateHeader(deviceCsv, CsvFileType::DeviceMap, kDeviceHeader);
     if (result.error.code != 0) return result;
     result = ValidateHeader(ruleCsv, CsvFileType::ModbusRule, kRuleHeader);
-    if (result.error.code != 0) return result;
-    result = ValidateHeader(signalCsv, CsvFileType::EmulatorMap, kSignalHeader);
     if (result.error.code != 0) return result;
 
     auto configuration = std::make_shared<ActiveConfiguration>();
@@ -725,8 +758,44 @@ ConfigurationBuildResult ConfigurationLoader::Build(const CsvPaths& paths) const
     if (result.error.code != 0) return result;
     result = ParseRules(ruleCsv, *configuration);
     if (result.error.code != 0) return result;
-    result = ParseSignals(signalCsv, *configuration);
-    if (result.error.code != 0) return result;
+    const std::filesystem::path deviceMapPath = std::filesystem::u8path(paths.values[0]);
+    std::unordered_map<std::string, ParsedCsv> registerMaps;
+    for (auto& device : configuration->devices)
+    {
+      std::filesystem::path registerMapPath;
+      result = ResolveRegisterMapPath(deviceMapPath, device.definition, registerMapPath);
+      if (result.error.code != 0) return result;
+      const std::string cacheKey = registerMapPath.u8string();
+      auto entry = registerMaps.find(cacheKey);
+      if (entry == registerMaps.end())
+      {
+        ParsedCsv parsed;
+        result = ReadCsv(cacheKey, CsvFileType::EmulatorMap, parsed);
+        if (result.error.code != 0)
+        {
+          result.error.text = "Register Map '" + device.definition.csvDbName + "': " +
+                              result.error.text;
+          return result;
+        }
+        result = ValidateHeader(parsed, CsvFileType::EmulatorMap, kSignalHeader);
+        if (result.error.code != 0)
+        {
+          result.error.text = "Register Map '" + device.definition.csvDbName + "': " +
+                              result.error.text;
+          return result;
+        }
+        entry = registerMaps.emplace(cacheKey, std::move(parsed)).first;
+      }
+      // Parsed rows are cached per physical file, but ParseSignals instantiates new
+      // definitions and Init_Value memory for every Device Index that shares the map.
+      result = ParseSignals(entry->second, device, *configuration);
+      if (result.error.code != 0)
+      {
+        result.error.text = "Register Map '" + device.definition.csvDbName + "': " +
+                            result.error.text;
+        return result;
+      }
+    }
     result.configuration = std::move(configuration);
     return result;
   }
@@ -749,9 +818,12 @@ ConfigurationRefreshResult ConfigurationStore::Refresh(const CsvPaths& paths,
   std::lock_guard<std::mutex> lock(mutex_);
   if (!build.Succeeded())
   {
+    // Keep the last-good snapshot for diagnostics, but mark it stale so lifecycle
+    // code cannot Connect until a later refresh succeeds.
     stale_ = true;
     return ConfigurationRefreshResult{build.error.code, generation_, build.error};
   }
+  // Publish only a fully built graph; readers never observe a partially parsed CSV.
   active_ = build.configuration;
   stale_ = false;
   ++generation_;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "M485E_Contracts.generated.h"
+
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -11,6 +13,8 @@
 
 namespace m485e::core
 {
+// Logical API values are kept stable even though Register Maps are now resolved
+// through DeviceDefinition::csvDbName rather than CsvPaths::values[2].
 enum class CsvFileType : std::int32_t
 {
   DeviceMap = 1,
@@ -89,6 +93,8 @@ struct SignalDefinition
 
 struct RegisterImage
 {
+  // Values and access masks share the full Modbus address domain so range checks
+  // remain constant-time and never depend on sparse-container iterator validity.
   std::array<std::uint16_t, 65536> values{};
   std::bitset<65536> allocated;
   std::bitset<65536> fc03Readable;
@@ -103,14 +109,20 @@ struct DeviceConfiguration
   std::shared_ptr<RegisterImage> initialImage;
 };
 
+/**
+ * @brief Immutable configuration graph published after an atomic CSV refresh.
+ * @note Lookup arrays use -1 as the not-found sentinel and allow RTU and CAPL
+ *       paths to resolve a device without scanning the CSV-order vectors.
+ */
 struct ActiveConfiguration
 {
   std::vector<DeviceConfiguration> devices;
   std::vector<RuleDefinition> rules;
   std::vector<SignalDefinition> signals;
   std::array<std::int16_t, 256> deviceByIndex{};
-  std::array<std::array<std::int16_t, 248>, 2> deviceBySlave{};
-  std::array<std::string, 2> uniquePorts{};
+  std::array<std::array<std::int16_t, 248>, M485E_PORT_SLOT_COUNT> deviceBySlave{};
+  std::array<std::string, M485E_PORT_SLOT_COUNT> uniquePorts{};
+  std::uint8_t activePortCount = 0;
   std::unordered_map<std::string, std::size_t> portLookup;
 
   ActiveConfiguration();
@@ -118,6 +130,8 @@ struct ActiveConfiguration
 
 struct CsvPaths
 {
+  // V1 retains three ABI slots. The loader consumes DeviceMap and FrameRule;
+  // DeviceMap CSV_DB_Name selects each reusable Register Map template.
   std::array<std::string, 3> values{};
 };
 

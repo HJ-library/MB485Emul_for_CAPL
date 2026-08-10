@@ -8,6 +8,7 @@
 
 namespace m485e::core
 {
+/** @brief Implements the Modbus RTU CRC-16 wire algorithm and low-byte-first CRC storage. */
 class ModbusCrc16 final
 {
  public:
@@ -18,6 +19,8 @@ class ModbusCrc16 final
 
 enum class RtuDisposition
 {
+  // Response sends response bytes, Ignore remains silent for another slave,
+  // and Discard rejects a malformed frame without a Modbus exception response.
   Response,
   Ignore,
   Discard,
@@ -37,6 +40,11 @@ class ModbusRtuEngine final
 {
  public:
   explicit ModbusRtuEngine(RuntimeModel& runtime) noexcept;
+  /**
+   * @brief Processes one CRC-validated candidate frame for a physical port slot.
+   * @return A response, silent-ignore, or discard decision plus diagnostic data.
+   * @note Only FC03, FC04, and FC10 are implemented by the emulator.
+   */
   RtuResult Process(std::uint8_t portSlot, const std::vector<std::uint8_t>& request) noexcept;
 
  private:

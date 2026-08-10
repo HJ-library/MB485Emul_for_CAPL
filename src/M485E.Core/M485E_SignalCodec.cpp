@@ -24,6 +24,8 @@ std::uint64_t MaskForSize(const std::uint8_t size) noexcept
 std::uint64_t ReadLogicalFrame(const m485e::core::SignalDefinition& signal,
                                const m485e::core::RegisterImage& image) noexcept
 {
+  // Register addresses always progress high-word first. LittleEndian changes only
+  // the two bytes inside each 16-bit register, never the order of registers.
   std::uint64_t frame = 0;
   const std::uint32_t wordCount = signal.length / 2U;
   for (std::uint32_t offset = 0; offset < wordCount; ++offset)
@@ -85,6 +87,8 @@ std::int32_t SignalCodec::Encode(const SignalDefinition& signal, const double ph
   }
   else
   {
+    // CAPL transfers physical values as double. Integers outside +/-2^53 cannot be
+    // represented exactly and are rejected rather than silently changing raw bits.
     const double candidate = (physicalValue - signal.offset) / signal.scale;
     if (!std::isfinite(candidate)) return M485E_ERR_SIGNAL_CONVERSION;
     const double rounded = std::round(candidate);
@@ -117,6 +121,8 @@ std::int32_t SignalCodec::Encode(const SignalDefinition& signal, const double ph
 
   const std::uint64_t valueMask = MaskForSize(signal.size);
   std::uint64_t frame = ReadLogicalFrame(signal, image);
+  // Start_Bit counts from the least-significant bit of the logical frame, matching
+  // the Windows-calculator convention defined by the CSV contract.
   const std::uint64_t fieldMask = signal.size == 64 ? valueMask : valueMask << signal.startBit;
   frame = (frame & ~fieldMask) | ((raw & valueMask) << signal.startBit);
   WriteLogicalFrame(signal, frame, image);

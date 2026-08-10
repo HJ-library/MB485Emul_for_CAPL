@@ -63,6 +63,8 @@ struct SyncError
 
 struct Context
 {
+  // All objects below belong to one CAPL context and are guarded by gMutex unless
+  // their own type documents an internal mutex. V1 intentionally supports one context.
   std::uint32_t handle = 0;
   bool closing = false;
   std::array<std::string, M485E_FILE_TYPE_COUNT> csvPaths{};
@@ -85,6 +87,8 @@ struct Context
 
 std::mutex gMutex;
 std::unique_ptr<Context> gContext;
+// Refresh, Connect, and Disconnect share one joinable thread slot because lifecycle
+// state validation guarantees that only one of those operations can be active.
 std::thread gLifecycleThread;
 std::atomic<bool> gLifecycleThreadDone{true};
 
@@ -105,7 +109,7 @@ const ErrorDefinition* ErrorDefinitionFor(const std::int32_t code) noexcept
 std::int32_t ValidateContext(const std::uint32_t handle) noexcept
 {
   if (!gContext) return M485E_ERR_NOT_INITIALIZED;
-  if (handle == 0U || handle != gContext->handle || gContext->closing)
+  if (handle != gContext->handle || gContext->closing)
     return M485E_ERR_INVALID_CONTEXT;
   return M485E_OK;
 }
@@ -151,6 +155,8 @@ std::int32_t ValidateInputString(const char* value, const std::uint32_t length,
 {
   if (value == nullptr || length == 0U) return M485E_ERR_INVALID_STRING;
   if (length > maximum) return M485E_ERR_LIMIT_EXCEEDED;
+  // CAPL passes explicit byte length plus a C string. Require both views to agree so
+  // embedded NUL data cannot be truncated differently by validation and std::string.
   if (std::memchr(value, '\0', length) != nullptr || value[length] != '\0')
     return M485E_ERR_LENGTH_MISMATCH;
   return M485E_OK;
@@ -220,6 +226,8 @@ void FillErrorMeta(const ErrorEvent& event,
 void FinishRefresh(Context* const context, const CsvPaths paths,
                    const std::uint32_t generation) noexcept
 {
+  // Build expensive CSV state without gMutex. Only the final pointer swap and
+  // lifecycle bookkeeping are serialized against CAPL API calls.
   ConfigurationLoader loader;
   const ConfigurationRefreshResult result = context->configurationStore.Refresh(paths, loader);
   std::unique_ptr<RuntimeModel> runtime;
@@ -240,6 +248,8 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
   }
 
   std::lock_guard<std::mutex> lock(gMutex);
+  // Finalize may have replaced or marked the context while parsing was in progress.
+  // In that case the detached result must not be published into a newer context.
   if (!gContext || gContext.get() != context || context->closing) return;
   std::int32_t finalStatus = result.status;
   if (result.status == M485E_OK && (!runtime || !snapshots))
@@ -286,6 +296,8 @@ void UpdateReconnectState(Context* const context, const std::int32_t operation,
   if (!gContext || gContext.get() != context || context->closing) return;
   if (result == M485E_STATUS_NO_DATA)
   {
+    // STATUS_NO_DATA is an internal transition notification meaning reconnect work
+    // started; it is not exposed as the final lifecycle result.
     context->activeGeneration = NextSequence(context->activeGeneration);
     context->activeOperation = operation;
     context->state = M485E_STATE_CONNECTING;
@@ -302,13 +314,16 @@ void UpdateReconnectState(Context* const context, const std::int32_t operation,
 }
 
 void FinishConnect(Context* const context, const std::uint32_t generation,
-                   std::array<m485e::platform::ConnectionPortConfig, 2> configs) noexcept
+                   std::array<m485e::platform::ConnectionPortConfig,
+                              M485E_PORT_SLOT_COUNT> configs,
+                   const std::uint8_t activePortCount) noexcept
 {
   std::unique_ptr<m485e::platform::RuntimeConnection> connection;
   try
   {
     connection = std::make_unique<m485e::platform::RuntimeConnection>(
-        std::move(configs), *context->runtime, *context->snapshots, context->errors,
+        std::move(configs), activePortCount, *context->runtime, *context->snapshots,
+        context->errors,
         [context](const std::int32_t operation, const std::int32_t result) {
           UpdateReconnectState(context, operation, result);
         });
@@ -341,6 +356,8 @@ void FinishConnect(Context* const context, const std::uint32_t generation,
     }
     context->connection = std::move(connection);
   }
+  // Start outside gMutex because port opening and worker creation may block and may
+  // also call UpdateReconnectState through the fatal callback.
   std::uint8_t failedSlot = 0;
   std::uint32_t osError = 0;
   const std::int32_t result = activeConnection->Start(failedSlot, osError);
@@ -378,7 +395,7 @@ void FinishConnect(Context* const context, const std::uint32_t generation,
       event.validMask |= M485E_EM_VALID_OS_ERROR;
       event.context[9] = static_cast<std::int32_t>(osError);
     }
-    context->errors.Push(event, "Opening the two configured COM ports failed.");
+    context->errors.Push(event, "Opening the configured COM ports failed.");
     context->state = M485E_STATE_DISCONNECTED;
     context->activeOperation = M485E_OPERATION_NONE;
     context->connection.reset();
@@ -413,6 +430,8 @@ void FinishDisconnect(Context* const context, const std::uint32_t generation) no
 
 void JoinCompletedLifecycle()
 {
+  // Joining outside gMutex avoids deadlock with a finishing lifecycle thread that
+  // still needs the same mutex for its final state update.
   std::thread completed;
   {
     std::lock_guard<std::mutex> lock(gMutex);
@@ -427,7 +446,6 @@ std::int32_t __stdcall M485E_Dll_InitializeContext(const std::uint32_t contextHa
 {
   JoinCompletedLifecycle();
   std::lock_guard<std::mutex> lock(gMutex);
-  if (contextHandle == 0U) return M485E_ERR_INVALID_CONTEXT;
   if (gContext) return RecordFailure(*gContext, M485E_ERR_ALREADY_INITIALIZED,
                                      "An emulator context is already active.");
   gContext = std::make_unique<Context>();
@@ -444,6 +462,8 @@ std::int32_t __stdcall M485E_Dll_FinalizeContext(const std::uint32_t contextHand
     const std::int32_t status = ValidateContext(contextHandle);
     if (status != M485E_OK) return status;
     gContext->closing = true;
+    // Move the thread out while locked, then join without holding gMutex. The closing
+    // flag prevents its completion path from publishing more state.
     if (gLifecycleThread.joinable()) operation = std::move(gLifecycleThread);
   }
   if (operation.joinable()) operation.join();
@@ -479,6 +499,8 @@ std::int32_t __stdcall M485E_Dll_SetCsvPath(const std::uint32_t contextHandle,
     return RecordFailure(*gContext, stringStatus, "CSV path length or termination is invalid.");
   const bool driveAbsolute = pathLength >= 3U && absolutePath[1] == ':' &&
                              (absolutePath[2] == '\\' || absolutePath[2] == '/');
+  // UNC paths are rejected even though they are absolute: configuration refresh must
+  // not depend on network credentials or availability inside CANalyzer.
   if (!driveAbsolute || (pathLength >= 2U && absolutePath[0] == '\\' &&
                          absolutePath[1] == '\\'))
     return RecordFailure(*gContext, M485E_ERR_INVALID_STRING,
@@ -533,16 +555,17 @@ std::int32_t __stdcall M485E_Dll_RefreshCsv(const std::uint32_t contextHandle)
       gContext->activeOperation != M485E_OPERATION_NONE)
     return RecordFailure(*gContext, M485E_ERR_INVALID_STATE,
                          "CSV refresh requires an idle disconnected context.");
-  for (const auto& path : gContext->csvPaths)
-    if (path.empty())
-      return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
-                           "All three CSV paths must be set before refresh.");
+  if (gContext->csvPaths[0].empty() || gContext->csvPaths[1].empty())
+    return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
+                         "DeviceMap and FrameRule paths must be set before refresh.");
   CsvPaths paths{gContext->csvPaths};
   Context* const context = gContext.get();
   const std::uint32_t generation = NextSequence(gContext->activeGeneration);
   gContext->activeGeneration = generation;
   gContext->activeOperation = M485E_OPERATION_REFRESH_CSV;
   gContext->state = M485E_STATE_REFRESHING;
+  // Acceptance is synchronous, completion is asynchronous. CAPL polls the versioned
+  // lifecycle layout instead of blocking the measurement thread on file I/O.
   gLifecycleThreadDone.store(false);
   gLifecycleThread = std::thread(FinishRefresh, context, std::move(paths), generation);
   return RecordSuccess(*gContext);
@@ -560,15 +583,20 @@ std::int32_t __stdcall M485E_Dll_Connect(const std::uint32_t contextHandle)
   if (gContext->state != M485E_STATE_DISCONNECTED)
     return RecordFailure(*gContext, M485E_ERR_INVALID_STATE,
                          "Connect requires Disconnected state.");
-  for (std::size_t slot = 0; slot < gContext->ports.size(); ++slot)
+  const auto configuration = gContext->runtime->Configuration();
+  const std::uint8_t activePortCount = configuration->activePortCount;
+  if (activePortCount == 0U || activePortCount > M485E_PORT_SLOT_COUNT)
+    return RecordFailure(*gContext, M485E_ERR_PORT_CONFIG_INCOMPLETE,
+                         "DeviceMap must define one to four active Ports.");
+  for (std::size_t slot = 0; slot < activePortCount; ++slot)
   {
     if (!gContext->ports[slot].configured ||
-        gContext->ports[slot].port != gContext->runtime->Configuration()->uniquePorts[slot])
+        gContext->ports[slot].port != configuration->uniquePorts[slot])
       return RecordFailure(*gContext, M485E_ERR_PORT_CONFIG_INCOMPLETE,
                            "Each DeviceMap PortSlot requires matching Serial configuration.");
   }
-  std::array<m485e::platform::ConnectionPortConfig, 2> configs{};
-  for (std::size_t slot = 0; slot < configs.size(); ++slot)
+  std::array<m485e::platform::ConnectionPortConfig, M485E_PORT_SLOT_COUNT> configs{};
+  for (std::size_t slot = 0; slot < activePortCount; ++slot)
   {
     configs[slot].port = gContext->ports[slot].port;
     configs[slot].settings = gContext->ports[slot].settings;
@@ -579,7 +607,8 @@ std::int32_t __stdcall M485E_Dll_Connect(const std::uint32_t contextHandle)
   gContext->activeOperation = M485E_OPERATION_CONNECT;
   gContext->state = M485E_STATE_CONNECTING;
   gLifecycleThreadDone.store(false);
-  gLifecycleThread = std::thread(FinishConnect, context, generation, std::move(configs));
+  gLifecycleThread =
+      std::thread(FinishConnect, context, generation, std::move(configs), activePortCount);
   return RecordSuccess(*gContext);
 }
 
@@ -680,6 +709,8 @@ std::int32_t __stdcall M485E_Dll_ReadRuleSnapshot(
                          "Snapshot Register output is too small.");
   std::array<std::int32_t, M485E_SNAPSHOT_META_COUNT> meta{};
   FillSnapshotMeta(snapshot, meta);
+  // Copy only after all validations succeed. This caller-owned-buffer rule lets CAPL
+  // keep displaying its previous valid sample when a read fails.
   std::copy(meta.begin(), meta.end(), outMeta);
   std::copy_n(snapshot.values.begin(), snapshot.quantity, outRegisters);
   return RecordSuccess(*gContext);
@@ -710,6 +741,8 @@ std::int32_t __stdcall M485E_Dll_TryDequeueChangeSnapshot(
     return RecordFailure(*gContext, result, "Change Snapshot dequeue failed.");
   std::array<std::int32_t, M485E_SNAPSHOT_META_COUNT> meta{};
   FillSnapshotMeta(snapshot, meta);
+  // TryDequeue validated capacity before consuming, so these copies cannot partially
+  // report a snapshot that remains in the queue.
   std::copy(meta.begin(), meta.end(), outMeta);
   std::copy_n(snapshot.values.begin(), snapshot.quantity, outRegisters);
   return RecordSuccess(*gContext);
@@ -989,6 +1022,8 @@ void RecordBoundaryException(const std::uint32_t contextHandle,
 template <typename Function>
 std::int32_t GuardExport(const std::uint32_t contextHandle, Function&& function) noexcept
 {
+  // No C++ exception may cross the extern "C" / CAPL boundary. Besides preventing
+  // process termination, the mapped error remains queryable through GetLastSyncError.
   try
   {
     return function();

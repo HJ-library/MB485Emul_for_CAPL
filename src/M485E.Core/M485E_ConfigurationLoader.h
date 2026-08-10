@@ -8,6 +8,11 @@
 
 namespace m485e::core
 {
+/**
+ * @brief Builds a complete immutable configuration without mutating live state.
+ * @note All CSV references, signal layouts, and Init_Value encodings are validated
+ *       before a configuration is returned to the caller.
+ */
 class ConfigurationLoader final
 {
  public:
@@ -24,6 +29,11 @@ struct ConfigurationRefreshResult
 class ConfigurationStore final
 {
  public:
+  /**
+   * @brief Atomically replaces the active configuration after a successful build.
+   * @return Status, generation, and structured CSV error information.
+   * @note A failed refresh marks the store stale but retains the last-good snapshot.
+   */
   ConfigurationRefreshResult Refresh(const CsvPaths& paths,
                                      const ConfigurationLoader& loader) noexcept;
   std::shared_ptr<const ActiveConfiguration> Snapshot() const noexcept;

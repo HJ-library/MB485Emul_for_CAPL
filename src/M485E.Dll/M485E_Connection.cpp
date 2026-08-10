@@ -8,12 +8,13 @@
 
 namespace m485e::platform
 {
-RuntimeConnection::RuntimeConnection(std::array<ConnectionPortConfig, 2> configs,
-                                     core::RuntimeModel& runtime,
-                                     core::SnapshotQueueService& snapshots,
-                                     core::ErrorQueue& errors,
-                                     StateCallback stateCallback)
+RuntimeConnection::RuntimeConnection(
+    std::array<ConnectionPortConfig, M485E_PORT_SLOT_COUNT> configs,
+    const std::uint8_t activePortCount, core::RuntimeModel& runtime,
+    core::SnapshotQueueService& snapshots, core::ErrorQueue& errors,
+    StateCallback stateCallback)
     : configs_(std::move(configs)),
+      activePortCount_(activePortCount),
       runtime_(runtime),
       snapshots_(snapshots),
       errors_(errors),
@@ -29,7 +30,9 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
   try
   {
     CloseAll();
-    for (std::size_t slot = 0; slot < transports_.size(); ++slot)
+    // Open every active handle before starting any worker. This prevents one port from
+    // serving requests while the connection is known to be incomplete.
+    for (std::size_t slot = 0; slot < activePortCount_; ++slot)
     {
       transports_[slot] = std::make_unique<Win32SerialTransport>();
       const std::int32_t status =
@@ -41,7 +44,7 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
         return status;
       }
     }
-    for (std::size_t slot = 0; slot < workers_.size(); ++slot)
+    for (std::size_t slot = 0; slot < activePortCount_; ++slot)
     {
       workers_[slot] = std::make_unique<core::PortWorker>(
           static_cast<std::uint8_t>(slot), core::CalculateRtuTiming(configs_[slot].settings),
@@ -57,7 +60,12 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
         return status;
       }
     }
-    running_.store(true);
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      // A worker can fail immediately after Start(). Do not publish Running after
+      // that callback has already queued a fatal reconnect request.
+      running_.store(!stopRequested_ && !fatalPending_);
+    }
     return M485E_OK;
   }
   catch (const std::bad_alloc&)
@@ -74,8 +82,9 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
 
 void RuntimeConnection::CloseAll() noexcept
 {
-  for (auto& transport : transports_)
-    if (transport) transport->Cancel();
+  // PortWorker::Stop sets its local stop flag before cancelling I/O. Cancelling a
+  // transport first would let the worker classify the expected teardown wake-up as
+  // a fatal device failure and recursively schedule another reconnect cycle.
   for (auto& worker : workers_)
     if (worker) worker->Stop();
   for (auto& worker : workers_) worker.reset();
@@ -93,6 +102,8 @@ std::int32_t RuntimeConnection::Start(std::uint8_t& failedPortSlot,
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (supervisor_.joinable() || running_.load()) return M485E_ERR_OPERATION_BUSY;
+    if (activePortCount_ == 0U || activePortCount_ > configs_.size())
+      return M485E_ERR_PORT_CONFIG_INCOMPLETE;
     stopRequested_ = false;
     fatalPending_ = false;
   }
@@ -116,8 +127,6 @@ void RuntimeConnection::Stop() noexcept
     std::lock_guard<std::mutex> lock(mutex_);
     stopRequested_ = true;
   }
-  for (auto& transport : transports_)
-    if (transport) transport->Cancel();
   condition_.notify_all();
   if (supervisor_.joinable()) supervisor_.join();
   else CloseAll();
@@ -125,13 +134,17 @@ void RuntimeConnection::Stop() noexcept
 
 bool RuntimeConnection::IsRunning() const noexcept { return running_.load(); }
 
-void RuntimeConnection::OnFatal(const std::uint8_t portSlot, const std::int32_t,
+void RuntimeConnection::OnFatal(const std::uint8_t portSlot, const std::int32_t code,
                                 const std::uint32_t osError) noexcept
 {
+  running_.store(false);
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    // One reconnect cycle covers all active ports; subsequent worker failures from the same
+    // teardown must not start overlapping reconnect attempts.
     if (stopRequested_ || fatalPending_) return;
     fatalPending_ = true;
+    failedStatus_ = code;
     failedPortSlot_ = portSlot;
     failedOsError_ = osError;
   }
@@ -164,17 +177,28 @@ void RuntimeConnection::Supervisor() noexcept
   {
     condition_.wait(lock, [this] { return stopRequested_ || fatalPending_; });
     if (stopRequested_) break;
-    fatalPending_ = false;
-    lock.unlock();
-    snapshots_.StopMonitoring();
-    if (stateCallback_) stateCallback_(M485E_OPERATION_AUTO_RECONNECT, M485E_STATUS_NO_DATA);
-    CloseAll();
-    std::int32_t lastStatus = M485E_ERR_CONNECT_FAILED;
+
+    // Copy the complete failure tuple while protected. Keep fatalPending_ asserted
+    // through teardown so any concurrent fatal callback belongs to this same cycle.
+    std::int32_t lastStatus = failedStatus_;
     std::uint8_t failedSlot = failedPortSlot_;
     std::uint32_t osError = failedOsError_;
+    if (stateCallback_)
+      stateCallback_(M485E_OPERATION_AUTO_RECONNECT, M485E_STATUS_NO_DATA);
+    lock.unlock();
+    // Monitoring is stopped before closing ports so CAPL cannot mistake stale queued
+    // changes for data produced after a successful reconnect.
+    snapshots_.StopMonitoring();
+    CloseAll();
+    lock.lock();
+    fatalPending_ = false;
+    lock.unlock();
+
     bool reconnected = false;
     for (std::uint32_t attempt = 0; attempt < kReconnectMaxAttempts; ++attempt)
     {
+      // wait_for is interruptible by Stop(); shutdown never waits for the full
+      // three-second reconnect interval.
       lock.lock();
       const bool stopped = condition_.wait_for(
           lock, std::chrono::milliseconds(kReconnectIntervalMs),
@@ -182,22 +206,51 @@ void RuntimeConnection::Supervisor() noexcept
       lock.unlock();
       if (stopped) break;
       lastStatus = OpenAll(failedSlot, osError);
-      if (lastStatus == M485E_OK)
+
+      lock.lock();
+      const bool stoppedAfterOpen = stopRequested_;
+      const bool failedAfterOpen = fatalPending_;
+      if (failedAfterOpen)
+      {
+        // A newly started worker can report a fatal error before OpenAll returns.
+        // Treat that as a failed attempt instead of publishing Connected.
+        lastStatus = failedStatus_;
+        failedSlot = failedPortSlot_;
+        osError = failedOsError_;
+      }
+      if (!stoppedAfterOpen && lastStatus == M485E_OK && !failedAfterOpen)
       {
         reconnected = true;
-        break;
+        // Publish success while holding mutex_ so a subsequent OnFatal callback is
+        // ordered after Connected and starts a distinct reconnect cycle.
+        if (stateCallback_) stateCallback_(M485E_OPERATION_AUTO_RECONNECT, M485E_OK);
+      }
+      lock.unlock();
+      if (stoppedAfterOpen || reconnected) break;
+
+      if (failedAfterOpen)
+      {
+        // Keep fatalPending_ set until all newly opened workers have stopped. This
+        // prevents teardown callbacks from creating a duplicate outer cycle.
+        CloseAll();
+        lock.lock();
+        fatalPending_ = false;
+        const bool stoppedDuringClose = stopRequested_;
+        lock.unlock();
+        if (stoppedDuringClose) break;
       }
     }
-    if (reconnected)
-    {
-      if (stateCallback_) stateCallback_(M485E_OPERATION_AUTO_RECONNECT, M485E_OK);
-    }
-    else if (!stopRequested_)
+
+    lock.lock();
+    if (!reconnected && !stopRequested_)
     {
       ReportReconnectFailure(failedSlot, osError);
       if (stateCallback_) stateCallback_(M485E_OPERATION_AUTO_RECONNECT, lastStatus);
     }
-    lock.lock();
+    // On success fatalPending_ was already false before Connected was published.
+    // Do not clear it here: a worker may have failed just after that publication,
+    // and the new pending event must drive the next outer reconnect cycle.
+    if (!reconnected) fatalPending_ = false;
   }
   lock.unlock();
   CloseAll();
