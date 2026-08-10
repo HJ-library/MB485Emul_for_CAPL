@@ -2,6 +2,7 @@
 
 variables
 {
+  // 수동 Register Read 요청이다. Quantity는 16-bit Register 개수이다.
   struct M485E_ManualReadRequest
   {
     long index;
@@ -9,6 +10,7 @@ variables
     long quantity;
   };
 
+  // 수동 Register Write 요청과 최대 125개의 word 데이터를 함께 보관한다.
   struct M485E_ManualWriteRequest
   {
     long index;
@@ -17,6 +19,7 @@ variables
     word data[125];
   };
 
+  // Signal Panel의 공통 입력값이다. Read와 Write 이벤트가 같은 로더를 사용한다.
   struct M485E_SignalRequest
   {
     long index;
@@ -24,18 +27,21 @@ variables
     float physicalValue;
   };
 
+  // 마지막 성공 Read는 AutoReadManual이 1초마다 같은 요청을 반복할 때 사용한다.
   struct M485E_ManualReadRequest gM485E_LastReadRequest;
   long gM485E_LastReadValid;
   word gM485E_UIWordData[125];
   long gM485E_UILongData[125];
-  long gM485E_ReadOptionValues[200];
   struct M485E_SignalRequest gM485E_SignalRequest;
+  // UI 입력 동기화, 자동 Read, DLL 상태 표시를 서로 독립된 타이머로 처리한다.
   msTimer tM485E_ManualAutoRead;
   msTimer tM485E_UISync;
   msTimer tM485E_LifecycleStatus;
   long gM485E_UILifecycleStatus[9];
 }
 
+// SignalControl 시스템변수의 Index, SignalName, PhysicalValue를 한 번에 복사한다.
+// 이벤트 처리 중 Panel 값이 바뀌어도 동일한 요청 묶음을 사용하기 위한 함수이다.
 void M485E_UI_LoadSignalRequest()
 {
   gM485E_SignalRequest.index = @sysvar::M485E::SignalControl::Index;
@@ -46,6 +52,8 @@ void M485E_UI_LoadSignalRequest()
       @sysvar::M485E::SignalControl::PhysicalValue;
 }
 
+// Register Read를 실행하고 성공한 word 결과를 Panel용 32-bit generic array에 복사한다.
+// 성공 요청은 Auto Read용 마지막 요청으로 보관하며 결과 코드는 항상 시스템변수에 기록한다.
 long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
 {
   long result;
@@ -55,9 +63,10 @@ long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
   if (result == M485E_OK)
   {
     for (index = 0; index < request.quantity; index++)
+    {
       gM485E_UILongData[index] = gM485E_UIWordData[index];
-    sysSetVariableLongArray(sysvar::M485E::ManualRead::Data, gM485E_UILongData,
-                            request.quantity);
+      @sysvar::M485E::ManualRead::Data[index] = gM485E_UILongData[index];
+    }
     gM485E_LastReadRequest.index = request.index;
     gM485E_LastReadRequest.startAddress = request.startAddress;
     gM485E_LastReadRequest.quantity = request.quantity;
@@ -68,6 +77,7 @@ long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
   return result;
 }
 
+// 준비된 Register Write 요청을 DLL에 전달하고 결과 코드를 Panel에 반영한다.
 long M485E_UI_ExecuteWrite(struct M485E_ManualWriteRequest request)
 {
   long result;
@@ -78,6 +88,7 @@ long M485E_UI_ExecuteWrite(struct M485E_ManualWriteRequest request)
   return result;
 }
 
+// ConnectSwitch가 바뀌면 두 Serial Port의 Connect 또는 Disconnect를 요청한다.
 on sysvar_update sysvar::M485E::Connection::ConnectSwitch
 {
   long result;
@@ -87,6 +98,8 @@ on sysvar_update sysvar::M485E::Connection::ConnectSwitch
   M485E_Core_ReportSyncFailure("Connection", result);
 }
 
+// Refresh 버튼 이벤트이다. 0은 무시하고 1일 때 CSV 전체 Refresh를 한 번 실행한다.
+// 처리 후 @this를 0으로 내려 Panel 버튼을 다음 요청에 다시 사용할 수 있게 한다.
 on sysvar_update sysvar::M485E::Connection::Refresh
 {
   long result;
@@ -97,6 +110,8 @@ on sysvar_update sysvar::M485E::Connection::Refresh
   @this = 0;
 }
 
+// Manual Read Send 버튼 이벤트이다.
+// Panel의 Index, StartAddress, Quantity를 캡처하여 Debug Register Read를 실행한다.
 on sysvar_update sysvar::M485E::ManualRead::Send
 {
   struct M485E_ManualReadRequest request;
@@ -108,6 +123,8 @@ on sysvar_update sysvar::M485E::ManualRead::Send
   @this = 0;
 }
 
+// Manual Write Send 버튼 이벤트이다.
+// generic array의 각 32-bit 값을 읽어 0..65535인지 검사한 뒤 word 배열로 변환한다.
 on sysvar_update sysvar::M485E::ManualWrite::Send
 {
   struct M485E_ManualWriteRequest request;
@@ -116,10 +133,10 @@ on sysvar_update sysvar::M485E::ManualWrite::Send
   request.index = @sysvar::M485E::ManualWrite::Index;
   request.startAddress = @sysvar::M485E::ManualWrite::StartAddress;
   request.quantity = @sysvar::M485E::ManualWrite::Quantity;
-  sysGetVariableLongArray(sysvar::M485E::ManualWrite::Data, gM485E_UILongData,
-                          elcount(gM485E_UILongData));
   for (index = 0; index < request.quantity && index < elcount(request.data); index++)
   {
+    gM485E_UILongData[index] =
+        @sysvar::M485E::ManualWrite::Data[index];
     if (gM485E_UILongData[index] < 0 || gM485E_UILongData[index] > 65535)
     {
       @sysvar::M485E::ManualWrite::ResultCode = M485E_ERR_INVALID_ARGUMENT;
@@ -132,6 +149,8 @@ on sysvar_update sysvar::M485E::ManualWrite::Send
   @this = 0;
 }
 
+// Signal Read 버튼 이벤트이다. SignalName으로 읽은 물리값을 PhysicalValue에 표시한다.
+// 실패하면 기존 PhysicalValue를 유지하고 ResultCode와 상세 오류만 갱신한다.
 on sysvar_update sysvar::M485E::SignalControl::Read
 {
   long result;
@@ -148,6 +167,7 @@ on sysvar_update sysvar::M485E::SignalControl::Read
   @this = 0;
 }
 
+// Signal Write 버튼 이벤트이다. Panel의 물리값을 Scale/Offset/Type 규칙에 따라 DLL에 쓴다.
 on sysvar_update sysvar::M485E::SignalControl::Write
 {
   long result;
@@ -161,6 +181,7 @@ on sysvar_update sysvar::M485E::SignalControl::Write
   @this = 0;
 }
 
+// ReadSwitch가 켜지면 CAN Monitoring을 시작하고 꺼지면 중지한다.
 on sysvar_update sysvar::M485E::Monitoring::ReadSwitch
 {
   long result;
@@ -170,6 +191,7 @@ on sysvar_update sysvar::M485E::Monitoring::ReadSwitch
   M485E_Core_ReportSyncFailure("Monitoring", result);
 }
 
+// UI 관련 세 타이머를 시작한다. 실제 Serial 연결 여부와는 독립적으로 상태를 동기화한다.
 void M485E_UI_Start()
 {
   setTimer(tM485E_ManualAutoRead, 1000);
@@ -177,6 +199,7 @@ void M485E_UI_Start()
   setTimer(tM485E_LifecycleStatus, 100);
 }
 
+// AutoReadManual이 켜져 있고 성공한 이전 요청이 있으면 1초마다 같은 범위를 다시 읽는다.
 on timer tM485E_ManualAutoRead
 {
   if (@sysvar::M485E::ManualRead::AutoReadManual != 0 && gM485E_LastReadValid != 0)
@@ -184,18 +207,21 @@ on timer tM485E_ManualAutoRead
   setTimer(tM485E_ManualAutoRead, 1000);
 }
 
+// Panel의 Check_ReadOption generic array를 100ms마다 Monitoring 후보 상태로 복사한다.
+// 실제 적용은 다음 Monitoring Cycle 경계에서 일괄 수행된다.
 on timer tM485E_UISync
 {
   long index;
   long readOptionCount;
-  sysGetVariableLongArray(sysvar::M485E::Monitoring::Check_ReadOption,
-                          gM485E_ReadOptionValues, elcount(gM485E_ReadOptionValues));
   readOptionCount = M485E_Monitoring_GetReadOptionCount();
   for (index = 0; index < readOptionCount; index++)
-    M485E_Monitoring_SetCandidate(index, gM485E_ReadOptionValues[index]);
+    M485E_Monitoring_SetCandidate(
+        index, @sysvar::M485E::Monitoring::Check_ReadOption[index]);
   setTimer(tM485E_UISync, 100);
 }
 
+// DLL 수명주기 상태를 100ms마다 읽어 Panel 표시 변수 세 개를 갱신한다.
+// 같은 Tick에서 비동기 오류도 최대 한 건 꺼내 CANalyzer Write 창에 출력한다.
 on timer tM485E_LifecycleStatus
 {
   long result;
@@ -213,6 +239,7 @@ on timer tM485E_LifecycleStatus
   setTimer(tM485E_LifecycleStatus, 100);
 }
 
+// 측정 종료 시 UI 타이머를 모두 취소하여 종료 후 이벤트가 재호출되지 않게 한다.
 void M485E_UI_Stop()
 {
   cancelTimer(tM485E_ManualAutoRead);

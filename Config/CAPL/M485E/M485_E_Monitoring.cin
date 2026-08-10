@@ -2,6 +2,8 @@
 
 variables
 {
+  // Panel의 ReadOption 한 칸과 실제 적용 상태를 함께 보관한다.
+  // candidate는 다음 Cycle에 적용할 값이고 applied는 현재 송출에 사용 중인 값이다.
   struct M485E_ReadOption
   {
     long configured;
@@ -12,6 +14,7 @@ variables
     long pendingGeneration;
   };
 
+  // 전체 모니터링 스케줄러의 진행 위치와 On/Off 상태를 보관한다.
   struct M485E_MonitoringState
   {
     long readOptionCount;
@@ -22,12 +25,14 @@ variables
     long candidateDirty;
   };
 
+  // 1초마다 새 주기를 만들고 10ms Pump가 CAN Frame 예산만큼 나누어 출력한다.
   const long M485E_MONITORING_CYCLE_MS = 1000;
   const long M485E_OUTPUT_PUMP_MS = 10;
   const long M485E_MAX_FRAMES_PER_TICK = 66;
   const long M485E_MAX_CHANGE_FRAMES_PER_TICK = 33;
   const long M485E_MAX_READ_OPTIONS = 200;
 
+  // Snapshot 버퍼는 DLL에서 받은 한 Rule의 Header 정보와 Register 값을 임시 보관한다.
   struct M485E_ReadOption gM485E_ReadOptions[200];
   struct M485E_MonitoringState gM485E_MonitoringState;
   msTimer tM485E_MonitoringCycle;
@@ -37,6 +42,8 @@ variables
   word gM485E_SnapshotRegisters[125];
 }
 
+// ReadOption 슬롯에 Device Index와 Rule ID를 등록한다.
+// slot은 Panel Check_ReadOption 배열의 위치와 동일하며 최대 200개까지 허용한다.
 long M485E_Monitoring_ConfigureReadOption(long slot, long index, long ruleId)
 {
   if (slot < 0 || slot >= M485E_MAX_READ_OPTIONS || index < 0 || index > 255 ||
@@ -50,11 +57,14 @@ long M485E_Monitoring_ConfigureReadOption(long slot, long index, long ruleId)
   return M485E_OK;
 }
 
+// 현재 등록된 마지막 ReadOption 슬롯까지의 배열 길이를 반환한다.
 long M485E_Monitoring_GetReadOptionCount()
 {
   return gM485E_MonitoringState.readOptionCount;
 }
 
+// Panel에서 읽은 선택 상태를 candidate에 기록한다.
+// 값이 실제로 바뀐 경우에만 candidateDirty를 세워 다음 Cycle에 일괄 반영한다.
 long M485E_Monitoring_SetCandidate(long slot, long enabled)
 {
   if (slot < 0 || slot >= gM485E_MonitoringState.readOptionCount ||
@@ -69,6 +79,8 @@ long M485E_Monitoring_SetCandidate(long slot, long enabled)
   return M485E_OK;
 }
 
+// 변경된 ReadOption 후보 전체를 한 번에 검증한 뒤 applied 상태로 확정한다.
+// 활성 후보의 Snapshot을 미리 읽어 유효성을 확인하며 하나라도 실패하면 적용하지 않는다.
 long M485E_Monitoring_ApplyCandidates()
 {
   long slot;
@@ -97,11 +109,15 @@ long M485E_Monitoring_ApplyCandidates()
   return M485E_OK;
 }
 
+// 한 Rule이 사용하는 CAN Frame 수를 계산한다: Header 1개 + Register 4개당 Data 1개.
 long M485E_Monitoring_FrameCost(long quantity)
 {
   return 1 + ((quantity + 3) / 4);
 }
 
+// DLL Snapshot 하나를 Extended CAN Header/Data Message 묶음으로 변환해 출력한다.
+// prefix 0은 주기 Frame(0x80), 1은 변경 Frame(0x81)을 의미한다.
+// Header는 DLC 8 고정이고 Data는 Register를 4개씩 Big-endian Byte 순서로 적재한다.
 void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
 {
   long arbitrationId;
@@ -150,6 +166,8 @@ void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
   }
 }
 
+// 두 Port의 Change Queue를 교대로 확인하여 변경 Snapshot을 최대 한 건 출력한다.
+// 성공 시 사용한 Frame 수를 반환하고 다음 호출은 반대 Port부터 시작한다.
 long M485E_Monitoring_TryOneChange()
 {
   long offset;
@@ -173,6 +191,9 @@ long M485E_Monitoring_TryOneChange()
   return 0;
 }
 
+// 10ms마다 호출되는 출력 Pump이다.
+// Change Snapshot을 우선 처리한 뒤 남은 Frame 예산으로 주기 Snapshot을 이어서 출력한다.
+// periodicCursor를 유지하므로 Rule 수가 많아도 다음 Tick에서 중단 지점부터 계속한다.
 void M485E_Monitoring_PumpOnce()
 {
   long usedFrames;
@@ -214,6 +235,8 @@ void M485E_Monitoring_PumpOnce()
   }
 }
 
+// 새로운 1초 주기를 시작한다.
+// Panel 후보 변경을 먼저 확정하고 활성 Rule에 이번 generation의 송출 대기 표시를 건다.
 void M485E_Monitoring_NewCycle()
 {
   long slot;
@@ -234,6 +257,7 @@ void M485E_Monitoring_NewCycle()
           gM485E_MonitoringState.generation;
 }
 
+// DLL 모니터링을 활성화하고 첫 Cycle 및 두 CAPL 타이머를 시작한다.
 long M485E_Monitoring_Start()
 {
   long result;
@@ -246,6 +270,7 @@ long M485E_Monitoring_Start()
   return M485E_OK;
 }
 
+// CAPL 타이머를 먼저 멈춘 뒤 DLL 모니터링을 비활성화한다.
 long M485E_Monitoring_Stop()
 {
   gM485E_MonitoringState.enabled = 0;
@@ -254,12 +279,14 @@ long M485E_Monitoring_Stop()
   return M485E_Core_StopMonitoring();
 }
 
+// 1초 주기 이벤트: 활성 Rule을 다음 송출 대상으로 다시 등록한다.
 on timer tM485E_MonitoringCycle
 {
   M485E_Monitoring_NewCycle();
   setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
 }
 
+// 10ms 주기 이벤트: Change/Periodic Snapshot을 Frame 예산 안에서 CAN으로 출력한다.
 on timer tM485E_OutputPump
 {
   M485E_Monitoring_PumpOnce();

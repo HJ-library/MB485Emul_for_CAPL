@@ -1,9 +1,9 @@
 Status,Namespace,Name,Full_Name,Type,Array_Length,Read_Only,Default,Panel_Control,Device_Index,Signal_Source,Description
 Existing,M485E::Connection,ConnectSwitch,M485E::Connection::ConnectSwitch,int32,,No,0,Toggle,,,Connect or disconnect both configured ports
 Existing,M485E::Connection,Refresh,M485E::Connection::Refresh,int32,,No,0,Button,,,Refresh all three CSV files while disconnected
-Existing,M485E::Connection,State,M485E::Connection::State,int32,,Yes,0,Indicator,,,Lifecycle state
-Existing,M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,Yes,0,Numeric display,,,Last completed lifecycle result
-Existing,M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,Yes,0,LED,,,CSV validation state
+Existing,M485E::Connection,State,M485E::Connection::State,int32,,No,0,Indicator,,,Lifecycle state; CAPL output displayed read-only on Panel
+Existing,M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,No,0,Numeric display,,,Last completed lifecycle result; CAPL output displayed read-only on Panel
+Existing,M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,No,0,LED,,,CSV validation state; CAPL output displayed read-only on Panel
 Existing,M485E::Connection,ResultCode,M485E::Connection::ResultCode,int32,,No,0,Numeric display,,,Last lifecycle command result
 Existing,M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,No,0,Toggle,,,Master monitoring switch
 Existing,M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,No,0,Rule checkboxes,,,Periodic Rule selection array

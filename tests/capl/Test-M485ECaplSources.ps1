@@ -70,6 +70,15 @@ Require-Match $ui 'M485E_Core_WriteSignal\s*\(\s*gM485E_SignalRequest\.index,\s*
 Require-Match $core 'M485E_Core_ReadSignal\s*\([^\)]*float&\s+outPhysicalValue\)' `
     'CAPL Signal Read wrapper must expose one caller-owned physical value by reference.'
 Require-Match $ui 'Check_ReadOption' 'ReadOption system variable adapter is missing.'
+if ($ui -match 'sys(?:Get|Set)VariableLongArray') {
+    throw 'UI generic arrays must use element access for CANalyzer 9.x compatibility.'
+}
+Require-Match $ui '@sysvar::M485E::ManualRead::Data\s*\[\s*index\s*\]' `
+    'Manual Read must write the generic array one element at a time.'
+Require-Match $ui '@sysvar::M485E::ManualWrite::Data\s*\[\s*index\s*\]' `
+    'Manual Write must read the generic array one element at a time.'
+Require-Match $ui '@sysvar::M485E::Monitoring::Check_ReadOption\s*\[\s*index\s*\]' `
+    'Monitoring must read the generic array one element at a time.'
 Require-Match $ui 'Connection::ConnectSwitch' 'Connect/Disconnect switch adapter is missing.'
 Require-Match $ui 'setTimer\(tM485E_ManualAutoRead,\s*1000\)' 'AutoRead timer is not started.'
 Require-Match $ui 'setTimer\(tM485E_UISync,\s*100\)' 'ReadOption synchronization timer is not started.'
@@ -80,6 +89,14 @@ Require-Match $main 'M485E_UI_Stop\s*\(' 'Main does not stop the UI timers.'
 
 [xml]$systemVariables = Get-Content -LiteralPath $systemVariablesPath -Raw
 if ($null -eq $systemVariables) { throw 'System variable XML could not be parsed.' }
+$connectionNamespace = $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="Connection"]')
+if ($null -eq $connectionNamespace) { throw 'Connection system variable namespace is missing.' }
+foreach ($statusName in @('State', 'LastResult', 'ConfigurationValid')) {
+    $statusVariable = $connectionNamespace.SelectSingleNode("variable[@name='$statusName']")
+    if ($null -eq $statusVariable -or $statusVariable.readOnly -ne 'false') {
+        throw "Connection::$statusName must be writable by the CAPL lifecycle adapter."
+    }
+}
 
 $requiredFiles = @(
     'tests\capl\M485E_Phase1_AbiProbe.can',

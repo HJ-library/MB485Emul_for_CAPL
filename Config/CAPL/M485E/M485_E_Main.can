@@ -1,6 +1,8 @@
 /*@!Encoding:949*/
 includes
 {
+  // DLL은 측정 구성의 Config/CAPL/DLL 폴더에서 로드한다.
+  // generated 파일은 DLL ABI 상수이고 나머지 cin 파일은 역할별 CAPL 모듈이다.
   #pragma library("..\\DLL\\M485E.dll")
   #include "M485E_Contracts.generated.cin"
   #include "M485_E_Core.cin"
@@ -10,6 +12,8 @@ includes
 
 variables
 {
+  // 하나의 RS-485 포트를 설정하는 CAPL 내부 자료형이다.
+  // portSlot은 DLL 내부 슬롯(0, 1), comPortNumber는 Windows COM 번호이다.
   struct M485E_PortConfig
   {
     long portSlot;
@@ -20,12 +24,15 @@ variables
     long stopBits;
   };
 
+  // 아래 상대 경로는 CANalyzer 구성 파일 기준으로 절대 경로로 변환되어 DLL에 전달된다.
   char gM485E_DeviceMapPath[128] = ".\\Config\\Maps\\M485E_DeviceMap.csv";
   char gM485E_FrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
   char gM485E_RegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
   struct M485E_PortConfig gM485E_PortConfigs[2];
 }
 
+// 두 포트의 기본 통신 조건을 채운다.
+// 회사 환경의 COM 번호나 통신 속도가 다르면 이 함수의 값만 변경한다.
 void M485E_Main_InitializePortConfigs()
 {
   gM485E_PortConfigs[0].portSlot = 0;
@@ -43,6 +50,8 @@ void M485E_Main_InitializePortConfigs()
   gM485E_PortConfigs[1].stopBits = 1;
 }
 
+// 준비된 포트 설정 배열을 앞에서부터 DLL에 등록한다.
+// 하나라도 실패하면 즉시 해당 오류 코드를 반환하며 뒤 포트는 적용하지 않는다.
 long M485E_Main_ApplyPortConfigs()
 {
   long configIndex;
@@ -61,6 +70,8 @@ long M485E_Main_ApplyPortConfigs()
   return M485E_OK;
 }
 
+// 측정 시작 준비 단계: 포트 기본값을 만들고 CAPL 전용 DLL Context를 생성한다.
+// CSV 로딩과 실제 Serial 연결은 아직 수행하지 않는다.
 on preStart
 {
   long result;
@@ -69,6 +80,9 @@ on preStart
   if (result != M485E_OK) M485E_Core_ReportSyncFailure("Initialize", result);
 }
 
+// 측정 시작 단계: CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
+// 이 단계에서는 Serial 포트를 열지 않으며 ConnectSwitch가 올라올 때 연결한다.
+// 마지막으로 UI 동기화용 타이머를 시작한다.
 on start
 {
   long result;
@@ -84,6 +98,8 @@ on start
   M485E_UI_Start();
 }
 
+// 측정 종료 단계: 타이머와 모니터링을 먼저 멈춘 뒤 포트를 닫고 Context를 해제한다.
+// 역순 종료를 지켜 DLL 작업이 남은 상태에서 Context가 파기되지 않게 한다.
 on stopMeasurement
 {
   M485E_UI_Stop();
