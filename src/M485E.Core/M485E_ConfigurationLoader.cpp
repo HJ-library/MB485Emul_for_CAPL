@@ -67,6 +67,8 @@ bool IsContinuationByte(const unsigned char value) noexcept
 
 bool IsValidUtf8(const std::string& bytes) noexcept
 {
+  // Reject embedded NUL as well as malformed UTF-8. CAPL and filesystem APIs use
+  // NUL-terminated strings, so accepting it here would make diagnostics ambiguous.
   std::size_t position = 0;
   while (position < bytes.size())
   {
@@ -126,6 +128,8 @@ std::string TrimAscii(std::string value)
 
 bool ParseCsvLine(const std::string& line, std::vector<std::string>& cells)
 {
+  // This parser deliberately supports RFC-style escaped quotes but not multiline
+  // fields. Row numbers must remain identical to physical file rows in diagnostics.
   cells.clear();
   std::string cell;
   bool quoted = false;
@@ -209,6 +213,8 @@ ConfigurationBuildResult ReadCsv(const std::string& path, const CsvFileType type
   {
     bytes.erase(0, 3);
   }
+  // A BOM is permitted only at byte zero. A later BOM normally means multiple
+  // concatenated files and would make an otherwise valid cell compare incorrectly.
   if (bytes.find("\xEF\xBB\xBF") != std::string::npos || !IsValidUtf8(bytes))
   {
     return Failure(M485E_ERR_CSV_INVALID_ENCODING, type, 0, 0,
@@ -404,6 +410,8 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
                      static_cast<std::uint32_t>(rowIndex + 1), 3,
                      "Port and Slave_ID pair is duplicated.");
 
+    // The first appearance order of each Port becomes PortSlot 0/1. Connect later
+    // verifies that CAPL supplied the same port names for those stable slots.
     auto port = std::find(ports.begin(), ports.end(), cells[1]);
     if (port == ports.end())
     {
@@ -498,6 +506,8 @@ ConfigurationBuildResult ParseRules(const ParsedCsv& csv, ActiveConfiguration& c
         static_cast<std::uint32_t>(rowIndex + 1)});
     auto& device = configuration.devices[configuration.deviceByIndex[index]];
     device.ruleIndices.push_back(ruleIndex);
+    // Rules define protocol visibility. Signal frames may allocate additional
+    // registers for direct debug access, but they do not implicitly grant FC03/04.
     for (std::uint32_t offset = 0; offset < quantity; ++offset)
     {
       const std::size_t registerAddress = address + offset;
@@ -639,6 +649,8 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, DeviceConfiguration&
                             minimum,
                             maximum,
                             static_cast<std::uint32_t>(rowIndex + 1)};
+    // Signals may share one exact Address+Length frame when their bit masks do not
+    // overlap. Byte_Order is a frame property, so mixed order within it is rejected.
     const auto frameKey = FrameKey(signal);
     const auto orderEntry = frameOrder.emplace(frameKey, order);
     if (!orderEntry.second && orderEntry.first->second != order)
@@ -656,6 +668,9 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, DeviceConfiguration&
     device.signalIndices.push_back(signalIndex);
   }
 
+  // Distinct frame definitions may not overlap register addresses even if their bit
+  // masks happen not to overlap. This prevents two different frame interpretations
+  // from rewriting each other's backing words.
   struct FrameRange
   {
     std::uint8_t index;
@@ -692,6 +707,8 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, DeviceConfiguration&
     const auto& signal = configuration.signals[signalIndex];
     for (std::uint32_t offsetIndex = 0; offsetIndex < signal.length / 2U; ++offsetIndex)
       device.initialImage->allocated.set(signal.address + offsetIndex);
+    // Encode through the runtime codec so refresh validation and later Panel writes
+    // use exactly the same Type, Scale, Offset, and byte-order rules.
     const std::int32_t status = m485e::core::SignalCodec::Encode(signal, signal.initValue,
                                                                 *device.initialImage);
     if (status != M485E_OK)
@@ -768,6 +785,8 @@ ConfigurationBuildResult ConfigurationLoader::Build(const CsvPaths& paths) const
         }
         entry = registerMaps.emplace(cacheKey, std::move(parsed)).first;
       }
+      // Parsed rows are cached per physical file, but ParseSignals instantiates new
+      // definitions and Init_Value memory for every Device Index that shares the map.
       result = ParseSignals(entry->second, device, *configuration);
       if (result.error.code != 0)
       {
@@ -798,9 +817,12 @@ ConfigurationRefreshResult ConfigurationStore::Refresh(const CsvPaths& paths,
   std::lock_guard<std::mutex> lock(mutex_);
   if (!build.Succeeded())
   {
+    // Keep the last-good snapshot for diagnostics, but mark it stale so lifecycle
+    // code cannot Connect until a later refresh succeeds.
     stale_ = true;
     return ConfigurationRefreshResult{build.error.code, generation_, build.error};
   }
+  // Publish only a fully built graph; readers never observe a partially parsed CSV.
   active_ = build.configuration;
   stale_ = false;
   ++generation_;

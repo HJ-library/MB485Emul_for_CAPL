@@ -37,6 +37,11 @@ struct ChangeQueueStats
   std::uint32_t lastSequence = 0;
 };
 
+/**
+ * @brief Creates periodic snapshots and buffers value-change snapshots per port.
+ * @note Each queue is bounded. On overflow the oldest snapshot is dropped so the
+ *       consumer receives the most recent emulator state rather than stale history.
+ */
 class SnapshotQueueService final
 {
  public:
@@ -46,6 +51,10 @@ class SnapshotQueueService final
   void StopMonitoring() noexcept;
   bool IsMonitoringEnabled() const noexcept;
   void ResetForRefresh() noexcept;
+  /**
+   * @brief Enqueues one snapshot for every Rule overlapping a completed write.
+   * @note Writes while monitoring is disabled are counted as suppressed, not queued.
+   */
   void RecordChange(std::uint8_t deviceIndex, WriteSource source,
                     const RegisterWriteResult& write) noexcept;
   std::int32_t TryDequeue(std::uint8_t portSlot, std::uint16_t dataCapacity,
@@ -104,6 +113,11 @@ struct ErrorQueueStats
   std::uint32_t lastSequence = 0;
 };
 
+/**
+ * @brief Thread-safe bounded queue for asynchronous worker and lifecycle errors.
+ * @note Consecutive identical events are coalesced through repeatCount to prevent
+ *       a persistent serial fault from flooding CAPL faster than it can poll.
+ */
 class ErrorQueue final
 {
  public:

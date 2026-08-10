@@ -71,6 +71,8 @@ void PortWorker::Report(const std::int32_t code, const std::int32_t stage,
 
 bool PortWorker::WriteResponse(const std::vector<std::uint8_t>& response) noexcept
 {
+  // Overlapped writes may legally complete partially. Continue from the transferred
+  // offset, but treat a zero-length completion as a fatal transport failure.
   std::size_t offset = 0;
   while (offset < response.size() && !stopRequested_.load())
   {
@@ -101,6 +103,8 @@ bool PortWorker::ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept
            "Modbus RTU frame was discarded or failed internally.");
   if (!result.changedRuleIndices.empty())
   {
+    // The protocol engine already committed the FC10 write. Repackage its captured
+    // Rule values so monitoring observes exactly that committed state.
     RegisterWriteResult write;
     write.status = M485E_OK;
     write.changed = true;
@@ -117,6 +121,8 @@ void PortWorker::Run() noexcept
   try
   {
     RtuFrameAssembler assembler(timing_);
+    // Poll often enough to detect t3.5 silence, while enforcing a 250 us lower bound
+    // to avoid a high-CPU busy loop at fast baud rates.
     const std::uint32_t pollUs = std::max<std::uint32_t>(250U,
         std::min<std::uint32_t>(timing_.t3_5Us, 1000U));
     while (!stopRequested_.load())

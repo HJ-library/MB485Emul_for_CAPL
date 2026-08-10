@@ -26,6 +26,8 @@ RtuTiming CalculateRtuTiming(const SerialSettings& settings) noexcept
   const std::uint64_t numerator = static_cast<std::uint64_t>(bitsPerCharacter) * 1000000ULL;
   const std::uint32_t characterTime =
       static_cast<std::uint32_t>((numerator + settings.baudRate - 1U) / settings.baudRate);
+  // Modbus specifies fixed t1.5/t3.5 values above 19200 baud to avoid unrealistically
+  // short software timers as the character time decreases.
   if (settings.baudRate > 19200U) return {characterTime, 750U, 1750U};
   // Conservative ceiling avoids early frame termination at low baud rates.
   const std::uint32_t t1_5 = static_cast<std::uint32_t>(
@@ -56,6 +58,8 @@ std::optional<std::vector<std::uint8_t>> RtuFrameAssembler::PushByte(
     }
     else if (gap > timing_.t1_5Us)
     {
+      // A mid-frame gap invalidates the entire candidate. Remain in discard mode
+      // until t3.5 so bytes from the invalid tail cannot form a second request.
       if (!buffer_.empty() || !discarding_) ++discardedFrameCount_;
       buffer_.clear();
       discarding_ = true;
@@ -67,6 +71,8 @@ std::optional<std::vector<std::uint8_t>> RtuFrameAssembler::PushByte(
   {
     if (buffer_.size() >= 256U)
     {
+      // RTU ADU length is bounded at 256 bytes. Oversized traffic is discarded as
+      // one bad frame rather than repeatedly allocating an unbounded buffer.
       buffer_.clear();
       discarding_ = true;
       ++discardedFrameCount_;

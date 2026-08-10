@@ -30,6 +30,8 @@ std::int32_t Win32SerialTransport::Open(const std::string& port,
     return M485E_ERR_SERIAL_CONFIG_INVALID;
   std::lock_guard<std::mutex> lock(mutex_);
   if (handle_ != INVALID_HANDLE_VALUE) return M485E_ERR_INVALID_STATE;
+  // The Win32 device namespace is required for COM10 and higher. Accepting an
+  // already-prefixed value keeps the transport usable in focused tests.
   const std::string path = port.rfind("\\\\.\\", 0) == 0 ? port : "\\\\.\\" + port;
   HANDLE candidate = CreateFileA(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
                                  OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
@@ -66,6 +68,8 @@ std::int32_t Win32SerialTransport::Open(const std::string& port,
   dcb.fDsrSensitivity = FALSE;
   dcb.fOutX = FALSE;
   dcb.fInX = FALSE;
+  // The selected USB-RS485 adapter controls direction automatically; asserting RTS
+  // or DTR here could interfere with that hardware-managed transmit enable.
   dcb.fRtsControl = RTS_CONTROL_DISABLE;
   dcb.fAbortOnError = FALSE;
   if (!SetCommState(candidate, &dcb))
@@ -141,6 +145,8 @@ core::SerialReadResult Win32SerialTransport::ReadByte(const std::uint32_t waitUs
     const DWORD wait = WaitForSingleObject(readEvent_, waitMs);
     if (wait == WAIT_TIMEOUT)
     {
+      // Cancel and wait for the OVERLAPPED request to complete before its stack object
+      // goes out of scope; Windows may otherwise write into invalid memory later.
       CancelIoEx(handle, &overlapped);
       WaitForSingleObject(readEvent_, INFINITE);
       return {core::SerialIoStatus::Timeout, 0, NowUs(), 0};
@@ -180,6 +186,8 @@ core::SerialWriteResult Win32SerialTransport::Write(const std::uint8_t* data,
     const DWORD wait = WaitForSingleObject(writeEvent_, 1000U);
     if (wait == WAIT_TIMEOUT)
     {
+      // A response write has a finite deadline. Timeout is fatal because retrying a
+      // partial RTU response could place duplicate bytes on the bus.
       CancelIoEx(handle, &overlapped);
       WaitForSingleObject(writeEvent_, INFINITE);
       return {core::SerialIoStatus::FatalError, 0, ERROR_TIMEOUT};

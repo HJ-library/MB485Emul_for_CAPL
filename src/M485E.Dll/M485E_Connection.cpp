@@ -29,6 +29,8 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
   try
   {
     CloseAll();
+    // Open both handles before starting either worker. This prevents one port from
+    // serving requests while the connection is known to be incomplete.
     for (std::size_t slot = 0; slot < transports_.size(); ++slot)
     {
       transports_[slot] = std::make_unique<Win32SerialTransport>();
@@ -74,6 +76,7 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
 
 void RuntimeConnection::CloseAll() noexcept
 {
+  // Cancel I/O first so every worker can leave ReadByte/Write promptly before join.
   for (auto& transport : transports_)
     if (transport) transport->Cancel();
   for (auto& worker : workers_)
@@ -130,6 +133,8 @@ void RuntimeConnection::OnFatal(const std::uint8_t portSlot, const std::int32_t,
 {
   {
     std::lock_guard<std::mutex> lock(mutex_);
+    // One reconnect cycle covers both ports; subsequent worker failures from the same
+    // teardown must not start overlapping reconnect attempts.
     if (stopRequested_ || fatalPending_) return;
     fatalPending_ = true;
     failedPortSlot_ = portSlot;
@@ -166,6 +171,8 @@ void RuntimeConnection::Supervisor() noexcept
     if (stopRequested_) break;
     fatalPending_ = false;
     lock.unlock();
+    // Monitoring is stopped before closing ports so CAPL cannot mistake stale queued
+    // changes for data produced after a successful reconnect.
     snapshots_.StopMonitoring();
     if (stateCallback_) stateCallback_(M485E_OPERATION_AUTO_RECONNECT, M485E_STATUS_NO_DATA);
     CloseAll();
@@ -175,6 +182,8 @@ void RuntimeConnection::Supervisor() noexcept
     bool reconnected = false;
     for (std::uint32_t attempt = 0; attempt < kReconnectMaxAttempts; ++attempt)
     {
+      // wait_for is interruptible by Stop(); shutdown never waits for the full
+      // three-second reconnect interval.
       lock.lock();
       const bool stopped = condition_.wait_for(
           lock, std::chrono::milliseconds(kReconnectIntervalMs),

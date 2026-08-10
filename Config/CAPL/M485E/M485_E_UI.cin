@@ -55,6 +55,7 @@ void M485E_UI_LoadSignalRequest()
 
 // Register Read를 실행하고 성공한 word 결과를 Panel용 32-bit int array에 복사한다.
 // 성공 요청은 Auto Read용 마지막 요청으로 보관하며 결과 코드는 항상 시스템변수에 기록한다.
+// request.quantity는 최대 125이며, 실제 범위 검증은 DLL이 단일 책임으로 수행한다.
 long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
 {
      long result;
@@ -78,6 +79,7 @@ long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
 }
 
 // 준비된 Register Write 요청을 DLL에 전달하고 결과 코드를 Panel에 반영한다.
+// request.data는 word 배열이므로 각 원소가 Modbus 16-bit Register 하나에 대응한다.
 long M485E_UI_ExecuteWrite(struct M485E_ManualWriteRequest request)
 {
      long result;
@@ -125,6 +127,7 @@ on sysvar_update sysvar::M485E::ManualRead::Send
 
 // Manual Write Send 버튼 이벤트이다.
 // generic array의 각 32-bit 값을 읽어 0..65535인지 검사한 뒤 word 배열로 변환한다.
+// CAPL System Variable 배열은 최소 32-bit이므로 DLL ABI word 배열로 넘기기 전 변환이 필요하다.
 on sysvar_update sysvar::M485E::ManualWrite::Send
 {
      struct M485E_ManualWriteRequest request;
@@ -209,6 +212,7 @@ on timer tM485E_ManualAutoRead
 
 // Panel의 Check_ReadOption int array를 100ms마다 Monitoring 후보 상태로 복사한다.
 // 실제 적용은 다음 Monitoring Cycle 경계에서 일괄 수행된다.
+// Panel에서 여러 CheckBox가 같은 시점에 바뀌어도 다음 Cycle에는 한 묶음으로 반영된다.
 on timer tM485E_UISync
 {
      long index;

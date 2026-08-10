@@ -10,6 +10,11 @@
 
 namespace m485e::platform
 {
+/**
+ * @brief Win32 overlapped-I/O implementation of the serial transport abstraction.
+ * @note Read and Write copy the active handle under a short mutex; CancelIoEx is used
+ *       to wake a blocked worker during shutdown or reconnect.
+ */
 class Win32SerialTransport final : public core::ISerialTransport
 {
  public:
@@ -20,6 +25,7 @@ class Win32SerialTransport final : public core::ISerialTransport
 
   std::int32_t Open(const std::string& port, const core::SerialSettings& settings,
                     std::uint32_t& osError) noexcept;
+  /** @brief Cancels pending I/O and closes the handle; safe to call repeatedly. */
   void Close() noexcept;
   bool IsOpen() const noexcept;
 

@@ -51,6 +51,8 @@ void SnapshotQueueService::StopMonitoring() noexcept
   for (auto& queue : queues_)
   {
     std::lock_guard<std::mutex> lock(queue.mutex);
+    // Pending events no longer have a consumer after monitoring stops. Count them as
+    // suppressed before clearing so diagnostics still explain the lost notifications.
     queue.stats.suppressedCount =
         SaturatingAdd(queue.stats.suppressedCount, static_cast<std::uint32_t>(queue.size));
     queue.head = 0;
@@ -141,6 +143,8 @@ void SnapshotQueueService::RecordChange(const std::uint8_t deviceIndex,
     queue.nextSequence = NextSequence(queue.nextSequence);
     if (queue.size == queue.items.size())
     {
+      // Prefer the newest state during bursts. The overflow latch preserves evidence
+      // that an older change was lost even after the queue later drains.
       queue.head = (queue.head + 1U) % queue.items.size();
       --queue.size;
       queue.stats.droppedCount = SaturatingAdd(queue.stats.droppedCount, 1U);
@@ -166,6 +170,8 @@ std::int32_t SnapshotQueueService::TryDequeue(const std::uint8_t portSlot,
   std::lock_guard<std::mutex> lock(queue.mutex);
   if (queue.size == 0U) return M485E_STATUS_NO_DATA;
   const RuleSnapshot& front = queue.items[queue.head];
+  // Validate capacity before advancing head; CAPL can retry with a larger buffer
+  // without losing the snapshot.
   if (dataCapacity < front.quantity) return M485E_ERR_BUFFER_TOO_SMALL;
   output = front;
   queue.head = (queue.head + 1U) % queue.items.size();
@@ -239,6 +245,8 @@ void ErrorQueue::Push(ErrorEvent event, const std::string_view text) noexcept
     ErrorEvent& latest = items_[(head_ + size_ - 1U) % items_.size()];
     if (SameContext(latest, event))
     {
+      // Coalescing only the newest identical event preserves ordering between
+      // different failures while limiting repeated-error traffic to CAPL.
       latest.repeatCount = SaturatingIncrement(latest.repeatCount);
       stats_.coalescedCount = SaturatingIncrement(stats_.coalescedCount);
       return;
@@ -248,6 +256,8 @@ void ErrorQueue::Push(ErrorEvent event, const std::string_view text) noexcept
   nextSequence_ = NextSequence(nextSequence_);
   if (size_ == items_.size())
   {
+    // Error delivery must not block serial workers. Drop the oldest event and latch
+    // overflow so the UI can report that diagnostics were incomplete.
     head_ = (head_ + 1U) % items_.size();
     --size_;
     stats_.droppedCount = SaturatingIncrement(stats_.droppedCount);
@@ -267,6 +277,7 @@ std::int32_t ErrorQueue::TryDequeue(const std::uint32_t textCapacity,
   std::lock_guard<std::mutex> lock(mutex_);
   if (size_ == 0U) return M485E_STATUS_NO_DATA;
   const std::size_t required = std::strlen(items_[head_].text.data()) + 1U;
+  // Do not consume an event until both metadata and text can be returned intact.
   if (textCapacity < required) return M485E_ERR_BUFFER_TOO_SMALL;
   output = items_[head_];
   head_ = (head_ + 1U) % items_.size();

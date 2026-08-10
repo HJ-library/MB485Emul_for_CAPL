@@ -46,6 +46,11 @@ class ISerialTransport
   virtual void Cancel() noexcept = 0;
 };
 
+/**
+ * @brief Owns the RTU receive/process/respond loop for one logical port slot.
+ * @note The transport abstraction keeps framing and protocol tests independent of
+ *       Win32 handles. Fatal I/O is reported to RuntimeConnection for reconnect.
+ */
 class PortWorker final
 {
  public:
@@ -59,6 +64,7 @@ class PortWorker final
   PortWorker& operator=(const PortWorker&) = delete;
 
   std::int32_t Start();
+  /** @brief Requests cancellation and joins the worker thread before returning. */
   void Stop() noexcept;
   bool IsRunning() const noexcept;
 

@@ -21,6 +21,11 @@ struct ConnectionPortConfig
   core::SerialSettings settings{};
 };
 
+/**
+ * @brief Coordinates two serial transports, two RTU workers, and reconnect recovery.
+ * @note Both ports form one emulator connection. A fatal fault on either port closes
+ *       both before retrying, avoiding a partially connected lifecycle state.
+ */
 class RuntimeConnection final
 {
  public:
@@ -36,6 +41,7 @@ class RuntimeConnection final
   RuntimeConnection& operator=(const RuntimeConnection&) = delete;
 
   std::int32_t Start(std::uint8_t& failedPortSlot, std::uint32_t& osError) noexcept;
+  /** @brief Stops reconnect supervision, workers, and transports synchronously. */
   void Stop() noexcept;
   bool IsRunning() const noexcept;
 

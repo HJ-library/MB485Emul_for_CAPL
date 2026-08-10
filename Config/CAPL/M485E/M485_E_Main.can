@@ -57,6 +57,7 @@ void M485E_Main_InitializePortConfigs()
 
 // 준비된 포트 설정 배열을 앞에서부터 DLL에 등록한다.
 // 하나라도 실패하면 즉시 해당 오류 코드를 반환하며 뒤 포트는 적용하지 않는다.
+// 반환: M485E_OK 또는 최초로 실패한 Port 설정의 오류 코드.
 long M485E_Main_ApplyPortConfigs()
 {
      long configIndex;
@@ -88,6 +89,7 @@ on preStart
 // 측정 시작 단계: CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
 // 이 단계에서는 Serial 포트를 열지 않으며 ConnectSwitch가 올라올 때 연결한다.
 // 마지막으로 UI 동기화용 타이머를 시작한다.
+// Refresh는 비동기 요청이므로 최종 완료 여부는 LifecycleStatus 타이머가 갱신한다.
 on start
 {
      long result;
