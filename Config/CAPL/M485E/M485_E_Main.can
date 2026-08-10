@@ -76,31 +76,58 @@ long M485E_Main_ApplyPortConfigs()
      return M485E_OK;
 }
 
-// 측정 시작 준비 단계: 포트 기본값을 만들고 CAPL 전용 DLL Context를 생성한다.
-// CSV 로딩과 실제 Serial 연결은 아직 수행하지 않는다.
+// 측정 시작 준비 단계: 포트 기본값을 만들고 현재 CAPL Program Node를 DLL에 등록한다.
+// Vector 공식 Sample과 같이 registerCAPLDLL은 이벤트 핸들러에서 직접 호출한다.
+// CSV 로딩, DLL Context 초기화와 실제 Serial 연결은 아직 수행하지 않는다.
 on preStart
 {
-     long result;
      M485E_Main_InitializePortConfigs();
-     result = M485E_Core_Initialize();
-     if (result != M485E_OK) M485E_Core_ReportSyncFailure("Initialize", result);
+     gM485E_ContextHandle = registerCAPLDLL();
+     write("M485E DLL registration: stage=preStart handle=%d", gM485E_ContextHandle);
 }
 
-// 측정 시작 단계: CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
+// 측정 시작 단계: DLL Context 초기화, CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
+// preStart 등록이 실패했으면 로드가 완료된 이 시점에서 한 번만 재등록한다.
+// Context 초기화 실패 시 후속 API를 호출하지 않아 -103 연쇄 오류를 막는다.
 // 이 단계에서는 Serial 포트를 열지 않으며 ConnectSwitch가 올라올 때 연결한다.
 // 마지막으로 UI 동기화용 타이머를 시작한다.
 // Refresh는 비동기 요청이므로 최종 완료 여부는 LifecycleStatus 타이머가 갱신한다.
 on start
 {
      long result;
-     result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
-     if (result == M485E_OK)
-          result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485E_FrameRulePath);
-     if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
-     if (result == M485E_OK) result = M485E_Core_RefreshCsv();
-     @sysvar::M485E::Connection::ResultCode = result;
-     M485E_Core_ReportSyncFailure("StartupConfiguration", result);
-     M485E_UI_Start();
+
+     if (gM485E_ContextHandle == 0)
+     {
+          gM485E_ContextHandle = registerCAPLDLL();
+          write("M485E DLL registration: stage=start-retry handle=%d",
+               gM485E_ContextHandle);
+     }
+
+     if (gM485E_ContextHandle == 0)
+          result = M485E_ERR_INVALID_CONTEXT;
+     else
+          result = M485E_Core_Initialize();
+     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
+          result);
+
+     if (result != M485E_OK)
+     {
+          @sysvar::M485E::Connection::ResultCode = result;
+          M485E_Core_ReportSyncFailure("Initialize", result);
+     }
+     else
+     {
+          result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
+          if (result == M485E_OK)
+               result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
+                    gM485E_FrameRulePath);
+          if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
+          if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+          write("M485E startup configuration: result=%d", result);
+          @sysvar::M485E::Connection::ResultCode = result;
+          M485E_Core_ReportSyncFailure("StartupConfiguration", result);
+          M485E_UI_Start();
+     }
 }
 
 // 측정 종료 단계: 타이머와 모니터링을 먼저 멈춘 뒤 포트를 닫고 Context를 해제한다.

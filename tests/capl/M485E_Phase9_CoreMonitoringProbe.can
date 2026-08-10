@@ -67,15 +67,24 @@ long M485E_Probe_ApplyPortConfigs()
 
 on preStart
 {
-  long result;
   M485E_Probe_InitializePortConfigs();
-  result = M485E_Core_Initialize();
-  if (result != M485E_OK) write("M485E Phase 9 probe Initialize failed: %d", result);
+  gM485E_ContextHandle = registerCAPLDLL();
 }
 
 on start
 {
   long result;
+  if (gM485E_ContextHandle == 0) gM485E_ContextHandle = registerCAPLDLL();
+  if (gM485E_ContextHandle == 0)
+    result = M485E_ERR_INVALID_CONTEXT;
+  else
+    result = M485E_Core_Initialize();
+  if (result != M485E_OK)
+  {
+    write("M485E Phase 9 probe Initialize failed: %d", result);
+    return;
+  }
+
   M485E_Monitoring_ConfigureReadOption(0, 0, 1);
   M485E_Monitoring_ConfigureReadOption(1, 0, 2);
   M485E_Monitoring_ConfigureReadOption(2, 1, 1);

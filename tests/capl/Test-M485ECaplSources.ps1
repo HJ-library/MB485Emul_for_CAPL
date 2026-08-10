@@ -97,6 +97,9 @@ Require-Match $core 'M485E_Core_ReportSyncFailure' 'Synchronous error reporting 
 Require-Match $core 'M485E_Core_PollOneErrorEvent' 'Asynchronous error polling helper is missing.'
 Require-Match $main 'M485E_UI_Start\s*\(' 'Main does not start the UI timers.'
 Require-Match $main 'M485E_UI_Stop\s*\(' 'Main does not stop the UI timers.'
+Require-Match $main 'on\s+preStart[\s\S]*?gM485E_ContextHandle\s*=\s*registerCAPLDLL\s*\(' 'Main must register the CAPL DLL directly during preStart.'
+Require-Match $main 'on\s+start[\s\S]*?gM485E_ContextHandle\s*==\s*0[\s\S]*?registerCAPLDLL\s*\(' 'Main must retry a failed CAPL DLL registration once during start.'
+Require-Match $main 'if\s*\(result\s*!=\s*M485E_OK\)[\s\S]*?M485E_Core_ReportSyncFailure\("Initialize"' 'Main must stop startup configuration after DLL initialization failure.'
 
 [xml]$systemVariables = Get-Content -LiteralPath $systemVariablesPath -Raw
 if ($null -eq $systemVariables) { throw 'System variable XML could not be parsed.' }
