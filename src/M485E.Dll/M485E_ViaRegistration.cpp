@@ -16,8 +16,9 @@ VIACLIENT(void) VIARegisterCDLL(VIACapl* service)
 
   uint32 handle = 0U;
   const VIAResult result = service->GetCaplHandle(&handle);
-  if (result != kVIA_OK || handle == 0U) return;
+  if (result != kVIA_OK) return;
 
-  // registerCAPLDLL() returns this same handle to CAPL. The Core then passes it
-  // to InitializeContext, so no duplicate service-to-handle map is necessary.
+  // Vector owns the handle domain, and zero is a valid handle for a CAPL program
+  // instance. registerCAPLDLL() returns this same value to CAPL; the Core then
+  // passes it to InitializeContext, so no duplicate service-to-handle map is needed.
 }

@@ -82,7 +82,7 @@ class SnapshotQueueService final
                             const std::vector<std::uint16_t>& values) const noexcept;
 
   std::shared_ptr<const ActiveConfiguration> configuration_;
-  std::array<PortQueue, 2> queues_{};
+  std::array<PortQueue, M485E_PORT_SLOT_COUNT> queues_{};
   bool monitoringEnabled_ = false;
   mutable std::mutex stateMutex_;
 };

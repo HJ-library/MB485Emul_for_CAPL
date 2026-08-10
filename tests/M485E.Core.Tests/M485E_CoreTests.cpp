@@ -79,6 +79,22 @@ std::string ValidDevices()
          "1,COM12,1,Second,signals.csv\n";
 }
 
+std::string OnePortDevices()
+{
+  return std::string(kDeviceHeader) +
+         "0,COM11,1,First,signals.csv\n"
+         "1,COM11,2,Second,signals.csv\n";
+}
+
+std::string FourPortDevices()
+{
+  return std::string(kDeviceHeader) +
+         "0,COM11,1,First,signals.csv\n"
+         "1,COM12,1,Second,signals.csv\n"
+         "2,COM13,1,Third,signals.csv\n"
+         "3,COM14,1,Fourth,signals.csv\n";
+}
+
 std::string ValidRules()
 {
   return std::string(kRuleHeader) +
@@ -105,6 +121,7 @@ void TestValidConfigurationAndInit()
   const auto result = ConfigurationLoader{}.Build(paths);
   Require(result.Succeeded(), "valid configuration rejected");
   Require(result.configuration->devices.size() == 2, "device count mismatch");
+  Require(result.configuration->activePortCount == 2, "active Port count mismatch");
   Require(result.configuration->rules.size() == 3, "rule count mismatch");
   Require(result.configuration->signals.size() == 8, "instantiated signal count mismatch");
   const auto& first = *result.configuration->devices[0].initialImage;
@@ -391,6 +408,49 @@ std::vector<std::uint8_t> Rtu(std::initializer_list<std::uint8_t> bytes)
   return frame;
 }
 
+void TestPortCardinalityAndSlot3Routing()
+{
+  Fixture fixture;
+  auto built = ConfigurationLoader{}.Build(
+      fixture.Write(OnePortDevices(), ValidRules(), ValidSignals()));
+  Require(built.Succeeded() && built.configuration->activePortCount == 1,
+          "one-Port DeviceMap was rejected");
+
+  const std::string slot3Rules = std::string(kRuleHeader) +
+                                 "3,1,0x03,10000,1,Slot 3 Read\n";
+  built = ConfigurationLoader{}.Build(
+      fixture.Write(FourPortDevices(), slot3Rules, ValidSignals()));
+  Require(built.Succeeded() && built.configuration->activePortCount == 4 &&
+              built.configuration->uniquePorts[3] == "COM14",
+          "four-Port DeviceMap or first-appearance slot mapping failed");
+  m485e::core::RuntimeModel runtime(built.configuration);
+  m485e::core::ModbusRtuEngine engine(runtime);
+  const auto response = engine.Process(3, Rtu({1, 0x03, 0x27, 0x10, 0, 1}));
+  Require(response.disposition == m485e::core::RtuDisposition::Response &&
+              response.response.size() == 7 && response.response[3] == 0x41 &&
+              response.response[4] == 0x48,
+          "PortSlot 3 RTU routing failed");
+  Require(engine.Process(4, Rtu({1, 0x03, 0x27, 0x10, 0, 1})).disposition ==
+              m485e::core::RtuDisposition::Ignore,
+          "out-of-range PortSlot was not ignored");
+
+  m485e::core::SnapshotQueueService snapshots(built.configuration);
+  snapshots.StartMonitoring();
+  m485e::core::RuleSnapshot snapshot;
+  Require(snapshots.CreatePeriodic(runtime, 3, 1, snapshot) == M485E_OK &&
+              snapshot.portSlot == 3,
+          "PortSlot 3 Snapshot routing failed");
+
+  const std::string fivePorts = FourPortDevices() +
+                                "4,COM15,1,Fifth,signals.csv\n";
+  ExpectFailure(fivePorts, slot3Rules, ValidSignals(),
+                M485E_ERR_PORT_CONFIG_INCOMPLETE,
+                "five-Port DeviceMap was accepted");
+  ExpectFailure(kDeviceHeader, slot3Rules, ValidSignals(),
+                M485E_ERR_PORT_CONFIG_INCOMPLETE,
+                "zero-Port DeviceMap was accepted");
+}
+
 void TestModbusRtuEngine()
 {
   const std::uint8_t known[] = {0x01U, 0x03U, 0x00U, 0x00U, 0x00U, 0x0AU};
@@ -540,6 +600,39 @@ void TestSnapshotAndDiagnosticQueues()
           "Error Queue oldest-drop diagnostics failed");
 }
 
+void TestMonitoringStopIsAnEnqueueBarrier()
+{
+  Fixture fixture;
+  const auto built = ConfigurationLoader{}.Build(
+      fixture.Write(ValidDevices(), ValidRules(), ValidSignals()));
+  Require(built.Succeeded(), "Monitoring barrier fixture build failed");
+  m485e::core::RuntimeModel runtime(built.configuration);
+  m485e::core::SnapshotQueueService snapshots(built.configuration);
+  const auto write = runtime.WriteRegisters(0, 10000, {0x1357U},
+                                            m485e::core::WriteSource::Direct);
+  Require(write.changed, "Monitoring barrier write did not change a Rule");
+
+  for (int round = 0; round < 50; ++round)
+  {
+    snapshots.StartMonitoring();
+    std::atomic<bool> run{true};
+    std::array<std::thread, 4> writers;
+    for (auto& writer : writers)
+    {
+      writer = std::thread([&] {
+        while (run.load(std::memory_order_relaxed))
+          snapshots.RecordChange(0, m485e::core::WriteSource::Direct, write);
+      });
+    }
+    std::this_thread::yield();
+    snapshots.StopMonitoring();
+    run.store(false, std::memory_order_relaxed);
+    for (auto& writer : writers) writer.join();
+    Require(snapshots.GetStats(0).pending == 0,
+            "RecordChange enqueued after StopMonitoring returned");
+  }
+}
+
 void TestRtuTimingAndFraming()
 {
   using m485e::core::CalculateRtuTiming;
@@ -676,8 +769,10 @@ int main()
     TestCardinalityBoundaries();
     TestAtomicRefresh();
     TestRuntimeRegisterAndSignalOperations();
+    TestPortCardinalityAndSlot3Routing();
     TestModbusRtuEngine();
     TestSnapshotAndDiagnosticQueues();
+    TestMonitoringStopIsAnEnqueueBarrier();
     TestRtuTimingAndFraming();
     TestPortWorkerWithPartialIoAndCancellation();
     std::cout << "M485E Phase 3-7 home-testable core tests PASS.\n";

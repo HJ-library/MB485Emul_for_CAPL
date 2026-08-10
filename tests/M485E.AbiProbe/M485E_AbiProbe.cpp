@@ -204,10 +204,31 @@ int main(int argc, char** argv)
   auto initialize = FunctionAt<OneDword>(table, "M485E_Dll_InitializeContext");
   auto finalize = FunctionAt<OneDword>(table, "M485E_Dll_FinalizeContext");
   auto lifecycle = FunctionAt<Status>(table, "M485E_Dll_GetLifecycleStatus");
-  if (initialize(0) != -102 || initialize(handle) != 0 || initialize(handle) != -104 ||
-      lifecycle(wrongHandle, 0, nullptr) != -102 || finalize(wrongHandle) != -102)
+  std::array<std::int32_t, 9> zeroStatus{};
+  const std::int32_t initializeZero = initialize(0);
+  const std::int32_t lifecycleZero = lifecycle(0, static_cast<std::uint32_t>(zeroStatus.size()),
+                                               zeroStatus.data());
+  const std::int32_t duplicateOther = initialize(handle);
+  const std::int32_t lifecycleWrong = lifecycle(wrongHandle, 0, nullptr);
+  const std::int32_t finalizeWrong = finalize(wrongHandle);
+  const std::int32_t finalizeZero = finalize(0);
+  const std::int32_t initializeNonZero = initialize(handle);
+  const std::int32_t duplicateSame = initialize(handle);
+  if (initializeZero != 0 || lifecycleZero != 0 || zeroStatus[0] != 1 ||
+      zeroStatus[1] != static_cast<std::int32_t>(zeroStatus.size()) ||
+      duplicateOther != -104 ||
+      lifecycleWrong != -102 || finalizeWrong != -102 || finalizeZero != 0 ||
+      initializeNonZero != 0 || duplicateSame != -104)
   {
-    return Fail("Context initialize, duplicate, or wrong-handle contract failed.");
+    std::cerr << "Context results: init0=" << initializeZero
+              << " lifecycle0=" << lifecycleZero
+              << " duplicateOther=" << duplicateOther
+              << " lifecycleWrong=" << lifecycleWrong
+              << " finalizeWrong=" << finalizeWrong
+              << " finalize0=" << finalizeZero
+              << " initNonZero=" << initializeNonZero
+              << " duplicateSame=" << duplicateSame << '\n';
+    return Fail("Zero-handle, duplicate, or wrong-handle context contract failed.");
   }
 
   const char path[] = "D:\\M485E\\DeviceMap.csv";
@@ -224,8 +245,10 @@ int main(int argc, char** argv)
 
   const char port[] = "COM3";
   auto setPort = FunctionAt<SetPortConfig>(table, "M485E_Dll_SetPortConfig");
-  if (setPort(handle, 0, 4, port, 115200, 8, 0, 1) != 0)
-    return Fail("Port string call failed.");
+  if (setPort(handle, 0, 4, port, 115200, 8, 0, 1) != 0 ||
+      setPort(handle, 3, 4, port, 115200, 8, 0, 1) != 0 ||
+      setPort(handle, 4, 4, port, 115200, 8, 0, 1) != -101)
+    return Fail("Port string or 0..3 PortSlot boundary call failed.");
   if (FunctionAt<OneDword>(table, "M485E_Dll_RefreshCsv")(handle) != -2002 ||
       FunctionAt<OneDword>(table, "M485E_Dll_Connect")(handle) != -2002 ||
       FunctionAt<OneDword>(table, "M485E_Dll_Disconnect")(handle) != 0)

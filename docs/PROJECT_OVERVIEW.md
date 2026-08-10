@@ -5,7 +5,7 @@
 Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Emulator의 설정,
 수동 조작과 Monitoring 출력을 담당한다.
 
-> 현재 구현 기준: Win32/x86, CANalyzer 9.x 대상, RS-485 Port 2개, FC03·FC04·FC10,
+> 현재 구현 기준: Win32/x86, CANalyzer 9.x 대상, RS-485 Port 1~4개, FC03·FC04·FC10,
 > Device 최대 256개, Monitoring Rule 최대 200개, Signal 최대 4,096개.
 
 ## 1. 시스템 구성
@@ -22,7 +22,8 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | CAPL UI | System Variable의 Connect, Refresh, Read/Write, Signal 조작을 Core에 전달 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
 
-RS-485 Port Slot 0과 1은 각각 가상 CAN Channel 1과 2에 대응한다. 가상 CAN은 외부
+RS-485 Port Slot 0~3은 Main에 설정한 가상 CAN Channel과 1:1로 대응한다. 기본 1-Port
+예제는 Slot 0을 Channel 1에 출력한다. 가상 CAN은 외부
 물리 장치에 송신하기 위한 것이 아니라 Emulator 내부 Register 상태를 Trace에서 보기
 위한 진단 경로다.
 
@@ -30,7 +31,7 @@ RS-485 Port Slot 0과 1은 각각 가상 CAN Channel 1과 2에 대응한다. 가
 
 | 파일 | 핵심 내용 | DLL에서 만들어지는 정보 |
 |---|---|---|
-| `M485E_DeviceMap.csv` | `Index`, COM Port, Slave ID | Device Index를 `Port + Slave ID`로 연결 |
+| `M485E_Device.csv` | `Index`, COM Port, Slave ID | Device Index를 `Port + Slave ID`로 연결 |
 | `M485E_FrameRule.csv` | `Index`, `Rule_ID`, FC, Address, Quantity | RTU 접근 권한과 CAN Monitoring 범위 |
 | 장치 유형별 `*_RegisterMap.csv` | Address, SignalName, Type, Bit 배치, Scale, Init Value | Register 초기값과 물리 Signal 변환 정보 |
 
@@ -46,7 +47,7 @@ Slave ID가 있어도 각 장치는 서로 다른 Index를 갖고, Port 설정�
 
 ```text
 Device Index
-    ├─ M485E_DeviceMap.csv  → COM Port + Slave ID
+    ├─ M485E_Device.csv     → COM Port + Slave ID
     ├─ M485E_FrameRule.csv  → FC03/FC04 범위 + Rule ID
     └─ CSV_DB_Name          → 장치 유형 Register Map + Signal 정의 + Init Value
 ```
@@ -61,10 +62,10 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 ![전체 동작 흐름](assets/overall_operation_flow.png)
 
 1. CANalyzer가 `M485_E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
-2. CAPL `preStart`에서 DLL Context를 초기화한다.
-3. CAPL `start`에서 DeviceMap/FrameRule 경로와 Port 2개의 Serial 설정을 전달한다.
+2. CAPL `preStart`에서 현재 Program Node를 등록하고 Vector Context Handle을 얻는다. Handle 값 0도 정상값이다.
+3. CAPL `start`에서 DLL Context를 초기화하고 DeviceMap/FrameRule 경로와 활성 Port 1~4개의 Serial 설정을 전달한다.
 4. DLL이 DeviceMap에서 참조하는 Register Map까지 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
-5. `ConnectSwitch`가 켜지면 두 COM Port를 모두 연다. 하나라도 실패하면 전체 Connect를 실패시킨다.
+5. `ConnectSwitch`가 켜지면 DeviceMap의 모든 활성 COM Port를 연다. 하나라도 실패하면 전체 Connect를 실패시킨다.
 6. Connected 상태에서 Board RTU 요청, CAPL 수동 조작과 CAN Monitoring을 병행한다.
 7. Measurement 종료 시 Monitoring과 Timer를 중지하고 Worker를 취소·Join한 뒤 COM과 Context를 정리한다.
 
@@ -132,7 +133,7 @@ DLL에서 Rule Snapshot을 읽어 CAN Message를 생성한다.
 - Monitoring Cycle: CAPL 코드의 공통 1,000ms Timer
 - Output Pump: 10ms Timer
 - Rule 선택: `M485E::Monitoring::Check_ReadOption[]`
-- Change Queue: 매 Pump마다 시작 Port를 바꾸는 두 Port Round-robin
+- Change Queue: 매 Pump마다 시작 Port를 순환하는 활성 Port Round-robin
 - Periodic Rule: Cycle이 끝나도 이어지는 단일 ReadOption Cursor
 - Periodic Snapshot: `0x80IIRRMM`
 - Change Snapshot: `0x81IIRRMM`
@@ -171,7 +172,7 @@ Table은 회사 Map 확정 후 구성해야 한다.
 ![수명주기 상태](assets/lifecycle_state.png)
 
 - Connect와 Disconnect는 CAPL Event를 막지 않도록 비동기로 처리한다.
-- 두 Port 중 하나가 끊기면 Monitoring을 중지하고 두 Port를 닫은 뒤 전체 재연결을 시도한다.
+- 활성 Port 중 하나가 끊기면 Monitoring을 중지하고 모든 활성 Port를 닫은 뒤 전체 재연결을 시도한다.
 - 자동 재연결은 3초 간격, 최대 10회다.
 - 중간에 성공하면 Connected로 돌아가고 요청된 Monitoring을 복구한다.
 - 모두 실패하면 Disconnected 상태와 Error Event를 남긴다.
@@ -189,7 +190,7 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 | `src/M485E.Dll` | CAPL Export Table, Context, Lifecycle, Win32 Serial Adapter |
 | `Config/CAPL/M485E` | Main, Core, Monitoring, UI CAPL 코드 |
 | `Config/System Variables/M485E.vsysvar` | Panel 연동 System Variable 정의 |
-| `Config/Maps` | DeviceMap, FrameRule 및 장치 유형별 Register Map |
+| `Config/Maps/M485E` | 기본 DeviceMap, FrameRule 및 장치 유형별 Register Map |
 | `spec` | 오류 코드와 공개 상수의 단일 원본 |
 | `generated` | spec에서 생성한 C++·CAPL 계약 |
 | `tests` | ABI, Core, Integration, CAPL 계약과 실환경 Probe |
@@ -202,7 +203,7 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 ## 9. 처음 실행하는 순서
 
 1. Solution을 `Release/Win32`로 빌드하여 `dist/M485E.dll`을 만든다.
-2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 DLL을 `Config/CAPL/DLL`에 배치한다.
+2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 DLL을 `Config/CAPL/Dll`에 배치한다.
 3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
 4. Program Node에 `M485_E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.

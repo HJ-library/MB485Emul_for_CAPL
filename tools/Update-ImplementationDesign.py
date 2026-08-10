@@ -51,8 +51,8 @@ phase_status = {
     "Phase 5": "Implementation Complete / Automated Verification Complete. CRC16, FC03/04/10, 무응답 및 Modbus Exception Golden/경계 시험 완료.",
     "Phase 6": "Implementation Complete / Automated Verification Complete. Periodic/Change/Error Queue, 불변 Snapshot, 256 oldest-drop, 통계·병합 시험 완료.",
     "Phase 7": "Implementation Complete / Automated Verification Complete / External Verification Pending. t1.5/t3.5, Partial I/O, Cancellation은 Fake Transport로 검증; SystemBase Multi USB-485 실제 통합은 회사 환경에서 수행.",
-    "Phase 8": "Implementation Complete / Automated Verification Complete / External Verification Pending. 비동기 Refresh/Connect, 두 Port rollback, 21 Export 통합, Finalize 및 Phase 1 ABI 회귀 완료; 실제 Port 복구는 회사 환경에서 수행.",
-    "Phase 9": "Implementation Complete / Automated and CANalyzer 13 Compile Verification Complete / External Verification Pending. CAPL Core/Monitoring, 1,000ms Cycle, 10ms Pump, 66/33 Frame budget, 두 Port round-robin 및 Extended CAN 조립 완료. Phase 9 Probe는 CANalyzer 13 x86 컴파일러에서 경고 없이 컴파일되었으며 CANalyzer 9.x SP8 Measurement는 회사 환경에서 수행.",
+    "Phase 8": "Implementation Complete / Automated Verification Complete / External Verification Pending. 비동기 Refresh/Connect, 1~4개 활성 Port 전체 rollback, 21 Export 통합, Finalize 및 Phase 1 ABI 회귀 완료; 실제 Port 복구는 회사 환경에서 수행.",
+    "Phase 9": "Implementation Complete / Automated and CANalyzer 13 Compile Verification Complete / External Verification Pending. CAPL Core/Monitoring, 1,000ms Cycle, 10ms Pump, 66/33 Frame budget, 활성 Port round-robin 및 Extended CAN 조립 완료. Phase 9 Probe는 CANalyzer 13 x86 컴파일러에서 경고 없이 컴파일되었으며 CANalyzer 9.x SP8 Measurement는 회사 환경에서 수행.",
     "Phase 10": "Home-testable Scope Complete / External Verification Pending. CAPL UI System Variable Adapter, Manual Read/Write, 1초 AutoRead, Signal Control, 시험 CSV·Probe·외부 검증 패키지 준비 완료. 독립 CAPL 컴파일러는 System Variable DB를 로드하지 않으므로 Main의 최종 Compile/Panel 배치, Board E2E 및 성능 실측은 회사 Configuration에서 수행.",
 }
 
@@ -76,7 +76,7 @@ if not any(paragraph.text == marker for paragraph in document.paragraphs):
         set_font(cell)
     rows = [
         ("CSV / Runtime / RTU", "M485E.Core", "Core Unit/Boundary PASS", "실제 Board 응답 시간"),
-        ("Serial / Lifecycle", "Win32 Overlapped I/O + 2 Worker", "Fake I/O + 없는 COM rollback PASS", "Multi USB-485 제거·복구"),
+        ("Serial / Lifecycle", "Win32 Overlapped I/O + 활성 Port별 Worker", "Fake I/O + 없는 COM rollback PASS", "Multi USB-485 제거·복구"),
         ("DLL ABI", "21 caplDllTable4 Export", "ABI/Integration Regression PASS", "CANalyzer 9.x Measurement"),
         ("CAPL Monitoring / UI", "Core·Monitoring·UI CIN + VSYSVAR", "정적 계약 검사 PASS", "CAPL Compile, Panel, 가상 CAN Trace"),
         ("Performance", "bounded Queue와 Pump budget", "경계·Queue 자동 시험 PASS", "200 Rule 시간·메모리 실측"),

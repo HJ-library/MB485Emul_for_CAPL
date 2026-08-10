@@ -13,9 +13,9 @@ Write Window의 오류 코드와 실제 동작을 기록한다.
 |---|---|---|
 | 생산 DLL | `dist/M485E.dll` | CANalyzer 9.x용 Release/Win32 DLL |
 | CAPL 실행 코드 | `Config/CAPL/M485E` | Main, Core, Monitoring, UI Adapter |
-| CAPL 배치 DLL | `Config/CAPL/DLL/M485E.dll` | Main의 `#pragma library`가 읽는 위치 |
+| CAPL 배치 DLL | `Config/CAPL/Dll/M485E.dll` | Main의 `#pragma library`가 읽는 위치 |
 | System Variable DB | `Config/System Variables/M485E.vsysvar` | Connect, Read/Write, Signal, Monitoring 제어 |
-| 최소 시험 CSV | `Config/Maps` | 먼저 기능을 확인할 작은 기본 Map |
+| 최소 시험 CSV | `Config/Maps/M485E` | Device, FrameRule 및 참조 Register Map을 포함한 기본 Map |
 | Origin 기반 예제 | `examples/M485E_Test` | Chiller, E-HVAC, B-HVAC, Gas 시험 초안 |
 | ABI 시험 CAPL | `tests/capl/M485E_Phase1_AbiProbe.can` | 21개 DLL API와 CAPL ABI 시험 |
 | ABI 시험 보조 파일 | `out/Win32/Release/M485E.CaplAbiFixture.dll` | Phase 1 CAPL Probe 전용 DLL |
@@ -42,7 +42,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\tools\Prepare-M485EPackage.ps1 -Configuration Release
 ```
 
-이 명령은 `dist/M485E.dll`을 `Config/CAPL/DLL/M485E.dll`로 복사한다.
+이 명령은 `dist/M485E.dll`을 `Config/CAPL/Dll/M485E.dll`로 복사한다.
 
 ## 3. 시험 전 회사 PC 정보 기록
 
@@ -50,13 +50,15 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - [ ] CANalyzer Process/Configuration 32비트 여부: ____________________
 - [ ] SystemBase Multi USB-485 Driver 버전: ____________________
 - [ ] Port 0 실제 COM 번호: ____________________
-- [ ] Port 1 실제 COM 번호: ____________________
+- [ ] 활성 Port 수(1~4): ____________________
+- [ ] Port 1~3 실제 COM 번호(사용 시): ____________________
 - [ ] Baud Rate / Data Bits / Parity / Stop Bits: ____________________
 - [ ] Board Master Response Timeout: ____________________ ms
 
-현재 CAPL 기본값은 COM11, COM12와 115200/8/N/1이다. 실제 설정과 다르면
-`Config/CAPL/M485E/M485_E_Main.can`의 `gM485E_PortConfigs[0..1]`을 수정한다.
-`M485E_DeviceMap.csv`의 `Port`도 같은 COM 이름으로 맞춰야 한다.
+현재 CAPL 기본 활성 Port는 1개이며 Slot 0은 COM11, 115200/8/N/1이다. 실제 설정과 다르면
+`Config/CAPL/M485E/M485_E_Main.can`의 `gM485E_ActivePortCount`와
+`gM485E_PortConfigs[0..3]`을 수정한다. 이 수는 `M485E_Device.csv`의 고유 `Port` 수와 같아야 하고
+각 Port 이름도 `COM%d` 결과와 일치해야 한다.
 
 ## 4. 시험 1 - 자동 검증 재실행
 
@@ -79,7 +81,7 @@ ABI Probe 실행 예:
 
 ## 5. 시험 2 - CANalyzer CAPL ABI
 
-1. CANalyzer 9.x SP8의 새 Configuration을 저장소 루트에 저장한다.
+1. Main 시험용 CANalyzer Configuration은 `Config`(회사 구조의 `ProjectConfig`) 바로 아래에 저장한다.
 2. `tests/capl/M485E_Phase1_AbiProbe.can`을 Program Node에 연결한다.
 3. CAPL을 Compile한다.
 4. Measurement를 시작한다.
@@ -101,7 +103,7 @@ CANalyzer 버전과 Process bitness를 함께 기록한다.
 4. CAPL Compile 후 Measurement를 시작하되 ConnectSwitch는 올리지 않는다.
 
 - [ ] Main CAPL Compile 경고/오류 없음
-- [ ] `Config/CAPL/DLL/M485E.dll` Load 성공
+- [ ] `Config/CAPL/Dll/M485E.dll` Load 성공
 - [ ] `M485E::Connection::ConfigurationValid = 1`
 - [ ] `M485E::Connection::State = 1`(Disconnected)
 - [ ] `M485E::Connection::LastResult = 0`
@@ -112,7 +114,7 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 
 ## 7. 시험 4 - 연결하지 않은 상태의 Register/Signal
 
-작은 기본 `Config/Maps`를 그대로 사용한다.
+작은 기본 `Config/Maps/M485E`를 그대로 사용한다.
 
 ### Manual Read
 
@@ -145,7 +147,7 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 - [ ] Read 값이 쓴 값과 동일
 - [ ] Quantity 0/126 또는 0~65535 밖 값은 오류 반환
 
-## 8. 시험 5 - 실제 두 RS-485 Port 연결
+## 8. 시험 5 - 실제 활성 RS-485 Port 연결
 
 1. SystemBase Multi USB-485와 Board를 연결한다.
 2. 실제 COM 번호와 통신 설정을 Main CAPL과 DeviceMap에 반영한다.
@@ -154,14 +156,14 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 5. 비동기 연결 완료를 기다린다.
 
 - [ ] State가 4(Connected)
-- [ ] 두 Port가 모두 열림
-- [ ] 한 Port라도 실패하면 전체 연결이 성공으로 표시되지 않음
+- [ ] Device Map의 1~4개 활성 Port가 모두 열림
+- [ ] 활성 Port 하나라도 실패하면 전체 연결이 성공으로 표시되지 않음
 - [ ] Connect 처리 중 CAPL Event가 장시간 멈추지 않음
 
 ## 9. 시험 6 - Board Modbus RTU 요청
 
-먼저 기본 `Config/Maps`로 시험한다. DeviceMap의 Slave ID는 두 Port 모두 1이지만 Port가
-다르므로 서로 다른 Device다.
+먼저 기본 `Config/Maps/M485E`로 시험한다. Device Map의 Slave 1과 2는 같은 COM11을
+공유하지만 서로 다른 Device Index다.
 
 | 순서 | Port/Slave | 요청 | 기대 결과 |
 |---:|---|---|---|
@@ -169,7 +171,7 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 | 2 | Port 0 / 1 | FC04, Address 10006, Quantity 2 | Temperature Register 정상 응답 |
 | 3 | Port 0 / 1 | FC10, Address 10000, Quantity 2, `0x4148 0x0000` | 정상 Write 응답 |
 | 4 | Port 0 / 1 | FC03, Address 10000, Quantity 2 | 직전 FC10 값 반환 |
-| 5 | Port 1 / 1 | FC03, Address 20000, Quantity 4 | 정상 응답 |
+| 5 | Port 0 / 2 | FC03, Address 20000, Quantity 4 | 정상 응답 |
 | 6 | 임의 Port / 미등록 Slave | FC03 | 응답 없음 |
 | 7 | 등록 Slave / 미지원 FC06 | FC06 | Illegal Function Exception |
 | 8 | 등록 Slave / 범위 밖 Address | FC03 | Illegal Data Address Exception |
@@ -181,17 +183,17 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 
 ## 10. 시험 7 - 가상 CAN Monitoring
 
-가상 CAN Channel 1과 2를 만들고 RS-485 Port Slot 0/1과 각각 대응시킨다. 우선
+활성 Port 수만큼 가상 CAN Channel을 만들고 Port Slot 0~3과 순서대로 대응시킨다. 우선
 `tests/capl/M485E_Phase9_CoreMonitoringProbe.can`으로 기본 Map의 세 Rule을 시험한다.
 
-- [ ] 두 가상 CAN Channel에 Extended CAN Message 출력
+- [ ] 각 활성 Port의 가상 CAN Channel에 Extended CAN Message 출력
 - [ ] Header Message DLC=8
 - [ ] Header의 Index, Slave ID, Function Code, SourceType, Address, Quantity 일치
 - [ ] Data Message가 Register 4개 단위로 분할됨
 - [ ] 마지막 Data Message DLC가 실제 Register 수 x 2
 - [ ] Direct/RTU Write 후 0x81 Change Snapshot 출력 및 SourceType 일치
 - [ ] 선택 Rule의 0x80 Periodic Snapshot이 1초 Cycle로 출력
-- [ ] 두 Port가 Round-robin으로 처리됨
+- [ ] 둘 이상의 활성 Port 사용 시 Change Queue가 Round-robin으로 처리됨
 
 현재 `M485_E_Main.can`은 프로젝트별 Rule slot을 자동 생성하지 않는다. Main과 Panel의
 `Check_ReadOption[]`만으로 0x80 시험을 시작하기 전에 프로젝트 Rule 목록을

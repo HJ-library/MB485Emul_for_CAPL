@@ -11,9 +11,9 @@
 | 구분 | 실제 사용할 파일 | 적용 방법 |
 |---|---|---|
 | CAPL Program Node | `Config/CAPL/M485E/M485_E_Main.can` | Program Node 하나에 이 파일만 연결 |
-| CAPL DLL | `Config/CAPL/DLL/M485E.dll` | Main의 `#pragma library`가 자동 로드 |
+| CAPL DLL | `Config/CAPL/Dll/M485E.dll` | Main의 `#pragma library`가 자동 로드 |
 | System Variable DB | `Config/System Variables/M485E.vsysvar` | CANalyzer Configuration에 등록 |
-| 실행 CSV | `Config/Maps/M485E_*.csv` 3개 | Main이 Measurement 시작 시 Refresh |
+| 실행 CSV | `Config/Maps/M485E` 폴더 전체 | Device, FrameRule 및 Device가 참조하는 Register Map을 시작 시 Refresh |
 
 다음 파일은 직접 Program Node나 System Variable DB로 등록하지 않는다.
 
@@ -25,21 +25,23 @@
 
 ## 2. 권장 폴더 배치
 
-CANalyzer Configuration 파일은 저장소 루트에 저장한다. Main의 CSV 상대경로가
-`.\Config\Maps\...`이므로 Configuration을 다른 폴더에 저장하면 경로가 어긋날 수 있다.
+CANalyzer Configuration 파일은 `Config` 폴더에 저장한다. 회사 프로젝트에서는 이 폴더가
+`ProjectConfig`에 해당한다. Main의 CSV 상대경로는 Configuration 파일 기준
+`.\Maps\M485E\...`이므로 Configuration을 다른 폴더에 저장하면 경로가 어긋난다.
 
 ```text
 Modbus485Emulator\
-├─ M485E_Company_Test.cfg        ← 회사에서 생성할 CANalyzer Configuration
 ├─ Config\
+│  ├─ M485E_Company_Test.cfg        ← 회사에서 생성할 CANalyzer Configuration
 │  ├─ CAPL\
-│  │  ├─ DLL\M485E.dll
+│  │  ├─ Dll\M485E.dll
 │  │  └─ M485E\M485_E_Main.can
 │  ├─ Maps\
-│  │  ├─ M485E_DeviceMap.csv
-│  │  ├─ M485E_FrameRule.csv
-│  │  ├─ M485E_DeviceA_RegisterMap.csv
-│  │  └─ M485E_DeviceB_RegisterMap.csv
+│  │  └─ M485E\
+│  │     ├─ M485E_Device.csv
+│  │     ├─ M485E_FrameRule.csv
+│  │     ├─ M485E_DeviceA_RegisterMap.csv
+│  │     └─ M485E_DeviceB_RegisterMap.csv
 │  └─ System Variables\M485E.vsysvar
 └─ examples\M485E_Test\
 ```
@@ -47,7 +49,7 @@ Modbus485Emulator\
 ## 3. DLL 배치
 
 Git에서 내려받은 Release DLL은 `dist/M485E.dll`이다. 저장소 루트에서 다음 명령을 한 번
-실행하면 Main이 찾는 `Config/CAPL/DLL/M485E.dll` 위치로 복사된다.
+실행하면 Main이 찾는 `Config/CAPL/Dll/M485E.dll` 위치로 복사된다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
@@ -57,7 +59,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 명령 실행 후 아래 두 파일의 크기와 수정 시간이 같은지 확인한다.
 
 - `dist/M485E.dll`
-- `Config/CAPL/DLL/M485E.dll`
+- `Config/CAPL/Dll/M485E.dll`
 
 ## 4. 회사 COM Port와 통신 설정 입력
 
@@ -71,8 +73,7 @@ gM485E_PortConfigs[0].baudRate = 115200;
 gM485E_PortConfigs[0].dataBits = 8;
 gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
 gM485E_PortConfigs[0].stopBits = 1;
-
-gM485E_PortConfigs[1].comPortNumber = 12;
+gM485E_ActivePortCount = 1;
 ```
 
 `comPortNumber=11`은 DLL에 `COM11`로 전달된다. Parity 값은 `M485E_PARITY_NONE`,
@@ -80,30 +81,32 @@ gM485E_PortConfigs[1].comPortNumber = 12;
 
 ### 4.2 Device Map
 
-`Config/Maps/M485E_DeviceMap.csv`의 `Port`도 같은 이름으로 맞춘다.
+`Config/Maps/M485E/M485E_Device.csv`의 `Port`도 같은 이름으로 맞춘다.
 
 ```csv
 Index,Port,Slave_ID,Device_Name,CSV_DB_Name
 0,COM11,1,Phase9 Device A,M485E_DeviceA_RegisterMap.csv
-1,COM12,1,Phase9 Device B,M485E_DeviceB_RegisterMap.csv
+1,COM11,2,Phase9 Device B,M485E_DeviceB_RegisterMap.csv
 ```
 
-CAPL의 Port Slot 0/1 순서와 Device Map의 고유 Port 등장 순서가 일치해야 한다. 두 Port는
-Connect 전에 모두 설정되어 있어야 하고, 한 Port Open이 실패하면 전체 Connect가 실패한다.
+`gM485E_ActivePortCount`는 Device Map의 고유 Port 수와 같아야 한다. 위 예제는 COM11 하나에
+Slave 1과 2가 있으므로 활성 Port는 1개이고 둘 다 Port Slot 0을 공유한다. 활성 Port가 2~4개이면
+Device Map의 고유 Port 첫 등장 순서대로 Slot 0~3 설정을 사용한다. 하나라도 Open에 실패하면
+현재 활성 Port 전체 Connect가 실패한다.
 
 ## 5. CANalyzer Configuration 만들기
 
-1. CANalyzer Configuration을 저장소 루트에 `M485E_Company_Test.cfg`로 저장한다.
+1. CANalyzer Configuration을 `Config/M485E_Company_Test.cfg`로 저장한다. 회사 구조에서는 `ProjectConfig` 바로 아래다.
 2. System Variable Configuration에서 `Config/System Variables/M485E.vsysvar`를 등록한다.
 3. CANalyzer의 System Variable 창에서 `M485E` Namespace가 보이는지 확인한다.
 4. CAPL Program Node 하나를 만들고 `Config/CAPL/M485E/M485_E_Main.can`을 연결한다.
 5. `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_UI.cin`을 별도 Node로 추가하지 않는다.
 6. Phase 1/Phase 9 Probe Node가 있다면 비활성화하거나 제거한다. DLL Context는 Main 하나만 사용한다.
-7. 두 가상 CAN Channel을 Channel 1과 2로 준비한다. Port Slot 0은 Channel 1, Slot 1은 Channel 2다.
+7. 활성 Port 수만큼 가상 CAN Channel을 준비한다. 기본 1-Port 예제는 Slot 0을 Channel 1에 출력한다.
 8. CAPL을 Compile한다.
 
 System Variable 관련 Compile Error가 나면 `.vsysvar`가 Configuration에 먼저 등록되었는지
-확인한다. DLL Load Error가 나면 `Config/CAPL/DLL/M485E.dll` 존재 여부와 CANalyzer가
+확인한다. DLL Load Error가 나면 `Config/CAPL/Dll/M485E.dll` 존재 여부와 CANalyzer가
 x86 Process인지 확인한다.
 
 ## 6. Panel 없이 먼저 확인
@@ -263,7 +266,7 @@ Configuration에서 `tests/capl/M485E_Phase9_CoreMonitoringProbe.can`을 사용�
 ## 10. 실제 RS-485 Board 연결
 
 1. 작은 Map의 CSV 검증과 수동 시험을 먼저 통과한다.
-2. SystemBase Multi USB-485의 두 COM 번호를 Main과 Device Map에 똑같이 입력한다.
+2. SystemBase Multi USB-485에서 사용할 1~4개 COM 번호를 Main과 Device Map에 똑같이 입력한다.
 3. Board와 RS-485를 연결한다.
 4. `ConnectSwitch=1`로 올리고 `State=4(Connected)`를 기다린다.
 5. Board에서 FC03, FC04, FC10 요청을 순서대로 보낸다.
@@ -275,7 +278,7 @@ Configuration에서 `tests/capl/M485E_Phase9_CoreMonitoringProbe.can`을 사용�
 | Slot 0 / Slave 1 | FC03, Address 10000, Quantity 2 | Power12V 값 응답 |
 | Slot 0 / Slave 1 | FC04, Address 10006, Quantity 2 | Temperature 값 응답 |
 | Slot 0 / Slave 1 | FC10, Address 10000, Quantity 2 | Write 후 FC03에서 같은 값 |
-| Slot 1 / Slave 1 | FC03, Address 20000, Quantity 4 | Counter Frame 응답 |
+| Slot 0 / Slave 2 | FC03, Address 20000, Quantity 4 | Counter Frame 응답 |
 
 ## 11. Origin 기반 예제 Map으로 전환
 
@@ -322,15 +325,15 @@ Register/Signal 수동 시험은 Rule Option 등록 없이 바로 가능하다.
 
 ## 13. 오늘 권장 시험 순서
 
-- [ ] DLL을 `Config/CAPL/DLL`에 배치
+- [ ] DLL을 `Config/CAPL/Dll`에 배치
 - [ ] 회사 COM 번호를 Main과 Device Map에 동일하게 입력
-- [ ] Configuration을 저장소 루트에 저장
+- [ ] Configuration을 `Config`(회사 구조의 `ProjectConfig`) 바로 아래에 저장
 - [ ] `M485E.vsysvar` 등록
 - [ ] `M485_E_Main.can` 하나만 Program Node에 연결하고 Compile
 - [ ] Connect OFF 상태에서 CSV Valid와 State 확인
 - [ ] Panel 없이 Manual Read/Write 및 Signal Read/Write 확인
 - [ ] 최소 공통 Panel 생성 및 같은 시험 반복
-- [ ] 실제 두 COM 연결 후 FC03/FC04/FC10 확인
+- [ ] 실제 활성 COM 연결 후 FC03/FC04/FC10 확인
 - [ ] 세 기본 Rule을 등록하고 가상 CAN Monitoring 확인
 - [ ] 마지막에 Origin 기반 예제 Map 적용
 

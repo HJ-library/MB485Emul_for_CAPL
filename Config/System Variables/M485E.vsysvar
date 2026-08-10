@@ -3,7 +3,7 @@
   <namespace name="" comment="">
     <namespace name="M485E" comment="Modbus485Emulator Panel adapter variables">
       <namespace name="Connection" comment="Emulator lifecycle controls and status">
-        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ConnectSwitch" comment="Connect or disconnect both configured Ports" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ConnectSwitch" comment="Connect or disconnect all active configured Ports" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Refresh" comment="Momentary CSV refresh command; disconnected only" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="State" comment="Lifecycle State; written by CAPL and displayed read-only on Panel" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="LastResult" comment="Last completed lifecycle result; written by CAPL and displayed read-only on Panel" bitcount="32" isSigned="true" encoding="65001" type="int" />

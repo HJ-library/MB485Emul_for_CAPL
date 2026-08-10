@@ -131,6 +131,14 @@ void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
      long count;
      long byteIndex;
 
+     if (meta[M485E_SM_PORT_SLOT] < 0 ||
+          meta[M485E_SM_PORT_SLOT] >= gM485E_ActivePortCount)
+     {
+          write("M485E Snapshot rejected: invalid PortSlot=%d ActivePortCount=%d",
+               meta[M485E_SM_PORT_SLOT], gM485E_ActivePortCount);
+          return;
+     }
+
      // 0x80/0x81은 CAPL Extended ID 내부 표현에서 bit 24의 prefix로 구분한다.
      arbitrationId = ((prefix & 0x01) << 24) |
           ((meta[M485E_SM_DEVICE_INDEX] & 0xFF) << 16) |
@@ -173,29 +181,32 @@ void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
      }
 }
 
-// 두 Port의 Change Queue를 교대로 확인하여 변경 Snapshot을 최대 한 건 출력한다.
-// 성공 시 사용한 Frame 수를 반환하고 다음 호출은 반대 Port부터 시작한다.
-// 한 Port의 Burst가 다른 Port의 Change Snapshot을 계속 지연시키지 않도록 시작점을 교대한다.
+// 활성 Port의 Change Queue를 Round-robin으로 확인하여 변경 Snapshot을 최대 한 건 출력한다.
+// 성공 시 사용한 Frame 수를 반환하고 다음 호출은 다음 활성 Port부터 시작한다.
+// 한 Port의 Burst가 다른 Port의 Change Snapshot을 계속 지연시키지 않도록 시작점을 순환한다.
 long M485E_Monitoring_TryOneChange()
 {
      long offset;
      long portSlot;
      long result;
-     for (offset = 0; offset < 2; offset++)
+     long portCount;
+     portCount = gM485E_ActivePortCount;
+     if (portCount < 1 || portCount > M485E_PORT_SLOT_COUNT) return 0;
+     for (offset = 0; offset < portCount; offset++)
      {
-          portSlot = (gM485E_MonitoringState.changeStartPort + offset) % 2;
+          portSlot = (gM485E_MonitoringState.changeStartPort + offset) % portCount;
           result = M485E_Core_TryDequeueChangeSnapshot(portSlot, gM485E_SnapshotMeta,
                gM485E_SnapshotRegisters);
           if (result == M485E_OK)
           {
                M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
                     gM485E_SnapshotRegisters, 1);
-               gM485E_MonitoringState.changeStartPort = (portSlot + 1) % 2;
+               gM485E_MonitoringState.changeStartPort = (portSlot + 1) % portCount;
                return M485E_Monitoring_FrameCost(gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
           }
      }
      gM485E_MonitoringState.changeStartPort =
-          (gM485E_MonitoringState.changeStartPort + 1) % 2;
+          (gM485E_MonitoringState.changeStartPort + 1) % portCount;
      return 0;
 }
 

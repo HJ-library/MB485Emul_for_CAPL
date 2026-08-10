@@ -19,7 +19,9 @@ variables
   const long M485E_STATE_ERROR = 6;
   const long M485E_PORT_SLOT_0 = 0;
   const long M485E_PORT_SLOT_1 = 1;
-  const long M485E_PORT_SLOT_COUNT = 2;
+  const long M485E_PORT_SLOT_2 = 2;
+  const long M485E_PORT_SLOT_3 = 3;
+  const long M485E_PORT_SLOT_COUNT = 4;
   const long M485E_SNAPSHOT_META_VERSION = 1;
   const long M485E_SNAPSHOT_META_COUNT = 11;
   const long M485E_SM_LAYOUT_VERSION = 0;

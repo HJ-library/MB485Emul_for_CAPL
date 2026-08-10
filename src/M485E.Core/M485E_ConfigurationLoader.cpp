@@ -410,7 +410,7 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
                      static_cast<std::uint32_t>(rowIndex + 1), 3,
                      "Port and Slave_ID pair is duplicated.");
 
-    // The first appearance order of each Port becomes PortSlot 0/1. Connect later
+    // The first appearance order of each Port becomes PortSlot 0..3. Connect later
     // verifies that CAPL supplied the same port names for those stable slots.
     auto port = std::find(ports.begin(), ports.end(), cells[1]);
     if (port == ports.end())
@@ -419,7 +419,7 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
       if (ports.size() > M485E_PORT_SLOT_COUNT)
         return Failure(M485E_ERR_PORT_CONFIG_INCOMPLETE, CsvFileType::DeviceMap,
                        static_cast<std::uint32_t>(rowIndex + 1), 2,
-                       "DeviceMap contains more than two unique Ports.");
+                       "DeviceMap contains more than four unique Ports.");
       port = std::prev(ports.end());
     }
     const std::size_t portIndex = static_cast<std::size_t>(std::distance(ports.begin(), port));
@@ -433,11 +433,12 @@ ConfigurationBuildResult ParseDevices(const ParsedCsv& csv, ActiveConfiguration&
         static_cast<std::int16_t>(configuration.devices.size());
     configuration.devices.push_back(std::move(device));
   }
-  if (ports.size() != M485E_PORT_SLOT_COUNT)
+  if (ports.empty())
   {
     return Failure(M485E_ERR_PORT_CONFIG_INCOMPLETE, CsvFileType::DeviceMap, 0, 2,
-                   "DeviceMap must contain exactly two unique Ports.");
+                   "DeviceMap must contain at least one Port.");
   }
+  configuration.activePortCount = static_cast<std::uint8_t>(ports.size());
   for (std::size_t index = 0; index < ports.size(); ++index)
   {
     configuration.uniquePorts[index] = ports[index];

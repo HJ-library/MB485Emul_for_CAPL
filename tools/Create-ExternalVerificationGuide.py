@@ -148,8 +148,8 @@ def main():
     add_heading(doc, "1. 시험 전 준비", 1)
     add_bullets(doc, [
         "Release/Win32 M485E.dll과 CAPL 파일, M485E.vsysvar, DeviceMap/FrameRule/참조 Register Map을 동일 Baseline에서 준비한다.",
-        "CANalyzer 9.x SP8 x86 Configuration에 가상 CAN 채널 2개를 생성하고 PortSlot 0→채널 1, PortSlot 1→채널 2로 사용한다.",
-        "SystemBase Multi USB 485의 두 Port를 Board RS-485에 연결한다. Adapter의 자동 송수신 방향 제어를 사용하며 DLL은 RTS 방향 제어를 수행하지 않는다.",
+        "CANalyzer 9.x SP8 x86 Configuration에 활성 Port 수(1~4)만큼 가상 CAN 채널을 생성하고 Main의 PortSlot별 채널 번호와 맞춘다.",
+        "SystemBase Multi USB 485의 시험 대상 활성 Port를 Board RS-485에 연결한다. Adapter의 자동 송수신 방향 제어를 사용하며 DLL은 RTS 방향 제어를 수행하지 않는다.",
         "Board Modbus Master의 Response Timeout, 요청 주기, 실제 COM 번호와 Serial 설정을 결과 파일 Environment 시트에 기록한다.",
         "시험 시작 전 Git Commit, DLL SHA-256, CANalyzer 버전/SP, Vector Driver 버전을 기록한다.",
     ])
@@ -160,7 +160,7 @@ def main():
         "CAPL Program Node에 Config/CAPL/M485E/M485_E_Main.can을 연결한다. Main은 생성 계약, Core, Monitoring, UI를 포함한다.",
         "Config/System Variables/M485E.vsysvar를 Configuration에 추가한다.",
         "Main.can에서 DeviceMap과 FrameRule 상대경로를 지정한다. Core가 getAbsFilePath()로 절대경로를 DLL에 전달하고 Register Map은 DeviceMap의 CSV_DB_Name으로 선택한다.",
-        "두 PortSlot의 COM 이름과 BaudRate/DataBits/Parity/StopBits를 설정하고 Refresh 완료를 Polling한 뒤 Connect한다.",
+        "DeviceMap 고유 Port 수와 같은 1~4개 PortSlot의 COM 번호와 BaudRate/DataBits/Parity/StopBits를 설정하고 Refresh 완료를 Polling한 뒤 Connect한다.",
         "ReadOption 정적 매핑을 설정하고 ReadSwitch ON에서 Monitoring을 시작한다.",
     ]
     for idx, step in enumerate(steps, 1):
@@ -173,18 +173,18 @@ def main():
     rows = [
         ("EV-001", "1/2", "CANalyzer 9.x에서 CAPL Compile 및 #pragma library 로드", "21개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
         ("EV-002", "3/8", "상대경로 3개 설정 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
-        ("EV-003", "7/8", "두 COM Port 전체 Connect", "두 Port가 모두 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
+        ("EV-003", "7/8", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
         ("EV-004", "5/7", "Port별 Slave에 FC03 Quantity 1/125 요청", "직접 Address의 Holding 값, CRC Low/High 정상 응답", "Serial trace"),
         ("EV-005", "5/7", "FC04 정상/권한 공백 요청", "정상값 또는 Exception 0x02, 부분 응답 없음", "Serial trace"),
         ("EV-006", "4/5/7", "FC10 정상 Write, 동일값 Write, 권한 공백 Write", "원자 적용; 동일값 Snapshot 없음; 공백은 0x02 및 무변경", "Serial/CAN"),
         ("EV-007", "5/7", "CRC 오류, FC06, Quantity/ByteCount 오류", "CRC 오류 무응답; FC06=0x01; 값 오류=0x03", "Serial trace"),
         ("EV-008", "6/9", "Periodic Snapshot Quantity 6", "0x80 Header 1 + Data 2, 마지막 DLC 4", "CAN trace"),
         ("EV-009", "6/9", "RTU/Direct/Reset 변경 Snapshot", "0x81 SourceType 01/02/03 및 변경 당시 값 보존", "CAN trace"),
-        ("EV-010", "6/9", "두 Port 동시 Change Burst", "Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할", "CAN trace"),
+        ("EV-010", "6/9", "여러 활성 Port 동시 Change Burst", "활성 Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할", "CAN trace"),
         ("EV-011", "9/10", "ReadSwitch OFF/ON 및 ReadOption 변경", "OFF 중 RTU 유지·CAN 억제, 다음 Cycle에 Candidate 원자 반영", "CAN/Write"),
         ("EV-012", "10", "Panel Manual Read/Write 및 1초 AutoRead", "확정 요청 Snapshot 사용, word 범위 검증, ResultCode 표시", "Panel capture"),
         ("EV-013", "10", "Panel Signal Float/Signed Read/Write", "12.5 등 물리값이 그대로 왕복하고 실패 시 기존 출력 유지", "Panel capture"),
-        ("EV-014", "7/8", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 두 Port Connected", "Timestamp log"),
+        ("EV-014", "7/8", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected", "Timestamp log"),
         ("EV-015", "8", "Disconnect/Connect와 Finalize", "Disconnect는 값 보존, Finalize는 2초 목표 내 Join/Close 후 Context 폐기", "Status/Process"),
         ("EV-016", "9/10", "200 Rule, 최대 Quantity, 0x81 Burst 성능 Profile", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표와 bounded Queue 진단", "Trace/metrics"),
     ]

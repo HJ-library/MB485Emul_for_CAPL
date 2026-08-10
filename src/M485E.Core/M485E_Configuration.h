@@ -1,5 +1,7 @@
 #pragma once
 
+#include "M485E_Contracts.generated.h"
+
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -118,8 +120,9 @@ struct ActiveConfiguration
   std::vector<RuleDefinition> rules;
   std::vector<SignalDefinition> signals;
   std::array<std::int16_t, 256> deviceByIndex{};
-  std::array<std::array<std::int16_t, 248>, 2> deviceBySlave{};
-  std::array<std::string, 2> uniquePorts{};
+  std::array<std::array<std::int16_t, 248>, M485E_PORT_SLOT_COUNT> deviceBySlave{};
+  std::array<std::string, M485E_PORT_SLOT_COUNT> uniquePorts{};
+  std::uint8_t activePortCount = 0;
   std::unordered_map<std::string, std::size_t> portLookup;
 
   ActiveConfiguration();

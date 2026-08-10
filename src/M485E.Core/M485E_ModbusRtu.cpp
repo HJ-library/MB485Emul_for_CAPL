@@ -83,11 +83,12 @@ RtuResult ModbusRtuEngine::Process(const std::uint8_t portSlot,
     if (request.size() < 4U || request.size() > 256U || !ModbusCrc16::IsValid(request))
       return {RtuDisposition::Discard, {}, M485E_ERR_RTU_FRAME_DISCARDED, 0, {}, {}};
     const std::uint8_t slaveId = request[0];
+    const auto configuration = runtime_.Configuration();
     // Invalid or unconfigured slave addresses are ignored silently. Responding would
     // create bus contention with the slave that actually owns the request.
-    if (slaveId == 0U || slaveId > 247U || portSlot >= 2U)
+    if (slaveId == 0U || slaveId > 247U ||
+        portSlot >= configuration->activePortCount)
       return {RtuDisposition::Ignore, {}, M485E_OK, 0, {}, {}};
-    const auto configuration = runtime_.Configuration();
     const std::int16_t devicePosition = configuration->deviceBySlave[portSlot][slaveId];
     if (devicePosition < 0) return {RtuDisposition::Ignore, {}, M485E_OK, 0, {}, {}};
     const std::uint8_t deviceIndex =

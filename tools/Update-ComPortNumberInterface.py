@@ -72,7 +72,7 @@ def update_functional_specification():
     initialization = document.tables[5]
     set_cell(
         initialization.rows[3].cells[1],
-        "세 상대경로, PortSlot 0/1, ComPortNumber(1~999), BaudRate, DataBits, Parity, StopBits",
+        "Device/FrameRule 두 상대경로, PortSlot 0~3, ComPortNumber(1~999), BaudRate, DataBits, Parity, StopBits",
     )
     set_cell(
         initialization.rows[5].cells[1],
@@ -116,7 +116,7 @@ def update_design():
         document.add_paragraph(
             "Main.can은 PortSlot별 COM 번호를 CAPL long으로 관리한다. "
             "M485E_Core_SetPortConfig는 ComPortNumber 1~999를 검증한 뒤 snprintf로 COM%d 문자열을 "
-            "생성하여 기존 M485E_Dll_SetPortConfig 문자열 ABI에 전달한다. M485E_DeviceMap.csv의 Port 칼럼과 "
+            "생성하여 기존 M485E_Dll_SetPortConfig 문자열 ABI에 전달한다. M485E_Device.csv의 Port 칼럼과 "
             "Win32 Serial 계층은 COM11 같은 Windows Port 이름을 계속 사용한다."
         )
         document.add_paragraph(
@@ -127,9 +127,9 @@ def update_design():
     if not any(paragraph.text == structure_marker for paragraph in document.paragraphs):
         document.add_heading(structure_marker, level=1)
         document.add_paragraph(
-            "Main.can은 두 Port의 portSlot, comPortNumber, baudRate, dataBits, parity, stopBits를 "
-            "M485E_PortConfig[2] 구조체 배열로 보관한다. 측정 전 초기화 함수가 각 원소를 채우고 "
-            "적용 함수가 elcount() 범위로 순회하여 M485E_Core_SetPortConfig를 호출한다."
+            "Main.can은 최대 네 Port의 portSlot, comPortNumber, baudRate, dataBits, parity, stopBits를 "
+            "M485E_PortConfig[4] 구조체 배열로 보관한다. 측정 전 초기화 함수가 각 원소를 채우고 "
+            "적용 함수가 gM485E_ActivePortCount(1~4) 범위로 순회하여 M485E_Core_SetPortConfig를 호출한다."
         )
         document.add_paragraph(
             "M485E_PortConfig는 CAPL Main 내부 설정 모델이며 DLL 경계를 통과하지 않는다. Core와 DLL은 "
@@ -143,10 +143,10 @@ def update_design():
 def update_external_guide():
     document = Document(GUIDE)
     for paragraph in document.paragraphs:
-        if "두 PortSlot의 COM 이름과 BaudRate/DataBits/Parity/StopBits" in paragraph.text:
+        if "PortSlot의 COM 이름과 BaudRate/DataBits/Parity/StopBits" in paragraph.text:
             paragraph.text = paragraph.text.replace(
-                "두 PortSlot의 COM 이름과 BaudRate/DataBits/Parity/StopBits",
-                "두 PortSlot의 숫자 COM Port 번호(예: 11, 12)와 BaudRate/DataBits/Parity/StopBits",
+                "PortSlot의 COM 이름과 BaudRate/DataBits/Parity/StopBits",
+                "1~4개 활성 PortSlot의 숫자 COM Port 번호와 BaudRate/DataBits/Parity/StopBits",
             )
             for run in paragraph.runs:
                 run.font.name = "Malgun Gothic"

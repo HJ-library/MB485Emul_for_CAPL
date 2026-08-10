@@ -3,8 +3,10 @@
 variables
 {
      // CAPL 노드별 DLL Context와 오류 조회용 공용 버퍼이다.
-     // Context Handle이 0이면 아직 초기화되지 않았거나 Finalize가 완료된 상태이다.
+     // Vector Handle은 0도 정상값이므로 등록/초기화 상태는 별도 Flag로 관리한다.
      dword gM485E_ContextHandle;
+     long gM485E_ContextRegistered;
+     long gM485E_ContextInitialized;
      long gM485E_CoreErrorMeta[20];
      char gM485E_CoreErrorText[1024];
 }
@@ -51,27 +53,26 @@ long M485E_Core_PollOneErrorEvent()
      return result;
 }
 
-// registerCAPLDLL로 현재 CAPL 노드의 Context Handle을 얻고 DLL Context를 초기화한다.
-// 이미 Handle이 있으면 재등록하지 않고 InitializeContext만 호출한다.
+// preStart에서 등록한 현재 CAPL 노드의 Context Handle로 DLL Context를 초기화한다.
+// Handle의 숫자값 0은 Vector에서 정상일 수 있으므로 상태 판정에 사용하지 않는다.
 // 반환: M485E_OK 또는 Context 등록/초기화 오류 코드.
 long M485E_Core_Initialize()
 {
-     if (gM485E_ContextHandle == 0)
-     {
-          gM485E_ContextHandle = registerCAPLDLL();
-     }
-     if (gM485E_ContextHandle == 0) return M485E_ERR_INVALID_CONTEXT;
-     return M485E_Dll_InitializeContext(gM485E_ContextHandle);
+     long result;
+     if (gM485E_ContextRegistered == 0) return M485E_ERR_INVALID_CONTEXT;
+     result = M485E_Dll_InitializeContext(gM485E_ContextHandle);
+     if (result == M485E_OK) gM485E_ContextInitialized = 1;
+     return result;
 }
 
 // DLL Context가 가진 포트, Queue 등의 자원을 정리한다.
-// 정상 종료된 경우에만 Handle을 0으로 지워 재초기화가 가능하게 한다.
+// Handle 값 대신 초기화 Flag를 확인하여 정상 Handle 0도 안전하게 Finalize한다.
 long M485E_Core_Finalize()
 {
      long result;
-     if (gM485E_ContextHandle == 0) return M485E_OK;
+     if (gM485E_ContextInitialized == 0) return M485E_OK;
      result = M485E_Dll_FinalizeContext(gM485E_ContextHandle);
-     if (result == M485E_OK) gM485E_ContextHandle = 0;
+     if (result == M485E_OK) gM485E_ContextInitialized = 0;
      return result;
 }
 
@@ -88,12 +89,14 @@ long M485E_Core_SetCsvPath(long fileType, char relativePath[])
                relativePath);
           return M485E_ERR_CSV_PATH_INVALID;
      }
+     write("M485E CSV path: FileType=%d RelativePath=%s AbsolutePath=%s", fileType,
+          relativePath, absolutePath);
      return M485E_Dll_SetCsvPath(gM485E_ContextHandle, fileType, strlen(absolutePath),
           absolutePath);
 }
 
 // CAPL에서 받은 숫자 COM 번호를 "COMn" 문자열로 변환하여 DLL에 전달한다.
-// portSlot은 물리 COM 번호가 아니라 DLL 내부의 0 또는 1번 포트 슬롯이다.
+// portSlot은 물리 COM 번호가 아니라 DLL 내부의 0~3번 포트 슬롯이다.
 // parity는 M485E_PARITY_* 상수, stopBits는 1 또는 2를 사용한다.
 // 반환: M485E_OK 또는 문자열/Serial 설정 검증 오류 코드.
 long M485E_Core_SetPortConfig(long portSlot, long comPortNumber, long baudRate,
@@ -115,7 +118,7 @@ long M485E_Core_RefreshCsv()
      return M485E_Dll_RefreshCsv(gM485E_ContextHandle);
 }
 
-// 검증된 설정을 사용해 두 Serial 포트를 열고 Modbus RTU Slave 처리를 시작한다.
+// 검증된 설정을 사용해 DeviceMap의 활성 Serial 포트를 열고 Modbus RTU Slave 처리를 시작한다.
 long M485E_Core_Connect()
 {
      return M485E_Dll_Connect(gM485E_ContextHandle);

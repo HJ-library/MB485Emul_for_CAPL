@@ -26,7 +26,7 @@ static_assert(m485e::M485E_FILE_MODBUS_RULE == 2);
 static_assert(m485e::M485E_FILE_EMULATOR_MAP == 3);
 static_assert(m485e::M485E_STATE_UNINITIALIZED == 0);
 static_assert(m485e::M485E_STATE_ERROR == 6);
-static_assert(m485e::M485E_PORT_SLOT_COUNT == 2);
+static_assert(m485e::M485E_PORT_SLOT_COUNT == 4);
 static_assert(m485e::M485E_SM_QUANTITY + 1 == m485e::M485E_SNAPSHOT_META_COUNT);
 static_assert(m485e::M485E_LS_CONFIGURATION_VALID + 1 ==
               m485e::M485E_LIFECYCLE_STATUS_COUNT);

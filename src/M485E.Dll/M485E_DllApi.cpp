@@ -109,7 +109,7 @@ const ErrorDefinition* ErrorDefinitionFor(const std::int32_t code) noexcept
 std::int32_t ValidateContext(const std::uint32_t handle) noexcept
 {
   if (!gContext) return M485E_ERR_NOT_INITIALIZED;
-  if (handle == 0U || handle != gContext->handle || gContext->closing)
+  if (handle != gContext->handle || gContext->closing)
     return M485E_ERR_INVALID_CONTEXT;
   return M485E_OK;
 }
@@ -314,13 +314,16 @@ void UpdateReconnectState(Context* const context, const std::int32_t operation,
 }
 
 void FinishConnect(Context* const context, const std::uint32_t generation,
-                   std::array<m485e::platform::ConnectionPortConfig, 2> configs) noexcept
+                   std::array<m485e::platform::ConnectionPortConfig,
+                              M485E_PORT_SLOT_COUNT> configs,
+                   const std::uint8_t activePortCount) noexcept
 {
   std::unique_ptr<m485e::platform::RuntimeConnection> connection;
   try
   {
     connection = std::make_unique<m485e::platform::RuntimeConnection>(
-        std::move(configs), *context->runtime, *context->snapshots, context->errors,
+        std::move(configs), activePortCount, *context->runtime, *context->snapshots,
+        context->errors,
         [context](const std::int32_t operation, const std::int32_t result) {
           UpdateReconnectState(context, operation, result);
         });
@@ -392,7 +395,7 @@ void FinishConnect(Context* const context, const std::uint32_t generation,
       event.validMask |= M485E_EM_VALID_OS_ERROR;
       event.context[9] = static_cast<std::int32_t>(osError);
     }
-    context->errors.Push(event, "Opening the two configured COM ports failed.");
+    context->errors.Push(event, "Opening the configured COM ports failed.");
     context->state = M485E_STATE_DISCONNECTED;
     context->activeOperation = M485E_OPERATION_NONE;
     context->connection.reset();
@@ -443,7 +446,6 @@ std::int32_t __stdcall M485E_Dll_InitializeContext(const std::uint32_t contextHa
 {
   JoinCompletedLifecycle();
   std::lock_guard<std::mutex> lock(gMutex);
-  if (contextHandle == 0U) return M485E_ERR_INVALID_CONTEXT;
   if (gContext) return RecordFailure(*gContext, M485E_ERR_ALREADY_INITIALIZED,
                                      "An emulator context is already active.");
   gContext = std::make_unique<Context>();
@@ -581,15 +583,20 @@ std::int32_t __stdcall M485E_Dll_Connect(const std::uint32_t contextHandle)
   if (gContext->state != M485E_STATE_DISCONNECTED)
     return RecordFailure(*gContext, M485E_ERR_INVALID_STATE,
                          "Connect requires Disconnected state.");
-  for (std::size_t slot = 0; slot < gContext->ports.size(); ++slot)
+  const auto configuration = gContext->runtime->Configuration();
+  const std::uint8_t activePortCount = configuration->activePortCount;
+  if (activePortCount == 0U || activePortCount > M485E_PORT_SLOT_COUNT)
+    return RecordFailure(*gContext, M485E_ERR_PORT_CONFIG_INCOMPLETE,
+                         "DeviceMap must define one to four active Ports.");
+  for (std::size_t slot = 0; slot < activePortCount; ++slot)
   {
     if (!gContext->ports[slot].configured ||
-        gContext->ports[slot].port != gContext->runtime->Configuration()->uniquePorts[slot])
+        gContext->ports[slot].port != configuration->uniquePorts[slot])
       return RecordFailure(*gContext, M485E_ERR_PORT_CONFIG_INCOMPLETE,
                            "Each DeviceMap PortSlot requires matching Serial configuration.");
   }
-  std::array<m485e::platform::ConnectionPortConfig, 2> configs{};
-  for (std::size_t slot = 0; slot < configs.size(); ++slot)
+  std::array<m485e::platform::ConnectionPortConfig, M485E_PORT_SLOT_COUNT> configs{};
+  for (std::size_t slot = 0; slot < activePortCount; ++slot)
   {
     configs[slot].port = gContext->ports[slot].port;
     configs[slot].settings = gContext->ports[slot].settings;
@@ -600,7 +607,8 @@ std::int32_t __stdcall M485E_Dll_Connect(const std::uint32_t contextHandle)
   gContext->activeOperation = M485E_OPERATION_CONNECT;
   gContext->state = M485E_STATE_CONNECTING;
   gLifecycleThreadDone.store(false);
-  gLifecycleThread = std::thread(FinishConnect, context, generation, std::move(configs));
+  gLifecycleThread =
+      std::thread(FinishConnect, context, generation, std::move(configs), activePortCount);
   return RecordSuccess(*gContext);
 }
 

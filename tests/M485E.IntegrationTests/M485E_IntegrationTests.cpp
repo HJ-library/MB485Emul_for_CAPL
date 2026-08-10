@@ -167,6 +167,37 @@ int main(int argc, char** argv)
     Require(lifecycle[M485E_LS_STATE] == M485E_STATE_DISCONNECTED &&
                 lifecycle[M485E_LS_LAST_RESULT] == M485E_ERR_SERIAL_OPEN_FAILED,
             "failed two-Port Connect did not roll back atomically");
+
+    // A later one-Port refresh must ignore the stale Slot 1 configuration because
+    // V1 has no separate API for clearing a previously configured inactive slot.
+    fixture.Write("DeviceMap.csv",
+                  "Index,Port,Slave_ID,Device_Name,CSV_DB_Name\n"
+                  "0,COM11,1,Device A,Map.csv\n");
+    fixture.Write("Rule.csv",
+                  "Index,Rule_ID,Function_Code,Address,Quantity,Request_Name\n"
+                  "0,1,0x03,10000,4,Holding\n");
+    Require(refresh(handle) == M485E_OK, "one-Port Refresh was not accepted");
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+              "one-Port Refresh status polling failed");
+      if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    Require(lifecycle[M485E_LS_LAST_RESULT] == M485E_OK,
+            "one-Port Refresh failed");
+    Require(connect(handle) == M485E_OK,
+            "one-Port Connect was rejected by an inactive stale PortSlot");
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+              "one-Port Connect status polling failed");
+      if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    Require(lifecycle[M485E_LS_STATE] == M485E_STATE_DISCONNECTED &&
+                lifecycle[M485E_LS_LAST_RESULT] == M485E_ERR_SERIAL_OPEN_FAILED,
+            "failed one-Port Connect did not reach the Serial Open stage");
     Require(finalize(handle) == M485E_OK, "Finalize failed");
     FreeLibrary(module);
     std::cout << "M485E DLL Phase 3-8 home integration tests PASS.\n";

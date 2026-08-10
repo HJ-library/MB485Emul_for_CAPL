@@ -10,7 +10,7 @@
 
 /**
  * @brief Creates the single emulator context associated with a CAPL node.
- * @param contextHandle Non-zero handle returned by CAPL registerCAPLDLL().
+ * @param contextHandle Handle returned by CAPL registerCAPLDLL(); zero is valid.
  * @return M485E_OK on success, otherwise a negative M485E error code.
  * @note V1 permits one active context per DLL process.
  */
@@ -39,9 +39,9 @@ M485E_API M485E_Dll_SetCsvPath(std::uint32_t contextHandle, std::int32_t fileTyp
                                std::uint32_t pathLength, const char* absolutePath);
 
 /**
- * @brief Configures one of the two serial-port slots while disconnected.
+ * @brief Configures one of the four serial-port slots while disconnected.
  * @param contextHandle Active CAPL context handle.
- * @param portSlot Logical slot in the range 0..1.
+ * @param portSlot Logical slot in the range 0..3.
  * @param portLength Number of port-name bytes, excluding the terminating NUL.
  * @param port NUL-terminated COM name, for example "COM11".
  * @param baudRate Positive serial baud rate.
@@ -65,15 +65,15 @@ M485E_API M485E_Dll_SetPortConfig(std::uint32_t contextHandle, std::int32_t port
 M485E_API M485E_Dll_RefreshCsv(std::uint32_t contextHandle);
 
 /**
- * @brief Asynchronously opens both configured COM ports and starts RTU workers.
+ * @brief Asynchronously opens the DeviceMap's one to four active COM ports.
  * @param contextHandle Active CAPL context handle.
  * @return M485E_OK when the operation is accepted, otherwise a negative error code.
- * @note A successful CSV refresh and matching configurations for both ports are required.
+ * @note Each active DeviceMap Port requires a matching slot configuration.
  */
 M485E_API M485E_Dll_Connect(std::uint32_t contextHandle);
 
 /**
- * @brief Asynchronously stops RTU workers and closes both COM ports.
+ * @brief Asynchronously stops RTU workers and closes all active COM ports.
  * @param contextHandle Active CAPL context handle.
  * @return M485E_OK when accepted or already disconnected, otherwise a negative error code.
  */
@@ -125,7 +125,7 @@ M485E_API M485E_Dll_ReadRuleSnapshot(std::uint32_t contextHandle, std::int32_t i
 /**
  * @brief Removes one change-triggered Rule snapshot from a port queue.
  * @param contextHandle Active CAPL context handle.
- * @param portSlot Logical port slot in the range 0..1.
+ * @param portSlot Logical port slot in the range 0..3.
  * @param metaCapacity Number of std::int32_t elements in outMeta.
  * @param outMeta Versioned snapshot metadata described by M485E_SM_*.
  * @param dataCapacity Number of std::uint16_t elements in outRegisters.
@@ -143,7 +143,7 @@ M485E_API M485E_Dll_TryDequeueChangeSnapshot(std::uint32_t contextHandle,
 /**
  * @brief Copies statistics for one change-snapshot queue.
  * @param contextHandle Active CAPL context handle.
- * @param portSlot Logical port slot in the range 0..1.
+ * @param portSlot Logical port slot in the range 0..3.
  * @param statsCapacity Number of std::int32_t elements in outStats.
  * @param outStats Versioned statistics described by M485E_CS_*.
  * @return M485E_OK on success, otherwise a negative M485E error code.
