@@ -32,6 +32,7 @@ variables
      long gM485E_LastReadValid;
      word gM485E_UIWordData[125];
      long gM485E_UILongData[125];
+     long gM485E_ReadOptionValues[200];
      struct M485E_SignalRequest gM485E_SignalRequest;
      // UI 입력 동기화, 자동 Read, DLL 상태 표시를 서로 독립된 타이머로 처리한다.
      msTimer tM485E_ManualAutoRead;
@@ -52,7 +53,7 @@ void M485E_UI_LoadSignalRequest()
           @sysvar::M485E::SignalControl::PhysicalValue;
 }
 
-// Register Read를 실행하고 성공한 word 결과를 Panel용 32-bit generic array에 복사한다.
+// Register Read를 실행하고 성공한 word 결과를 Panel용 32-bit int array에 복사한다.
 // 성공 요청은 Auto Read용 마지막 요청으로 보관하며 결과 코드는 항상 시스템변수에 기록한다.
 long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
 {
@@ -63,10 +64,9 @@ long M485E_UI_ExecuteRead(struct M485E_ManualReadRequest request)
      if (result == M485E_OK)
      {
           for (index = 0; index < request.quantity; index++)
-          {
                gM485E_UILongData[index] = gM485E_UIWordData[index];
-               @sysvar::M485E::ManualRead::Data[index] = gM485E_UILongData[index];
-          }
+          sysSetVariableLongArray(sysvar::M485E::ManualRead::Data,
+               gM485E_UILongData, request.quantity);
           gM485E_LastReadRequest.index = request.index;
           gM485E_LastReadRequest.startAddress = request.startAddress;
           gM485E_LastReadRequest.quantity = request.quantity;
@@ -133,10 +133,10 @@ on sysvar_update sysvar::M485E::ManualWrite::Send
      request.index = @sysvar::M485E::ManualWrite::Index;
      request.startAddress = @sysvar::M485E::ManualWrite::StartAddress;
      request.quantity = @sysvar::M485E::ManualWrite::Quantity;
+     sysGetVariableLongArray(sysvar::M485E::ManualWrite::Data,
+          gM485E_UILongData, elcount(gM485E_UILongData));
      for (index = 0; index < request.quantity && index < elcount(request.data); index++)
      {
-          gM485E_UILongData[index] =
-               @sysvar::M485E::ManualWrite::Data[index];
           if (gM485E_UILongData[index] < 0 || gM485E_UILongData[index] > 65535)
           {
                @sysvar::M485E::ManualWrite::ResultCode = M485E_ERR_INVALID_ARGUMENT;
@@ -207,16 +207,17 @@ on timer tM485E_ManualAutoRead
      setTimer(tM485E_ManualAutoRead, 1000);
 }
 
-// Panel의 Check_ReadOption generic array를 100ms마다 Monitoring 후보 상태로 복사한다.
+// Panel의 Check_ReadOption int array를 100ms마다 Monitoring 후보 상태로 복사한다.
 // 실제 적용은 다음 Monitoring Cycle 경계에서 일괄 수행된다.
 on timer tM485E_UISync
 {
      long index;
      long readOptionCount;
+     sysGetVariableLongArray(sysvar::M485E::Monitoring::Check_ReadOption,
+          gM485E_ReadOptionValues, elcount(gM485E_ReadOptionValues));
      readOptionCount = M485E_Monitoring_GetReadOptionCount();
      for (index = 0; index < readOptionCount; index++)
-          M485E_Monitoring_SetCandidate(
-          index, @sysvar::M485E::Monitoring::Check_ReadOption[index]);
+          M485E_Monitoring_SetCandidate(index, gM485E_ReadOptionValues[index]);
      setTimer(tM485E_UISync, 100);
 }
 

@@ -70,15 +70,15 @@ Require-Match $ui 'M485E_Core_WriteSignal\s*\(\s*gM485E_SignalRequest\.index,\s*
 Require-Match $core 'M485E_Core_ReadSignal\s*\([^\)]*float&\s+outPhysicalValue\)' `
     'CAPL Signal Read wrapper must expose one caller-owned physical value by reference.'
 Require-Match $ui 'Check_ReadOption' 'ReadOption system variable adapter is missing.'
-if ($ui -match 'sys(?:Get|Set)VariableLongArray') {
-    throw 'UI generic arrays must use element access for CANalyzer 9.x compatibility.'
+Require-Match $ui 'sysSetVariableLongArray\s*\(\s*sysvar::M485E::ManualRead::Data' `
+    'Manual Read must write the int array through sysSetVariableLongArray.'
+Require-Match $ui 'sysGetVariableLongArray\s*\(\s*sysvar::M485E::ManualWrite::Data' `
+    'Manual Write must read the int array through sysGetVariableLongArray.'
+Require-Match $ui 'sysGetVariableLongArray\s*\(\s*sysvar::M485E::Monitoring::Check_ReadOption' `
+    'Monitoring must read the int array through sysGetVariableLongArray.'
+if ($ui -match '@sysvar::M485E::(?:ManualRead::Data|ManualWrite::Data|Monitoring::Check_ReadOption)\s*\[') {
+    throw 'CANalyzer 9.x must not directly access int array system variable elements.'
 }
-Require-Match $ui '@sysvar::M485E::ManualRead::Data\s*\[\s*index\s*\]' `
-    'Manual Read must write the generic array one element at a time.'
-Require-Match $ui '@sysvar::M485E::ManualWrite::Data\s*\[\s*index\s*\]' `
-    'Manual Write must read the generic array one element at a time.'
-Require-Match $ui '@sysvar::M485E::Monitoring::Check_ReadOption\s*\[\s*index\s*\]' `
-    'Monitoring must read the generic array one element at a time.'
 Require-Match $ui 'Connection::ConnectSwitch' 'Connect/Disconnect switch adapter is missing.'
 Require-Match $ui 'setTimer\(tM485E_ManualAutoRead,\s*1000\)' 'AutoRead timer is not started.'
 Require-Match $ui 'setTimer\(tM485E_UISync,\s*100\)' 'ReadOption synchronization timer is not started.'
@@ -95,6 +95,16 @@ foreach ($statusName in @('State', 'LastResult', 'ConfigurationValid')) {
     $statusVariable = $connectionNamespace.SelectSingleNode("variable[@name='$statusName']")
     if ($null -eq $statusVariable -or $statusVariable.readOnly -ne 'false') {
         throw "Connection::$statusName must be writable by the CAPL lifecycle adapter."
+    }
+}
+$arrayVariables = @(
+    $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="Monitoring"]/variable[@name="Check_ReadOption"]'),
+    $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="ManualRead"]/variable[@name="Data"]'),
+    $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="ManualWrite"]/variable[@name="Data"]')
+)
+foreach ($arrayVariable in $arrayVariables) {
+    if ($null -eq $arrayVariable -or $arrayVariable.type -ne 'intarray') {
+        throw 'CAPL LongArray adapters require intarray system variables.'
     }
 }
 

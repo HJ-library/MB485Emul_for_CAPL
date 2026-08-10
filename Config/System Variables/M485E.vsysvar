@@ -12,14 +12,14 @@
       </namespace>
       <namespace name="Monitoring" comment="CAN monitoring controls">
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ReadSwitch" comment="Master monitoring switch" bitcount="32" isSigned="true" encoding="65001" type="int" />
-        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Check_ReadOption" comment="Periodic Rule selection" bitcount="32" isSigned="true" encoding="65001" type="genericarray" arrayLength="200"><elementPrototype name="Prototype" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" /></variable>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Check_ReadOption" comment="Periodic Rule selection" bitcount="32" isSigned="true" encoding="65001" type="intarray" arrayLength="200" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Last monitoring command result" bitcount="32" isSigned="true" encoding="65001" type="int" />
       </namespace>
       <namespace name="ManualRead" comment="Manual Register Read">
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Index" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="StartAddress" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Quantity" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
-        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Data" comment="16-bit values stored in 32-bit elements" bitcount="32" isSigned="true" encoding="65001" type="genericarray" arrayLength="125"><elementPrototype name="Prototype" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" /></variable>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Data" comment="16-bit values stored in 32-bit elements" bitcount="32" isSigned="true" encoding="65001" type="intarray" arrayLength="125" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="AutoReadManual" comment="Repeat last accepted Read every second" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Send" comment="Momentary command" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
@@ -28,7 +28,7 @@
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Index" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="StartAddress" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Quantity" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
-        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Data" comment="16-bit values stored in 32-bit elements" bitcount="32" isSigned="true" encoding="65001" type="genericarray" arrayLength="125"><elementPrototype name="Prototype" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" /></variable>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Data" comment="16-bit values stored in 32-bit elements" bitcount="32" isSigned="true" encoding="65001" type="intarray" arrayLength="125" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Send" comment="Momentary command" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="" bitcount="32" isSigned="true" encoding="65001" type="int" />
       </namespace>
