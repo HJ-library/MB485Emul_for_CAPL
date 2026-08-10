@@ -85,14 +85,15 @@ Core가 Write Window 메시지로 정리한다.
 
 각 Port Worker는 독립적으로 다음 순서를 처리한다.
 
-1. COM에서 Byte를 읽고 RTU t1.5/t3.5 간격으로 Frame 경계를 판정한다.
-2. CRC와 Frame 형식을 검사한다.
+1. COM에서 최대 256Byte Chunk로 읽고 Read Timeout과 관계없이 미완성 후보를 이어 붙인다.
+2. FC03·FC04·FC10 예상 길이와 CRC-16으로 Frame을 복구하고, 미지원 Function은 bounded CRC sliding으로 분리한다.
 3. 수신 Port와 Slave ID로 Device Index를 찾는다.
 4. Function Code와 Address 범위를 `M485E_FrameRule.csv` 권한과 대조한다.
-5. FC03·FC04는 Register를 읽어 응답하고, FC10은 Register를 쓴 뒤 정상 응답한다.
+5. CRC 유효 요청 뒤 계산된 t3.5 Guard를 보장하고 FC03·FC04는 Register를 읽어 응답하며, FC10은 Register를 쓴 뒤 정상 응답한다.
 6. FC10에서 값이 실제로 바뀌면 변경 범위와 겹치는 모든 Rule의 Change Snapshot을 Port Queue에 넣는다.
 
-미등록 Slave와 Broadcast 주소는 응답하지 않는다. 등록 Slave의 미지원 Function이나
+미등록 Slave와 Slave ID 0 Broadcast는 응답하지 않는다. Register Address 0은 별개의 정상
+주소다. 등록 Slave의 미지원 Function이나
 잘못된 Address·Quantity는 Modbus Exception으로 응답한다. 한 Port의 처리 지연이 다른
 Port를 막지 않도록 Port별 Worker와 Framing 상태를 분리한다.
 
@@ -134,7 +135,7 @@ DLL에서 Rule Snapshot을 읽어 CAN Message를 생성한다.
 - Output Pump: 10ms Timer
 - Rule 선택: `M485E::Monitoring::Check_ReadOption[]`
 - Change Queue: 매 Pump마다 시작 Port를 순환하는 활성 Port Round-robin
-- Periodic Rule: Cycle이 끝나도 이어지는 단일 ReadOption Cursor
+- Periodic Rule: Port별로 Cycle이 끝나도 이어지는 ReadOption Cursor와 시작 Port Round-robin
 - Periodic Snapshot: `0x80IIRRMM`
 - Change Snapshot: `0x81IIRRMM`
 
@@ -164,8 +165,8 @@ Pump에서 우선 처리한다.
 현재 기본 Phase 9 Probe에는 세 Rule 예제가 등록되어 있지만 실제 프로젝트 Main의 Rule
 Table은 회사 Map 확정 후 구성해야 한다.
 
-정식 요구사항 `FR-CAN-047`의 "Port별 지속 Rule Cursor"와 현재 단일 Cursor 구현 사이의
-차이는 후속 코드 보완 대상으로 남아 있다. Change Queue의 Port Round-robin은 구현되어 있다.
+Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별 Cursor를 별도로
+유지하므로 한 Port에 Rule이 집중되어도 다른 Port의 Rule이 영구적으로 밀리지 않는다.
 
 ## 7. 연결 끊김과 오류 복구
 
@@ -227,7 +228,7 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 - 두 가상 CAN Channel의 Extended Header/Data Message
 - 실제 B-HVAC·Chiller Address와 Gas Reset Address
 - 최대 200 Rule, Change Burst와 장시간 안정성
-- `FR-CAN-047`에 따른 Periodic Port별 지속 Rule Cursor 보완과 회귀 검증
+- SystemBase Multi USB 485와 실제 Board에서 RTU Chunk 분할·병합, 응답 Timing 및 Noise 재동기화 검증
 - 장치별 탭을 포함한 실제 CANalyzer Panel `.xvp`
 
 x64 DLL과 최신 CANalyzer 지원은 현재 Release 범위가 아니라 후속 체크리스트 대상이다.

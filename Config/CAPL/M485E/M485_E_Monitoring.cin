@@ -9,6 +9,7 @@ variables
           long configured;
           long index;
           long ruleId;
+          long portSlot;
           long candidateEnabled;
           long appliedEnabled;
           long pendingGeneration;
@@ -19,7 +20,8 @@ variables
      {
           long readOptionCount;
           long generation;
-          long periodicCursor;
+          long periodicCursor[M485E_PORT_SLOT_COUNT];
+          long periodicStartPort;
           long changeStartPort;
           long enabled;
           long candidateDirty;
@@ -34,6 +36,7 @@ variables
 
      // Snapshot 버퍼는 DLL에서 받은 한 Rule의 Header 정보와 Register 값을 임시 보관한다.
      struct M485E_ReadOption gM485E_ReadOptions[200];
+     long gM485E_CandidatePortSlots[200];
      struct M485E_MonitoringState gM485E_MonitoringState;
      msTimer tM485E_MonitoringCycle;
      msTimer tM485E_OutputPump;
@@ -53,6 +56,7 @@ long M485E_Monitoring_ConfigureReadOption(long slot, long index, long ruleId)
      gM485E_ReadOptions[slot].configured = 1;
      gM485E_ReadOptions[slot].index = index;
      gM485E_ReadOptions[slot].ruleId = ruleId;
+     gM485E_ReadOptions[slot].portSlot = -1;
      if (slot >= gM485E_MonitoringState.readOptionCount)
           gM485E_MonitoringState.readOptionCount = slot + 1;
      return M485E_OK;
@@ -99,12 +103,16 @@ long M485E_Monitoring_ApplyCandidates()
                     gM485E_SnapshotMeta,
                     gM485E_SnapshotRegisters);
                if (result != M485E_OK) return result;
+               gM485E_CandidatePortSlots[slot] =
+                    gM485E_SnapshotMeta[M485E_SM_PORT_SLOT];
           }
      }
      for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
      {
           gM485E_ReadOptions[slot].appliedEnabled =
                gM485E_ReadOptions[slot].candidateEnabled;
+          if (gM485E_ReadOptions[slot].appliedEnabled != 0)
+               gM485E_ReadOptions[slot].portSlot = gM485E_CandidatePortSlots[slot];
           if (gM485E_ReadOptions[slot].appliedEnabled == 0)
                gM485E_ReadOptions[slot].pendingGeneration = 0;
      }
@@ -210,48 +218,85 @@ long M485E_Monitoring_TryOneChange()
      return 0;
 }
 
-// 10ms마다 호출되는 출력 Pump이다.
-// Change Snapshot을 우선 처리한 뒤 남은 Frame 예산으로 주기 Snapshot을 이어서 출력한다.
-// periodicCursor를 유지하므로 Rule 수가 많아도 다음 Tick에서 중단 지점부터 계속한다.
-void M485E_Monitoring_PumpOnce()
+// 지정 Port에서 아직 송출하지 않은 Periodic Rule 하나를 찾아 출력한다.
+// Port별 Cursor를 성공한 Rule 다음 위치로만 옮겨 Frame 예산 부족 시 같은 Rule을 다음 Tick에 재시도한다.
+// 반환: 출력한 CAN Frame 수. 대기 Rule이 없거나 남은 예산으로 출력할 수 없으면 0.
+long M485E_Monitoring_TryOnePeriodic(long portSlot, long remainingFrames)
 {
-     long usedFrames;
-     long changeFrames;
      long checked;
      long slot;
      long result;
      long cost;
+     if (gM485E_MonitoringState.readOptionCount <= 0 || remainingFrames <= 0)
+          return 0;
+     for (checked = 0; checked < gM485E_MonitoringState.readOptionCount; checked++)
+     {
+          slot = (gM485E_MonitoringState.periodicCursor[portSlot] + checked) %
+               gM485E_MonitoringState.readOptionCount;
+          if (gM485E_ReadOptions[slot].appliedEnabled != 0 &&
+               gM485E_ReadOptions[slot].pendingGeneration != 0 &&
+               gM485E_ReadOptions[slot].portSlot == portSlot)
+          {
+               result = M485E_Core_ReadRuleSnapshot(gM485E_ReadOptions[slot].index,
+                    gM485E_ReadOptions[slot].ruleId,
+                    gM485E_SnapshotMeta,
+                    gM485E_SnapshotRegisters);
+               if (result != M485E_OK) continue;
+               cost = M485E_Monitoring_FrameCost(
+                    gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
+               if (cost > remainingFrames) return 0;
+               M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
+                    gM485E_SnapshotRegisters, 0);
+               gM485E_ReadOptions[slot].pendingGeneration = 0;
+               gM485E_MonitoringState.periodicCursor[portSlot] =
+                    (slot + 1) % gM485E_MonitoringState.readOptionCount;
+               return cost;
+          }
+     }
+     return 0;
+}
+
+// 10ms마다 호출되는 출력 Pump이다.
+// Change Snapshot을 우선 처리한 뒤 Port별 지속 Cursor를 Round-robin으로 순회한다.
+// 한 Round에서 활성 Port마다 최대 한 Rule을 처리하고 예산이 남으면 다음 Round를 반복한다.
+void M485E_Monitoring_PumpOnce()
+{
+     long usedFrames;
+     long changeFrames;
+     long portCount;
+     long startPort;
+     long offset;
+     long portSlot;
+     long cost;
+     long madeProgress;
      if (gM485E_MonitoringState.enabled == 0) return;
 
      usedFrames = 0;
      changeFrames = M485E_Monitoring_TryOneChange();
      if (changeFrames <= M485E_MAX_CHANGE_FRAMES_PER_TICK)
           usedFrames = changeFrames;
-
-     for (checked = 0; checked < gM485E_MonitoringState.readOptionCount; checked++)
+     portCount = gM485E_ActivePortCount;
+     if (portCount < 1 || portCount > M485E_PORT_SLOT_COUNT) return;
+     startPort = gM485E_MonitoringState.periodicStartPort % portCount;
+     while (usedFrames < M485E_MAX_FRAMES_PER_TICK)
      {
-          slot = (gM485E_MonitoringState.periodicCursor + checked) %
-               gM485E_MonitoringState.readOptionCount;
-          if (gM485E_ReadOptions[slot].appliedEnabled != 0 &&
-               gM485E_ReadOptions[slot].pendingGeneration != 0)
+          madeProgress = 0;
+          for (offset = 0; offset < portCount; offset++)
           {
-               result = M485E_Core_ReadRuleSnapshot(gM485E_ReadOptions[slot].index,
-                    gM485E_ReadOptions[slot].ruleId,
-                    gM485E_SnapshotMeta,
-                    gM485E_SnapshotRegisters);
-               if (result == M485E_OK)
+               portSlot = (startPort + offset) % portCount;
+               cost = M485E_Monitoring_TryOnePeriodic(portSlot,
+                    M485E_MAX_FRAMES_PER_TICK - usedFrames);
+               if (cost > 0)
                {
-                    cost = M485E_Monitoring_FrameCost(gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
-                    if (usedFrames + cost > M485E_MAX_FRAMES_PER_TICK) break;
-                    M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
-                         gM485E_SnapshotRegisters, 0);
                     usedFrames = usedFrames + cost;
-                    gM485E_ReadOptions[slot].pendingGeneration = 0;
-                    gM485E_MonitoringState.periodicCursor =
-                         (slot + 1) % gM485E_MonitoringState.readOptionCount;
+                    madeProgress = 1;
                }
           }
+          if (madeProgress == 0) break;
+          startPort = (startPort + 1) % portCount;
      }
+     gM485E_MonitoringState.periodicStartPort =
+          (gM485E_MonitoringState.periodicStartPort + 1) % portCount;
 }
 
 // 새로운 1초 주기를 시작한다.
@@ -284,6 +329,8 @@ long M485E_Monitoring_Start()
      result = M485E_Core_StartMonitoring();
      if (result != M485E_OK) return result;
      gM485E_MonitoringState.enabled = 1;
+     // Refresh 후 Device-to-Port 매핑이 바뀌었을 수 있으므로 활성 후보를 다시 검증한다.
+     gM485E_MonitoringState.candidateDirty = 1;
      M485E_Monitoring_NewCycle();
      setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
      setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);

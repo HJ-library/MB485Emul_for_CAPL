@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -18,6 +19,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -510,6 +512,21 @@ void TestModbusRtuEngine()
   result = engine.Process(0, Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0, 1}));
   Require(result.disposition == m485e::core::RtuDisposition::Ignore,
           "Broadcast request was not ignored");
+
+  Fixture addressZeroFixture;
+  const auto addressZeroBuilt = ConfigurationLoader{}.Build(addressZeroFixture.Write(
+      std::string(kDeviceHeader) + "0,COM11,1,AddressZero,signals.csv\n",
+      std::string(kRuleHeader) + "0,1,0x03,0,1,Address Zero Read\n",
+      std::string(kSignalHeader) +
+          "0,AddressZeroValue,Unsigned,2,BigEndian,0,16,1,0,,4660,,,\n"));
+  Require(addressZeroBuilt.Succeeded(), "Register Address 0 fixture build failed");
+  m485e::core::RuntimeModel addressZeroRuntime(addressZeroBuilt.configuration);
+  m485e::core::ModbusRtuEngine addressZeroEngine(addressZeroRuntime);
+  result = addressZeroEngine.Process(0, Rtu({1, 0x03, 0, 0, 0, 1}));
+  Require(result.disposition == m485e::core::RtuDisposition::Response &&
+              result.response.size() == 7U && result.response[3] == 0x12U &&
+              result.response[4] == 0x34U,
+          "Register Address 0 was confused with broadcast Slave ID 0");
   auto badCrc = Rtu({1, 0x03, 0x27, 0x10, 0, 1});
   badCrc.back() ^= 0x01U;
   result = engine.Process(0, badCrc);
@@ -633,10 +650,10 @@ void TestMonitoringStopIsAnEnqueueBarrier()
   }
 }
 
-void TestRtuTimingAndFraming()
+void TestRtuTimingAndStreamFraming()
 {
   using m485e::core::CalculateRtuTiming;
-  using m485e::core::RtuFrameAssembler;
+  using m485e::core::RtuStreamParser;
   using m485e::core::SerialParity;
   using m485e::core::SerialSettings;
   Require(m485e::core::ValidateSerialSettings({9600, 8, SerialParity::Even, 1}) == M485E_OK,
@@ -651,54 +668,95 @@ void TestRtuTimingAndFraming()
   Require(high.t1_5Us == 750 && high.t3_5Us == 1750,
           "high-baud fixed RTU timing failed");
 
-  RtuFrameAssembler assembler(high);
-  Require(!assembler.PushByte(1, 0).has_value() &&
-              !assembler.PushByte(3, 100).has_value() &&
-              !assembler.PushByte(0, 200).has_value(),
-          "frame completed before t3.5");
-  auto frame = assembler.OnSilence(1950);
-  Require(frame.has_value() && *frame == std::vector<std::uint8_t>({1, 3, 0}),
-          "t3.5 did not complete a partial-read frame");
+  const auto readRequest = Rtu({1, 0x03, 0x27, 0x10, 0, 1});
+  for (std::size_t split = 0; split <= readRequest.size(); ++split)
+  {
+    RtuStreamParser parser;
+    auto first = parser.PushBytes(readRequest.data(), split);
+    auto second =
+        parser.PushBytes(readRequest.data() + split, readRequest.size() - split);
+    Require(first.frames.size() + second.frames.size() == 1U &&
+                (first.frames.empty() ? second.frames[0] : first.frames[0]) == readRequest,
+            "RTU request was not recovered across every USB chunk boundary");
+  }
 
-  assembler.PushByte(1, 3000);
-  assembler.PushByte(3, 3100);
-  assembler.PushByte(0, 3900);  // t1.5 < gap < t3.5: discard until next frame gap.
-  Require(!assembler.OnSilence(5650).has_value() && assembler.DiscardedFrameCount() == 1,
-          "t1.5 violation did not discard and resynchronize");
-  assembler.PushByte(1, 6000);
-  assembler.PushByte(4, 6100);
-  frame = assembler.OnSilence(7850);
-  Require(frame.has_value() && frame->size() == 2,
-          "assembler did not recover after a valid t3.5 gap");
+  const auto writeRequest = Rtu({1, 0x10, 0x27, 0x10, 0, 1, 2, 0x12, 0x34});
+  std::vector<std::uint8_t> combined = readRequest;
+  combined.insert(combined.end(), writeRequest.begin(), writeRequest.end());
+  RtuStreamParser parser;
+  auto batch = parser.PushBytes(combined.data(), combined.size());
+  Require(batch.frames.size() == 2U && batch.frames[0] == readRequest &&
+              batch.frames[1] == writeRequest,
+          "two RTU frames delivered in one USB chunk were not separated");
 
-  assembler.Reset();
-  for (std::uint16_t index = 0; index < 257U; ++index)
-    assembler.PushByte(static_cast<std::uint8_t>(index), 10000U + index);
-  Require(!assembler.OnSilence(12007).has_value() && assembler.DiscardedFrameCount() == 2,
-          "overlength RTU ADU was not discarded");
+  std::vector<std::uint8_t> prefixed{0x55U, 0xAAU};
+  prefixed.insert(prefixed.end(), readRequest.begin(), readRequest.end());
+  parser.Reset();
+  batch = parser.PushBytes(prefixed.data(), prefixed.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == readRequest &&
+              batch.discardedSegments == 1U,
+          "RTU parser did not CRC-resynchronize after a garbage prefix");
+
+  auto badCrc = readRequest;
+  badCrc.back() ^= 0x01U;
+  parser.Reset();
+  batch = parser.PushBytes(badCrc.data(), badCrc.size());
+  Require(batch.frames.empty(), "bad CRC frame was accepted");
+  batch = parser.PushBytes(readRequest.data(), readRequest.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == readRequest &&
+              batch.discardedSegments == 1U,
+          "bad CRC segment was not discarded when the next valid frame arrived");
+
+  const auto unsupported = Rtu({1, 0x06, 0x27, 0x10, 0x12, 0x34});
+  parser.Reset();
+  batch = parser.PushBytes(unsupported.data(), unsupported.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == unsupported,
+          "CRC sliding fallback did not recover an unknown Function request");
+
+  std::vector<std::uint8_t> maximumWrite{1, 0x10, 0, 0, 0, 123, 246};
+  maximumWrite.resize(7U + 246U, 0x5AU);
+  m485e::core::ModbusCrc16::Append(maximumWrite);
+  Require(maximumWrite.size() == 255U, "maximum FC10 fixture length is invalid");
+  parser.Reset();
+  batch = parser.PushBytes(maximumWrite.data(), maximumWrite.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == maximumWrite,
+          "maximum FC10 request was not recovered");
 }
 
 class FakeSerialTransport final : public m485e::core::ISerialTransport
 {
  public:
-  explicit FakeSerialTransport(std::vector<std::uint8_t> input)
+  explicit FakeSerialTransport(std::vector<std::uint8_t> input,
+                               const std::size_t chunkSize = 0U,
+                               const bool timeoutBetweenChunks = false)
+      : input_(std::move(input)),
+        chunkSize_(chunkSize == 0U ? input_.size() : chunkSize),
+        timeoutBetweenChunks_(timeoutBetweenChunks)
   {
-    std::uint64_t time = 1000;
-    for (const auto value : input)
-    {
-      reads_.push_back({m485e::core::SerialIoStatus::Data, value, time, 0});
-      time += 100;
-    }
-    now_.store(time + 2000);
   }
-  m485e::core::SerialReadResult ReadByte(std::uint32_t) noexcept override
+  m485e::core::SerialReadResult Read(std::uint8_t* const data,
+                                     const std::size_t capacity,
+                                     std::uint32_t) noexcept override
   {
-    const std::size_t index = readIndex_.fetch_add(1);
-    if (index < reads_.size()) return reads_[index];
+    if (cancelled_.load())
+      return {m485e::core::SerialIoStatus::Cancelled, 0, 0};
+    if (timeoutPending_)
+    {
+      timeoutPending_ = false;
+      std::this_thread::yield();
+      return {m485e::core::SerialIoStatus::Timeout, 0, 0};
+    }
+    if (readOffset_ < input_.size())
+    {
+      const std::size_t size = std::min(
+          capacity, std::min(chunkSize_, input_.size() - readOffset_));
+      std::memcpy(data, input_.data() + readOffset_, size);
+      readOffset_ += size;
+      timeoutPending_ = timeoutBetweenChunks_ && readOffset_ < input_.size();
+      return {m485e::core::SerialIoStatus::Data, size, 0};
+    }
     std::this_thread::yield();
-    return {cancelled_.load() ? m485e::core::SerialIoStatus::Cancelled
-                              : m485e::core::SerialIoStatus::Timeout,
-            0, now_.load(), 0};
+    return {m485e::core::SerialIoStatus::Timeout, 0, 0};
   }
   m485e::core::SerialWriteResult Write(const std::uint8_t* data,
                                        const std::size_t size) noexcept override
@@ -708,7 +766,6 @@ class FakeSerialTransport final : public m485e::core::ISerialTransport
     output_.insert(output_.end(), data, data + chunk);
     return {m485e::core::SerialIoStatus::Data, chunk, 0};
   }
-  std::uint64_t NowUs() const noexcept override { return now_.load(); }
   void Cancel() noexcept override { cancelled_.store(true); }
   std::vector<std::uint8_t> Output() const
   {
@@ -717,9 +774,11 @@ class FakeSerialTransport final : public m485e::core::ISerialTransport
   }
 
  private:
-  std::vector<m485e::core::SerialReadResult> reads_;
-  std::atomic<std::size_t> readIndex_{0};
-  std::atomic<std::uint64_t> now_{0};
+  std::vector<std::uint8_t> input_;
+  std::size_t chunkSize_ = 0;
+  std::size_t readOffset_ = 0;
+  bool timeoutBetweenChunks_ = false;
+  bool timeoutPending_ = false;
   std::atomic<bool> cancelled_{false};
   mutable std::mutex mutex_;
   std::vector<std::uint8_t> output_;
@@ -734,7 +793,9 @@ void TestPortWorkerWithPartialIoAndCancellation()
   m485e::core::RuntimeModel runtime(built.configuration);
   m485e::core::SnapshotQueueService snapshots(built.configuration);
   m485e::core::ErrorQueue errors;
-  FakeSerialTransport transport(Rtu({1, 0x03, 0x27, 0x10, 0, 1}));
+  // A timeout between every byte emulates user-mode scheduling/USB delivery gaps.
+  // The RTU parser must retain the partial frame instead of treating them as t3.5.
+  FakeSerialTransport transport(Rtu({1, 0x03, 0x27, 0x10, 0, 1}), 1U, true);
   std::atomic<int> fatalCount{0};
   m485e::core::PortWorker worker(
       0, m485e::core::CalculateRtuTiming(
@@ -773,7 +834,7 @@ int main()
     TestModbusRtuEngine();
     TestSnapshotAndDiagnosticQueues();
     TestMonitoringStopIsAnEnqueueBarrier();
-    TestRtuTimingAndFraming();
+    TestRtuTimingAndStreamFraming();
     TestPortWorkerWithPartialIoAndCancellation();
     std::cout << "M485E Phase 3-7 home-testable core tests PASS.\n";
     return 0;

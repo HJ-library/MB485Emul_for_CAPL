@@ -43,7 +43,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - Phase 4: Device별 16bit Register Memory, FC03/FC04 권한, Direct Read/Write, Signal 물리값 Codec, Init/Reset
 - Phase 5: CRC-16/Modbus, FC03/FC04/FC10, 표준 Exception 및 무응답 정책
 - Phase 6: Port별 Change Snapshot FIFO와 Error FIFO, 고정 용량 256, oldest-drop·병합·통계
-- Phase 7: Win32 Overlapped COM I/O, t1.5/t3.5 RTU Framing, Port Worker, 취소 가능한 I/O
+- Phase 7: Win32 Overlapped Chunk I/O, 예상 길이+CRC RTU Stream Parser, 응답 t3.5 Guard, Port Worker, 취소 가능한 I/O
 - Phase 8: 비동기 Refresh/Connect/Disconnect, 활성 Port 전체 성공/전체 실패, 3초 간격 최대 10회 자동 재연결, 21개 Export의 실제 Core 연결
 - Phase 9: CAPL Core Wrapper, 1,000ms Monitoring Cycle, 10ms Output Pump, 1~4 Port Round-robin, Vector Extended CAN ID와 Header/Data Frame 생성
 - Phase 10: Manual Read/Write, 1초 AutoRead, Signal 물리값 제어, ReadSwitch/ReadOption System Variable Adapter와 외부 시험 패키지

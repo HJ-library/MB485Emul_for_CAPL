@@ -62,10 +62,10 @@
 | FR-RTU-019 | Quantity가 Function별 허용 범위를 벗어나거나 `0x10` Byte Count가 `Quantity × 2`와 다르면 Register를 변경하지 않고 Exception Code `0x03 Illegal Data Value`를 반환한다. |
 | FR-RTU-020 | `Address + Quantity - 1`은 32bit 이상의 중간값으로 계산한다. 결과가 16bit Address 범위를 초과하거나 요청 범위에 해당 Function Code 권한이 없는 Register가 하나라도 있으면 Exception Code `0x02 Illegal Data Address`를 반환한다. |
 | FR-RTU-021 | 1차 구현은 Modbus Broadcast를 지원하지 않는다. `M485E_DeviceMap.csv`의 `Slave_ID`는 `1~247`만 허용하고 `0`, `248~255`는 CSV 검증 오류로 처리한다. |
-| FR-RTU-022 | Wire에서 수신한 Slave Address `0`, 예약 Address `248~255`, 등록되지 않은 Slave ID 및 해당 Port의 다른 Slave ID 프레임에는 응답하지 않고 Register와 Snapshot 상태를 변경하지 않는다. |
+| FR-RTU-022 | Wire에서 수신한 Slave ID `0` Broadcast, 예약 Slave ID `248~255`, 등록되지 않은 Slave ID 및 해당 Port의 다른 Slave ID 프레임에는 응답하지 않고 Register와 Snapshot 상태를 변경하지 않는다. 이 Slave ID 판정은 PDU의 16bit Register Address와 독립적이며 Register Address `0`은 정상 주소로 허용한다. |
 | FR-RTU-023 | Serial 통신 모드는 Modbus RTU만 지원하고 ASCII 모드는 지원하지 않는다. RTU ADU는 Address 1Byte, Function 1Byte, Data `0~252Byte`, CRC 2Byte로 구성하며 최대 길이는 256Byte다. |
-| FR-RTU-024 | RTU 수신기는 `t3.5` 이상의 무응답 구간 뒤 첫 Byte를 새 Frame 시작으로 보고, 마지막 Byte 이후 `t3.5` 무응답을 Frame 완료로 판정한다. Frame 내부 Byte 간 무응답이 `t1.5`를 초과하면 해당 부분 Frame을 폐기하고 다음 유효 Frame 경계까지 재동기화한다. |
-| FR-RTU-025 | BaudRate가 19,200 이하이면 실제 Serial Character의 Start 1Bit, Data 8Bit, 설정된 Parity Bit 및 Stop Bit를 합산한 Character Time으로 `t1.5`와 `t3.5`를 계산한다. 19,200 초과에서는 각각 750us와 1,750us를 사용한다. |
+| FR-RTU-024 | RTU Wire의 Frame 간 무응답은 `t3.5` 규칙을 따르되 Windows `ReadFile` 완료 시각은 실제 Byte 도착 시각으로 간주하지 않는다. DLL은 FC03/FC04/FC10의 예상 ADU 길이와 CRC-16, 미지원 Function의 bounded CRC sliding 탐색으로 Frame을 복구하며 Serial Read Timeout이나 Read 호출 반환 경계만으로 미완성 후보를 폐기하지 않는다. |
+| FR-RTU-025 | BaudRate가 19,200 이하이면 실제 Serial Character의 Start 1Bit, Data 8Bit, 설정된 Parity Bit 및 Stop Bit를 합산한 Character Time으로 `t1.5`와 `t3.5`를 계산한다. 19,200 초과에서는 각각 750us와 1,750us를 사용한다. 계산한 `t3.5`는 완성된 요청 뒤 응답 송신 전 보수적 Inter-frame Guard에 사용하며 수신 Byte 분할의 단독 근거로 사용하지 않는다. |
 | FR-RTU-026 | CRC-16은 Slave Address부터 마지막 Data Byte까지 계산하고 RTU Wire에는 CRC Low Byte, High Byte 순서로 배치한다. CRC가 일치하지 않는 Frame에는 응답하지 않는다. |
 | FR-RTU-027 | 4Byte 미만, 256Byte 초과, 불완전 Frame, CRC 오류 및 수신 중 Noise로 폐기한 Frame에는 Modbus Exception을 보내지 않고 진단 Counter 또는 병합 가능한 Error Event만 갱신한다. |
 | FR-RTU-028 | FC03/FC04 정상 요청 ADU는 정확히 8Byte여야 한다. 정상 응답은 `ByteCount=Quantity × 2`와 Address 오름차순 Register 데이터를 포함하며 응답 ADU 길이는 `5 + Quantity × 2`다. |
@@ -75,7 +75,7 @@
 | FR-RTU-032 | FC10 Register 적용이 성공한 뒤 RTU 성공 응답 송신에 실패해도 적용된 Register와 생성된 변경 Snapshot을 Rollback하지 않는다. 진단은 적용 전 실패와 적용 후 응답 송신 실패를 서로 다른 Stage로 구분한다. |
 | FR-RTU-033 | 유효한 개별 Slave Frame에서 미지원 Function은 `0x01 Illegal Function`, 권한 또는 Address 범위 오류는 `0x02 Illegal Data Address`, 알려진 Function의 잘못된 PDU 길이·Quantity·ByteCount는 `0x03 Illegal Data Value`, 복구 불가능한 내부 처리 실패는 `0x04 Server Device Failure`로 응답한다. |
 | FR-RTU-034 | 각 활성 Port Worker는 해당 Port의 RTU 요청을 한 번에 하나씩 순차 처리하고 1~4개 Port Worker는 서로 독립적으로 동작한다. |
-| FR-RTU-035 | Serial Read가 한 Frame을 여러 조각으로 반환해도 DLL은 `t1.5/t3.5`와 최대 ADU 길이를 기준으로 조립하며 Read 호출의 반환 경계를 RTU Frame 경계로 해석하지 않는다. Serial Write는 응답 ADU 전체 송신 완료를 추적하고 Partial Write 또는 취소를 성공으로 처리하지 않는다. |
+| FR-RTU-035 | Serial Read가 한 Frame을 여러 조각으로 반환하거나 여러 Frame을 한 조각으로 반환해도 DLL은 최대 ADU 길이 256Byte, Function별 예상 길이와 CRC-16으로 분리·조립한다. 미완성 후보는 Read Timeout을 지나도 유지하고 후속 CRC 유효 Frame 또는 bounded Buffer 상한에서 재동기화한다. Serial Write는 응답 ADU 전체 송신 완료를 추적하고 Partial Write 또는 취소를 성공으로 처리하지 않는다. |
 
 #### Serial Port Configuration
 
@@ -101,7 +101,7 @@
 | FR-PORT-018 | `PortSlot`은 `0~3`을 허용한다. DeviceMap의 고유 Port는 첫 등장 순서대로 연속 Slot `0~N-1`에 매핑하며 같은 Slot의 다른 Port 또는 같은 Port의 복수 Slot 대응은 Connect에서 오류로 거부한다. |
 | FR-PORT-019 | CAPL `Main.can`은 `PortSlot 0~3`과 가상 CAN 채널의 1:1 매핑을 관리하고 DLL은 등록된 `Port` 문자열을 DeviceMap의 Port와 대조하여 각 Device Index의 `PortSlot`을 결정한다. |
 | FR-PORT-020 | `PortSlot`과 Port 설정은 Disconnected 상태에서만 변경할 수 있고 성공적인 재설정 전까지 해당 Slot의 기존 설정을 유지한다. |
-| FR-PORT-021 | RTU Timing 계산은 실제 적용된 BaudRate, DataBits 8, Parity와 StopBits 설정을 사용하고 계산 결과는 고해상도 단조 증가 Clock으로 판정한다. 19,200 이하의 계산값은 조기 Frame 종료가 발생하지 않도록 필요한 경우 보수적으로 올림한다. |
+| FR-PORT-021 | RTU Timing 계산은 실제 적용된 BaudRate, DataBits 8, Parity와 StopBits 설정을 사용한다. Windows/USB Driver가 묶거나 나눈 Read 완료 간격은 Wire Byte 간격으로 판정하지 않으며, 완성된 CRC 유효 요청의 응답은 계산된 `t3.5` 이상을 보수적으로 기다린 뒤 송신한다. |
 | FR-PORT-022 | DLL은 COM Port의 RTS를 RS-485 송수신 방향 제어에 사용하지 않으며 CAPL Port 설정 API에도 RTS/DE/RE 제어 옵션을 추가하지 않는다. |
 | FR-PORT-023 | 사용 Adapter와 Driver는 DLL이 송신한 RTU 응답을 수신 데이터로 되돌리지 않아야 한다. 1차 DLL은 Local Echo 검출·제거 알고리즘을 제공하지 않는다. |
 
@@ -111,9 +111,9 @@
 | --- | --- |
 | DES-RTU-001 | 외부 RTU `0x10`과 CAPL Direct Write는 권한 검사와 SourceType은 분리하되 동일한 원자적 다중 Register Write Engine을 사용한다. |
 | DES-RTU-002 | `0x06` Legacy Handler, 호환 설정 Flag 및 Legacy 전용 DLL을 만들지 않는다. |
-| DES-RTU-003 | Broadcast를 부분 지원하지 않는다. Slave Address `0`은 Wire에서 무응답·무적용으로 폐기하고 향후 Broadcast FC10이 필요하면 전체 대상 검증과 무응답 원자 적용 정책을 별도 Version 요구사항으로 추가한다. |
+| DES-RTU-003 | Broadcast를 부분 지원하지 않는다. Slave ID `0`은 Wire에서 무응답·무적용으로 폐기하되 Register Address `0`과 혼동하지 않는다. 향후 Broadcast FC10이 필요하면 전체 대상 검증과 무응답 원자 적용 정책을 별도 Version 요구사항으로 추가한다. |
 | DES-RTU-004 | RTU Frame 조립, CRC/주소/Function 검증, 원자적 Register 적용과 응답 송신을 Port별 단일 Worker Pipeline으로 처리한다. |
-| DES-RTU-005 | Serial Transport와 고해상도 단조 증가 Clock은 실제 Windows 구현과 시험용 대체 구현을 분리할 수 있는 최소 경계만 둔다. 범용 통신 Framework나 사용하지 않는 Driver Plug-in 구조는 만들지 않는다. |
+| DES-RTU-005 | Serial Transport는 실제 Windows 구현과 시험용 대체 구현을 분리할 수 있는 최소 경계만 둔다. 수신 Parser는 OS Byte Timestamp 의존성을 두지 않으며 범용 통신 Framework나 사용하지 않는 Driver Plug-in 구조는 만들지 않는다. |
 
 ### 3.2 Register 및 Signal 관리
 
@@ -1077,7 +1077,7 @@
 | LOG-013 | Error Event FIFO Overflow 시 제거된 Sequence 범위, DropCount와 Error Queue Overflow Latch를 진단한다. 별도 범용 Critical Latch는 표시하지 않는다. |
 | LOG-014 | 오류 Context의 ValidMask에 포함되지 않은 File, Port, Device, Rule 또는 Address 필드는 임의의 기본값으로 출력하지 않는다. |
 | LOG-015 | CAPL Core는 `Refreshing`, `Connecting`, `Disconnecting` 전환과 완료 상태를 기록하고 비동기 실패 Event를 해당 작업의 Operation/Stage와 연결하여 출력한다. |
-| LOG-016 | Port별로 CRC 오류, 불완전 Frame, Oversize Frame, `t1.5` 위반, 무시한 Broadcast·예약·미등록 Slave Frame, Modbus Exception별 발생 수와 Response 송신 실패 수를 진단 Counter로 구분한다. |
+| LOG-016 | Port별로 CRC 오류, 불완전·Oversize Frame, Noise 재동기화, 무시한 Broadcast·예약·미등록 Slave Frame, Modbus Exception별 발생 수와 Response 송신 실패 수를 진단 Counter로 구분한다. Windows Read 완료 간격만으로 `t1.5` 위반 Counter를 증가시키지 않는다. |
 | LOG-017 | RTU Noise 진단은 동일 오류의 반복을 병합하거나 Rate-limit하여 CAPL Write Window와 Error Event FIFO를 Flood하지 않으며 누적 Counter는 보존한다. |
 
 ### 제안
@@ -1133,7 +1133,7 @@
 | COMP-010 | 구현 단계에서는 기존 Prototype 소스·API·빌드 설정·샘플·설명 정보를 신규 `M485E` 요구사항과 구조에 맞는 산출물로 교체하고, 최종 산출물에 혼재시키지 않는다. |
 | COMP-011 | x86과 향후 x64 DLL은 동일한 32bit signed 상태 코드 값과 의미를 유지해야 한다. |
 | COMP-012 | 출시된 M485E 상태 코드는 이후 버전에서 숫자를 변경하거나 다른 의미로 재사용하지 않아야 하며 CAPL Core가 구버전 코드도 동일하게 해석해야 한다. |
-| COMP-013 | RTU Wire 처리는 Modbus Serial Line의 256Byte ADU, CRC Low-Byte-first와 `t1.5/t3.5` Frame 경계 및 Modbus Application Protocol의 FC03/04/10 Quantity·Exception 규칙과 호환되어야 한다. |
+| COMP-013 | RTU Wire 처리는 Modbus Serial Line의 256Byte ADU, CRC Low-Byte-first와 `t1.5/t3.5` 규칙 및 Modbus Application Protocol의 FC03/04/10 Quantity·Exception 규칙과 호환되어야 한다. Windows 수신 경계는 Function별 길이와 CRC-16으로 복구하고 응답 전 `t3.5` Guard를 적용한다. |
 | COMP-014 | 1차 버전의 Broadcast 미지원과 `IF-LIMIT-001~008`의 공개 최대값은 호환성 계약으로 문서화한다. 향후 Broadcast 지원 또는 한도 축소는 명시적인 Version 검토 없이 기존 동작을 변경할 수 없다. |
 | COMP-015 | 전체 Emulator 구현에 앞서 CANalyzer 9.x x86 최소 ABI 확인 산출물로 `#pragma library`, `CAPL_DLL_INFO4`, Context Handle, `word[]`·`long[]`·`char[]`, `float(F)`/C++ `double`, `getAbsFilePath()` 및 문자열 입출력을 컴파일·호출 검증한다. ABI 실패 시 전체 구현을 진행하기 전에 공개 인터페이스 요구사항을 다시 검토한다. |
 
@@ -1219,7 +1219,7 @@
 | AC-056 | FR-LOAD-010, FR-LOAD-018 | 1차 Runtime에는 Performance Monitor 기반 Critical Overload Latch가 없고 Queue Overflow만으로 ReadSwitch 상태가 바뀌지 않는다. ReadSwitch Handler와 다른 CAPL 호출의 Start/Stop은 동일한 DLL Monitoring 상태를 변경한다. |
 | AC-057 | FR-CAN-042~044, PERF-011 | 같은 Rule이 여러 Cycle 연속 미처리되어도 Pending은 한 개만 유지되고 과거 Generation은 Catch-up 출력되지 않으며 전체 Periodic Pending은 200개를 초과하지 않는다. |
 | AC-058 | FR-CAN-046 | 이전 Cycle에서 지연된 Rule을 다음 Cycle에 처리하면 Pending 생성 당시 값이 아니라 DLL 호출 시점의 현재 Register 값이 출력된다. |
-| AC-059 | FR-CAN-047, DES-CAN-017 | 일부 Rule이 Cycle 내 처리되지 않은 경우 다음 처리는 지속 Rule Cursor 위치부터 시작하여 배열 뒤쪽 Rule도 영구적으로 누락되지 않는다. |
+| AC-059 | FR-CAN-047, DES-CAN-017 | 일부 Rule이 Cycle 내 처리되지 않은 경우 다음 처리는 해당 Port의 지속 Rule Cursor 위치부터 시작한다. 각 Tick의 시작 Port도 순환하여 한 Port의 Rule 집중이 다른 Port의 Rule을 영구적으로 누락시키지 않는다. |
 | AC-060 | FR-LOAD-012 | 새 ReadOption 집합의 계산 Frame 비용이 검증된 Cycle 처리 예산을 초과하면 일부 Rule만 적용하지 않고 전체 변경을 거부하며 직전 Applied ReadOption을 유지한다. |
 | AC-061 | FR-CAN-048 | Cycle Deadline Miss가 발생해도 `0x80` Monitoring은 자동 정지되지 않고 최신 Pending 한 개로 병합하여 Best-effort 처리를 계속하며 Performance Monitor 상태를 추가 조건으로 요구하지 않는다. |
 | AC-062 | DATA-005, FR-CAN-049 | CSV Address `40000`은 CAPL과 DLL에서 `40000`, RTU Starting Address와 CAN Header에서 `0x9C40`으로 사용되며 `0` 또는 `39999`로 변환되지 않는다. |
@@ -1373,9 +1373,9 @@
 | AC-209 | FR-LOAD-010, FR-LOAD-017 | Performance Monitor 값이나 Queue Overflow와 관계없이 ReadSwitch OFF 또는 StopMonitoring에서만 정지 정책을 적용하며, 재시작하면 과거 `0x80`/`0x81` 재생 없이 Applied Rule의 최신 `0x80`을 즉시 등록한다. |
 | AC-210 | FR-CAN-056, FR-LOAD-018 | ReadSwitch OFF→ON은 Change Sequence, Queue Counter와 Overflow Latch를 유지하고 생성되지 않는 Critical Overload Latch를 조작하지 않는다. 성공한 Refresh에서는 기존 Change 진단 상태가 초기화된다. |
 | AC-211 | FR-RTU-021, DATA-DEV-005, ERR-039 | DeviceMap의 `Slave_ID=1`과 `247`은 허용되고 `0`, `248`, `255`는 파일·행·칼럼 Context가 있는 CSV 오류로 Load/Refresh 전체가 거부된다. |
-| AC-212 | FR-RTU-022, DES-RTU-003 | 유효 CRC를 가진 Slave Address `0`의 FC10, FC03 및 FC04 Frame을 수신해도 응답 Byte가 없고 어떤 Device Register와 Snapshot도 변경되지 않는다. 예약·미등록·다른 Slave ID도 동일하게 무응답이다. |
+| AC-212 | FR-RTU-022, DES-RTU-003 | 유효 CRC를 가진 Slave ID `0`의 FC10, FC03 및 FC04 Frame을 수신해도 응답 Byte가 없고 어떤 Device Register와 Snapshot도 변경되지 않는다. 반면 등록 Slave ID가 Starting Address `0`을 요청하면 정상 Rule 권한에 따라 처리한다. 예약·미등록·다른 Slave ID도 무응답이다. |
 | AC-213 | FR-RTU-023, FR-RTU-026, FR-RTU-030 | 알려진 RTU 시험 Vector에서 Address부터 Data까지 계산한 CRC가 Wire에 Low Byte, High Byte 순서로 배치되고 Starting Address, Quantity와 Register Data는 각각 High Byte, Low Byte 순서로 왕복한다. |
-| AC-214 | FR-RTU-024~025, FR-PORT-021 | 9,600bps와 19,200bps에서는 실제 Character 형식으로 계산한 `t1.5/t3.5`, 19,200 초과에서는 750us/1,750us를 사용한다. Frame 내부 `t1.5` 초과 Gap은 해당 Frame 폐기 후 다음 `t3.5` 경계에서 정상 재동기화된다. |
+| AC-214 | FR-RTU-024~025, FR-PORT-021 | 9,600bps와 19,200bps에서는 실제 Character 형식으로 `t1.5/t3.5`, 19,200 초과에서는 750us/1,750us를 계산한다. 완성된 요청의 응답은 계산된 `t3.5` Guard 뒤 송신하며, 시험 Transport가 한 요청 Byte 사이에 여러 Read Timeout을 반환해도 CRC 유효 Frame은 분리·폐기되지 않는다. |
 | AC-215 | FR-RTU-027, ERR-040, LOG-016~017 | CRC 오류, 4Byte 미만, 256Byte 초과, 불완전 Frame과 Noise Burst에는 응답하지 않고 Register를 유지하며 원인별 Counter가 증가하되 Error FIFO와 Write Window가 이벤트 수만큼 Flood되지 않는다. |
 | AC-216 | FR-RTU-028~029 | FC03/04 요청은 정확히 8Byte이며 Quantity 125 응답은 `ByteCount=250`, ADU 255Byte다. FC10 Quantity 123 요청은 `ByteCount=246`, ADU 255Byte이고 성공 응답은 Starting Address와 Quantity를 Echo하는 8Byte다. |
 | AC-217 | FR-RTU-019, FR-RTU-027~029, FR-RTU-033 | 유효 Slave·CRC에서 FC06은 `0x86/0x01`, 권한 공백은 `Function Code + 0x80`과 Exception `0x02`, Quantity 또는 FC10 ByteCount·PDU 길이 오류는 `Function Code + 0x80`과 Exception `0x03`으로 응답하고 CRC·Frame 경계 오류는 Exception 없이 무응답이다. |
@@ -1397,7 +1397,7 @@
 | AC-233 | NFR-012 | 로컬 CSV 경로는 읽기 전용으로 열리고 UNC·네트워크 경로와 권한 부족 경로는 권한 상승 없이 명시적 오류로 거부된다. 구성된 Port의 Modbus 요청에는 별도 인증 절차를 적용하지 않는다. |
 | AC-234 | IF-META-015, IF-QSTAT-001~004 | Snapshot V1 Count 11이 유지되고 Change Sequence가 `0x7FFFFFFF` 다음 `1`로 순환하며 `0`은 미생성·Periodic 예약 의미를 유지한다. |
 | AC-235 | DATA-MAP-017~020, OOS-013 | `Value_Table`이 있는 CSV도 Emulator 동작에는 영향을 주지 않고 1차 산출물에 DBC 변환 실행 파일, DLL Export 또는 CAPL API가 포함되지 않는다. |
-| AC-236 | DES-RTU-005 | 실제 COM Port 없이 시험용 Serial Transport와 Clock으로 RTU 분할 수신, Timing, CRC, Partial Write 및 취소 경로를 재현할 수 있고 제품 Runtime에는 사용하지 않는 범용 Plug-in Framework가 노출되지 않는다. |
+| AC-236 | DES-RTU-005 | 실제 COM Port 없이 시험용 Serial Transport로 RTU 분할·병합 수신, Read Timeout 사이의 후보 유지, CRC 재동기화, Partial Write 및 취소 경로를 재현할 수 있고 제품 Runtime에는 사용하지 않는 범용 Plug-in Framework가 노출되지 않는다. |
 | AC-237 | DATA-MAP-023 | 같은 Index의 `Power12V`와 `power12v`는 서로 다른 Signal로 조회되고 같은 Index에서 완전히 같은 `Power12V` 이름을 두 번 정의하면 CSV 전체가 거부된다. 다른 Index의 `Power12V` 재사용은 허용된다. |
 | AC-238 | COMP-015 | CANalyzer 9.x x86 최소 ABI 확인 Configuration에서 DLL 로딩과 각 Scalar·Reference·배열·문자열·`float(F)`·경로 호출이 성공하고, 결과가 확정되기 전에는 전체 Emulator API 구현 완료로 판정하지 않는다. |
 | AC-239 | PERF-020 | 시험에 사용한 Board Master Response Timeout을 기록하고 정상 지원 부하의 RTU 요청별 Frame 완료~응답 첫 Byte 송신 시작 시간이 해당 Timeout의 50%를 넘지 않는다. |
@@ -1436,11 +1436,11 @@
 | TBD-013 ◆ | 1차 구현은 Performance Monitor 기반 Critical Overload 자동 정지·재개와 Critical Latch를 제공하지 않는다. ReadSwitch Handler와 다른 CAPL 코드는 같은 Start/Stop API와 DLL Monitoring 상태를 사용한다. | 75/85/90% 값 주입, Queue Overflow, Deadline Miss 및 명시적 Start/Stop 시험 |
 | TBD-029 ◆ | Performance Monitor는 Connect·RTU·CAN Monitoring의 필수 조건이 아니며 비활성·미갱신 상태에서도 Monitoring을 허용한다. 기존 75/85/90% Warning·정지 대신 Output Pump 예산, Latest-Wins Pending, bounded Change Queue와 Deadline/Drop 진단을 사용한다. | Performance Monitor 부재, StartMonitoring, ReadOption 적용, Queue Overflow와 RTU 독립성 시험 |
 | TBD-026 ◆ | `0x81`은 Port별 256개 불변 Snapshot FIFO와 CAPL 10ms 단건 Dequeue Polling을 사용하며 Overflow는 oldest-drop으로 처리한다. | 배열 출력 Buffer, Queue Overflow 및 10ms Polling 시험 |
-| TBD-027 ◆ | `0x80` Pending은 Rule별 최신 Generation 한 개로 병합하고 지속 Rule Cursor로 처리하며 과거 Cycle을 Catch-up 재생하지 않는다. | 200 Rule, 두 가상 채널 및 `0x81` Burst 공정성 시험 |
+| TBD-027 ◆ | `0x80` Pending은 Rule별 최신 Generation 한 개로 병합하고 Port별 지속 Rule Cursor로 처리하며 과거 Cycle을 Catch-up 재생하지 않는다. | 200 Rule, 1~4개 가상 채널 및 `0x81` Burst 공정성 시험 |
 | TBD-031 ◆ | CSV, CAPL API, DLL, RTU PDU 및 CAN Header는 동일한 16bit 직접 Address를 사용한다. `40000`은 그대로 `40000`이며 Function Code 기반 변환과 `±1` 보정을 하지 않는다. | Address `0`, `40000`, `65535` 및 Address+Quantity 경계 시험 |
 | TBD-019 ◆ | 외부 `0x03/0x04` Quantity는 1~125, 외부 `0x10`은 1~123, `M485E_FrameRule.csv` Rule Quantity는 1~125로 제한한다. 초과 Quantity는 `0x03`, Address 범위 초과는 `0x02` Exception으로 처리한다. | Function별 경계값, Byte Count 불일치 및 최대 33개 CAN Message 시험 |
 | TBD-018 ◆ | 1차 구현은 Modbus Broadcast를 지원하지 않는다. DeviceMap은 Slave ID `1~247`만 허용하고 Wire의 `0`, `248~255`, 미등록·다른 Slave 프레임은 무응답·무적용으로 폐기한다. | CSV Slave 경계, Broadcast FC03/04/10 무응답·Register 불변 시험 |
-| TBD-048 ◆ | RTU ADU는 최대 256Byte, CRC는 Low Byte first, 19,200 이하에서는 실제 Character 기반 `t1.5/t3.5`, 초과에서는 750us/1,750us를 사용한다. CRC·Frame 경계 오류는 무응답이며 FC03/04/10의 길이·Exception·Partial I/O·FC10 적용 후 송신 실패 정책을 `FR-RTU-023~035`로 고정한다. | 공식 RTU Vector, Timing·Noise 재동기화, 최대 ADU, Partial Read/Write, Exception 및 FC10 원자성 시험 |
+| TBD-048 ◆ | RTU ADU는 최대 256Byte, CRC는 Low Byte first이며 Function별 예상 길이와 bounded CRC sliding으로 Windows Read 분할·병합을 복구한다. `t1.5/t3.5`는 실제 Serial 설정으로 계산하되 Read 완료 경계로 Frame을 폐기하지 않고 응답 전 `t3.5` Guard에 사용한다. | 공식 RTU Vector, Byte별 Timeout·Chunk 병합·Noise 재동기화, 최대 ADU, Partial Write, Exception 및 FC10 원자성 시험 |
 | TBD-049 ◆ | Device별 유효 Register는 Rule 범위와 Signal Frame 범위의 합집합이고 외부 권한은 Function별 Rule 범위 합집합이다. 연속 권한이면 여러 Rule 경계를 허용하며 Rule 전용 Register는 0으로 초기화하고 CAPL Direct API는 전체 유효 집합에 접근한다. | Rule/Map 교차 참조, 권한 공백, 인접 Rule 횡단, Init 0, Direct·RTU 접근 차이 및 Snapshot 중복 제거 시험 |
 | TBD-062 ◆ | Index/Rule ID `0~255`, Slave ID `1~247`, Direct Quantity `1~125`, Device 256·Rule 200·Signal 4,096, CSV 4MiB·행 4,096Byte와 문자열·Queue 최대값을 `IF-LIMIT-001~008`의 공개 계약으로 고정한다. | 모든 최대/초과 경계, x86 Peak 메모리, 문자열 Length/NUL, CSV 및 Queue Overflow 시험 |
 | TBD-014 ◆ | IEEE Float/Double은 Decode한 실수값 자체를 물리값으로 사용한다. Init/Write 값은 그대로 IEEE 형식으로 Encode하고 Read 값은 그대로 반환한다. CSV의 `Scale`은 명시적인 `1`, `Offset`은 빈 Cell 또는 `0`만 허용한다. | Float 32bit, Double 64bit의 양수·음수·소수 및 잘못된 Size/Scale/Offset 시험 |
@@ -1551,7 +1551,7 @@
 | `-3007` | `M485E_ERR_SERIAL_CANCEL_FAILED` | Critical | `ERR_SERIAL_CANCEL_FAILED` | Serial I/O 취소 실패 |
 | `-3008` | `M485E_ERR_SERIAL_DEVICE_REMOVED` | Error | `ERR_SERIAL_DEVICE_REMOVED` | USB-RS485 또는 COM 장치 제거·무효 Handle |
 | `-3009` | `M485E_ERR_SERIAL_WORKER_FAILED` | Critical | `ERR_SERIAL_WORKER_FAILED` | Port Worker 시작·실행·종료 실패 |
-| `-3010` | `M485E_ERR_RTU_FRAME_DISCARDED` | Warning | `ERR_RTU_FRAME_DISCARDED` | CRC, 길이, `t1.5` 또는 Frame 경계 오류로 요청 폐기 |
+| `-3010` | `M485E_ERR_RTU_FRAME_DISCARDED` | Warning | `ERR_RTU_FRAME_DISCARDED` | CRC, 길이, Noise 또는 bounded Stream 재동기화로 요청 폐기 |
 | `-3011` | `M485E_ERR_RTU_RESPONSE_FAILED` | Error | `ERR_RTU_RESPONSE_FAILED` | Register 적용 전·후 RTU 응답 생성 또는 송신 실패 |
 | `-3012` | `M485E_ERR_RTU_INTERNAL_FAILURE` | Critical | `ERR_RTU_INTERNAL_FAILURE` | Modbus Exception `0x04`에 대응하는 내부 RTU 처리 실패 |
 | `-4000` | `M485E_ERR_DEVICE_NOT_FOUND` | Error | `ERR_DEVICE_NOT_FOUND` | Device Index가 Active Configuration에 없음 |
@@ -1637,8 +1637,8 @@
 | CON-011 | `0x81` 변경 Snapshot은 Port별 256개 고정 용량 불변 Snapshot FIFO에 변경 당시 값을 저장하고 CAPL 10ms Output Pump가 원자적 단건 Dequeue로 Polling한다. VIA Callback과 DLL 직접 CAN 출력은 사용하지 않는다. Overflow 시 oldest-drop으로 최신 Snapshot과 RTU 동작을 유지하고 손실을 진단한다. | `FR-CAN-029`~`039`, `DES-CAN-010`~`015`, `IF-MON-006`~`012`, `ERR-008`, `LOG-005`~`006`, `PERF-008`~`009`, `AC-046`~`053`, `TBD-026` |
 | CON-012 | CAN Monitoring은 가상 CAN 전용이므로 물리 Bus Load 계산과 Performance Monitor 기반 Application Queue Load, 75/85/90% Warning·자동 정지·Critical Latch를 제거했다. 보호는 Output Pump Frame·실행시간 예산, Rule별 Latest-Wins Pending, Port별 256개 Change Queue, Deadline/Drop 진단과 실환경 처리량 시험으로 수행하며 RTU와 Register 처리는 독립적으로 유지한다. | `ENV-012`~`013`, `FR-CAN-032`~`048`, `FR-LOAD-001`~`019`, `LOG-001`~`003`, `LOG-007`~`008`, `PERF-004`~`019`, `AC-018`~`021`, `AC-027`, `AC-054`~`061`, `AC-175`~`176`, `AC-207`~`210`, `AC-231`, `TBD-012`, `TBD-013`, `TBD-024`, `TBD-029`, `TBD-040`, `TBD-053`, `TBD-054` |
 | CON-013 | Periodic Pending은 Register 데이터를 보관하는 Historical Queue가 아니라 Rule별 최신 Snapshot 요청 상태로 정의했다. Cycle Deadline Miss 시 최신 Generation 한 개로 병합하고 지속 Rule Cursor로 공정하게 처리하며, Missed Sample을 진단하되 Deadline Miss만으로 Monitoring을 정지하지 않는다. | `FR-CAN-022`, `FR-CAN-042`~`048`, `DES-CAN-005`, `DES-CAN-008`, `DES-CAN-017`~`018`, `FR-LOAD-012`, `LOG-008`, `PERF-011`~`012`, `AC-029`, `AC-057`~`061`, `TBD-027` |
-| CON-014 | Modbus 표준의 Slave Address `0` Broadcast를 부분 지원하지 않고 1차 범위에서 전체 미지원으로 확정했다. CSV는 Slave ID `1~247`만 허용하고 Wire의 Broadcast·예약·미등록·다른 Slave Frame은 무응답·무적용으로 폐기한다. | `FR-RTU-021`~`022`, `DES-RTU-003`, `DATA-DEV-005`, `ERR-039`~`040`, `COMP-014`, `AC-211`~`212`, `TBD-018` |
-| CON-015 | RTU 최대 ADU, CRC 순서, `t1.5/t3.5`, Frame 재동기화, FC03/04/10 길이와 Exception, Partial I/O 및 FC10 적용 후 응답 송신 실패의 비-Rollback 정책을 공식 Serial Line 규칙과 원자적 Write 기준으로 확정했다. | `FR-RTU-023`~`035`, `FR-PORT-021`, `DES-RTU-004`, `ERR-040`~`043`, `COMP-013`, `AC-213`~`218`, `TBD-048` |
+| CON-014 | Modbus 표준의 Slave ID `0` Broadcast를 부분 지원하지 않고 1차 범위에서 전체 미지원으로 확정했다. CSV는 Slave ID `1~247`만 허용하고 Wire의 Broadcast·예약·미등록·다른 Slave Frame은 무응답·무적용으로 폐기한다. Register Address `0`은 별개의 정상 16bit Address다. | `FR-RTU-021`~`022`, `DES-RTU-003`, `DATA-DEV-005`, `ERR-039`~`040`, `COMP-014`, `AC-211`~`212`, `TBD-018` |
+| CON-015 | RTU 최대 ADU, CRC 순서, Function별 예상 길이+bounded CRC sliding 재동기화, 응답 전 `t3.5` Guard, FC03/04/10 길이와 Exception, Partial I/O 및 FC10 적용 후 응답 송신 실패의 비-Rollback 정책을 공식 Serial Line 규칙과 Windows USB 특성을 함께 고려하여 확정했다. | `FR-RTU-023`~`035`, `FR-PORT-021`, `DES-RTU-004`, `ERR-040`~`043`, `COMP-013`, `AC-213`~`218`, `TBD-048` |
 | CON-016 | 1차 공개 숫자·문자열·CSV·Device/Rule/Signal·Queue 한도를 고정했다. 기존 최대값 축소와 같은 ABI에서 Buffer 의미 변경은 호환성을 깨는 변경으로 관리한다. | `IF-LIMIT-001`~`008`, `DATA-022`~`023`, `ERR-042`, `PERF-014`, `PERF-018`, `COMP-014`, `AC-224`~`228`, `TBD-062` |
 | CON-017 | 1차 RS-485 하드웨어를 자동 방향 제어 USB-RS485 Adapter로 한정하고 DLL의 RTS/GPIO 방향 제어와 Local Echo 제거를 후속 범위로 분리했다. | `ENV-014`~`015`, `FR-PORT-022`~`023`, `OOS-014`, `AC-229` |
 | CON-018 | Performance 기반 Critical Latch 제거에 맞춰 범용 Critical 상태 Latch도 추가하지 않는다. Lifecycle 결과와 Change/Error Queue 손실은 각 전용 Status, Latch 및 Counter로 조회한다. | `IF-ERR-015`, `LOG-005`, `LOG-013`, `AC-149`~`150`, `TBD-025` |
@@ -1674,7 +1674,7 @@
 | RISK-006 | 현재 저장소의 Prototype 코드·README·CAPL 예시는 신규 요구사항과 호환되지 않으며 구현 단계에서 혼재하면 잘못된 API와 Function Code가 다시 사용될 위험이 있다. `COMP-009`~`010`, `DOC-001`~`003`에 따라 교체한다. |
 | RISK-007 | 비동기 Lifecycle 완료 결과를 Error FIFO와 분리된 Status Latch로 보존하도록 확정했다. Latch와 Error Event 기록 순서 또는 Generation 갱신이 원자적이지 않으면 결과를 잘못 연결할 수 있으므로 `TBD-046`에서 검증한다. |
 | RISK-008 | 단일 Context와 모든 초기화 상태에서의 동기 Finalize 계약을 확정했다. 구현에서 Serial I/O 취소 또는 Worker Join이 완료되기 전에 Context를 해제하면 DLL Unload 후 접근이 발생할 수 있으므로 `TBD-047`, `TBD-057`의 종료·동기화 시험으로 검증한다. |
-| RISK-009 | Runtime 치명적 COM 장애는 현재 활성 Port 전체 정리와 제한 자동 재연결로 처리하고 RTU Stream Framing은 공식 `t1.5/t3.5` 규칙으로 확정했다. 구현에서 정상 유휴/Timeout을 장애로 오판하지 않는지는 `TBD-056`, 실제 Windows Timer 정밀도와 Partial I/O 재동기화는 `TBD-048`의 검증 항목으로 시험한다. |
+| RISK-009 | Runtime 치명적 COM 장애는 현재 활성 Port 전체 정리와 제한 자동 재연결로 처리한다. RTU Stream Parser는 Windows Read Timeout을 Frame 경계로 오판하지 않고 예상 길이+CRC로 복구하며, 실제 USB-RS485 Adapter의 Chunking·Noise와 응답 `t3.5` Guard는 `TBD-048`의 실환경 검증 항목으로 시험한다. |
 | RISK-010 | ReadOption은 CAPL 정적 Table로 모든 ModbusRule을 일대일 매핑하도록 확정했지만 별도 Rule Catalog API를 제공하지 않으므로 프로젝트 수정 시 CAPL Table과 CSV가 함께 갱신되지 않을 위험은 `TBD-050`의 Configuration 검사로 검증한다. Register 할당과 Function별 권한 합집합은 `TBD-049`의 확정 시험으로 검증한다. |
 | RISK-011 | Change Queue API는 PortSlot으로 통일했고 Write Buffer는 Capacity가 Quantity 이상이면 앞의 Quantity개만 사용하는 계약으로 확정했다. 구현 시 CAPL 고정 `word[]`의 `elcount()` 전달과 System Variable `long[]`에서 범위 검증 후 변환이 정확한지는 `TBD-051`, `TBD-063`에서 검증한다. |
 | RISK-012 | Refresh 실패 후 Last-good Configuration과 Register를 보존하되 성공한 Refresh 전 Connect를 차단하도록 확정했다. 구현에서 Active/Pending Path 세대가 섞이거나 실패한 임시 Memory가 노출되지 않는지는 `TBD-055`에서 검증한다. |

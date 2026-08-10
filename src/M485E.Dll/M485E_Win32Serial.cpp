@@ -3,7 +3,6 @@
 #include "M485E_Contracts.generated.h"
 
 #include <algorithm>
-#include <chrono>
 
 namespace m485e::platform
 {
@@ -126,45 +125,72 @@ core::SerialIoStatus Win32SerialTransport::ClassifyError(const std::uint32_t err
   return core::SerialIoStatus::FatalError;
 }
 
-core::SerialReadResult Win32SerialTransport::ReadByte(const std::uint32_t waitUs) noexcept
+core::SerialReadResult Win32SerialTransport::Read(std::uint8_t* const data,
+                                                  const std::size_t capacity,
+                                                  const std::uint32_t waitMs) noexcept
 {
+  if (data == nullptr || capacity == 0U)
+    return {core::SerialIoStatus::FatalError, 0, ERROR_INVALID_PARAMETER};
   const HANDLE handle = Handle();
   if (handle == INVALID_HANDLE_VALUE)
-    return {core::SerialIoStatus::FatalError, 0, NowUs(), ERROR_INVALID_HANDLE};
+    return {core::SerialIoStatus::FatalError, 0, ERROR_INVALID_HANDLE};
+
+  DWORD communicationErrors = 0;
+  COMSTAT status{};
+  if (!ClearCommError(handle, &communicationErrors, &status))
+  {
+    const DWORD resultError = GetLastError();
+    return {ClassifyError(resultError), 0, resultError};
+  }
+  if ((communicationErrors & (CE_FRAME | CE_OVERRUN | CE_RXOVER | CE_RXPARITY)) != 0U)
+    return {core::SerialIoStatus::RecoverableError, 0, communicationErrors};
+
+  const DWORD available = status.cbInQue;
+  const DWORD requested = static_cast<DWORD>(std::min<std::size_t>(
+      capacity, available == 0U ? 1U : static_cast<std::size_t>(available)));
   OVERLAPPED overlapped{};
   overlapped.hEvent = readEvent_;
   ResetEvent(readEvent_);
-  std::uint8_t value = 0;
   DWORD transferred = 0;
-  if (!ReadFile(handle, &value, 1, &transferred, &overlapped))
+  if (!ReadFile(handle, data, requested, &transferred, &overlapped))
   {
     const DWORD error = GetLastError();
     if (error != ERROR_IO_PENDING)
-      return {ClassifyError(error), 0, NowUs(), error};
-    const DWORD waitMs = std::max<DWORD>(1U, (waitUs + 999U) / 1000U);
-    const DWORD wait = WaitForSingleObject(readEvent_, waitMs);
+      return {ClassifyError(error), 0, error};
+    const DWORD wait = WaitForSingleObject(readEvent_, std::max<DWORD>(1U, waitMs));
     if (wait == WAIT_TIMEOUT)
     {
       // Cancel and wait for the OVERLAPPED request to complete before its stack object
-      // goes out of scope; Windows may otherwise write into invalid memory later.
+      // goes out of scope. A byte can win the race with cancellation, so preserve a
+      // successful completion rather than manufacturing a false idle boundary.
       CancelIoEx(handle, &overlapped);
       WaitForSingleObject(readEvent_, INFINITE);
-      return {core::SerialIoStatus::Timeout, 0, NowUs(), 0};
+      if (GetOverlappedResult(handle, &overlapped, &transferred, FALSE))
+        return transferred == 0U
+                   ? core::SerialReadResult{core::SerialIoStatus::Timeout, 0, 0}
+                   : core::SerialReadResult{core::SerialIoStatus::Data, transferred, 0};
+      const DWORD resultError = GetLastError();
+      if (resultError == ERROR_OPERATION_ABORTED)
+        return {core::SerialIoStatus::Timeout, 0, 0};
+      return {ClassifyError(resultError), 0, resultError};
     }
     if (wait != WAIT_OBJECT_0 || !GetOverlappedResult(handle, &overlapped, &transferred, FALSE))
     {
       const DWORD resultError = GetLastError();
-      return {ClassifyError(resultError), 0, NowUs(), resultError};
+      return {ClassifyError(resultError), 0, resultError};
     }
   }
-  if (transferred != 1U)
-    return {core::SerialIoStatus::Timeout, 0, NowUs(), 0};
-  DWORD communicationErrors = 0;
-  COMSTAT status{};
-  if (ClearCommError(handle, &communicationErrors, &status) &&
-      (communicationErrors & (CE_FRAME | CE_OVERRUN | CE_RXPARITY)) != 0U)
-    return {core::SerialIoStatus::RecoverableError, 0, NowUs(), communicationErrors};
-  return {core::SerialIoStatus::Data, value, NowUs(), 0};
+  if (transferred == 0U) return {core::SerialIoStatus::Timeout, 0, 0};
+  communicationErrors = 0;
+  status = {};
+  if (!ClearCommError(handle, &communicationErrors, &status))
+  {
+    const DWORD resultError = GetLastError();
+    return {ClassifyError(resultError), 0, resultError};
+  }
+  if ((communicationErrors & (CE_FRAME | CE_OVERRUN | CE_RXOVER | CE_RXPARITY)) != 0U)
+    return {core::SerialIoStatus::RecoverableError, 0, communicationErrors};
+  return {core::SerialIoStatus::Data, transferred, 0};
 }
 
 core::SerialWriteResult Win32SerialTransport::Write(const std::uint8_t* data,
@@ -199,14 +225,6 @@ core::SerialWriteResult Win32SerialTransport::Write(const std::uint8_t* data,
     }
   }
   return {core::SerialIoStatus::Data, transferred, 0};
-}
-
-std::uint64_t Win32SerialTransport::NowUs() const noexcept
-{
-  return static_cast<std::uint64_t>(
-      std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count());
 }
 
 void Win32SerialTransport::Cancel() noexcept

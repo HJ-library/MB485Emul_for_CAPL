@@ -73,7 +73,15 @@ Require-Match $monitoring 'gM485E_MonitoringMessage\.DLC\s*=\s*count\s*\*\s*2' '
 Require-Match $monitoring 'struct\s+M485E_MonitoringState' `
     'Monitoring scheduler state struct is missing.'
 Require-Match $monitoring 'gM485E_MonitoringState\.changeStartPort' `
-    'Two-Port round-robin state is missing.'
+    'Change Snapshot Port round-robin state is missing.'
+Require-Match $monitoring 'periodicCursor\s*\[\s*M485E_PORT_SLOT_COUNT\s*\]' `
+    'Periodic Monitoring must keep one persistent cursor per Port.'
+Require-Match $monitoring 'gM485E_MonitoringState\.periodicStartPort' `
+    'Periodic Monitoring Port round-robin start state is missing.'
+Require-Match $monitoring 'M485E_Monitoring_TryOnePeriodic\s*\(long\s+portSlot,\s*long\s+remainingFrames\)' `
+    'Periodic Monitoring must schedule each Port through the per-Port helper.'
+Require-Match $monitoring 'gM485E_ReadOptions\[slot\]\.portSlot\s*==\s*portSlot' `
+    'Periodic Monitoring must filter each ReadOption by its resolved PortSlot.'
 Require-Match $monitoring 'M485E_Monitoring_GetReadOptionCount' `
     'Monitoring ReadOption count accessor is missing.'
 
