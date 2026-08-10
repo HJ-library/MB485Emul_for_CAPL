@@ -17,10 +17,13 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | Board | Modbus RTU Master로 FC03·FC04 Read와 FC10 Write 요청 전송 |
 | SystemBase Multi USB-485 | 자동 방향 제어 방식으로 PC와 Board의 RS-485 연결 |
 | `M485E.dll` | CSV 검증, 장치/Register 상태, RTU Slave, Queue와 연결 수명주기 처리 |
-| CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 오류를 Write Window에 출력 |
-| CAPL Monitoring | 선택 Rule을 읽어 가상 CAN Header/Data Message로 변환 |
-| CAPL UI | System Variable의 Connect, Refresh, Read/Write, Signal 조작을 Core에 전달 |
+| CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
+| CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
+| CAPL UI | Panel/System Variable 요청을 캡처해 Core 또는 Monitoring 진입점에 전달 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
+
+Core만 `M485E_Dll_*`을 직접 호출한다. UI는 System Variable과 Panel 표현을, Monitoring은
+CAN Message 생성과 스케줄링을 소유하며 Core는 두 표현 계층에 의존하지 않는다.
 
 RS-485 Port Slot 0~3은 Main에 설정한 가상 CAN Channel과 1:1로 대응한다. 기본 1-Port
 예제는 Slot 0을 Channel 1에 출력한다. 가상 CAN은 외부

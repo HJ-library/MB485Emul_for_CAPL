@@ -1,5 +1,8 @@
 /*@!Encoding:949*/
 
+// Core는 CAPL과 DLL 사이의 단일 경계이다.
+// Context, ABI 변환, 공통 오류 처리만 담당하며 System Variable, CAN 출력, Timer에 의존하지 않는다.
+
 variables
 {
      // CAPL 노드별 DLL Context와 오류 조회용 공용 버퍼이다.

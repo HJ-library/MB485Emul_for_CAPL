@@ -1,5 +1,8 @@
 /*@!Encoding:949*/
 
+// Monitoring은 ReadOption, Snapshot의 CAN 변환, Timer와 Port별 스케줄링을 담당한다.
+// DLL은 Core Wrapper로만 호출하며 System Variable 선택값은 UI를 통해 전달받는다.
+
 variables
 {
      // Panel의 ReadOption 한 칸과 실제 적용 상태를 함께 보관한다.

@@ -197,7 +197,7 @@
 | FR-LIFE-001 | CAPL Panel에 Connect 제어 기능을 제공한다. |
 | FR-LIFE-002 | Connect 동작으로 DLL의 COM 통신 및 Modbus RTU Emulator를 Start한다. |
 | FR-LIFE-003 | Disconnect 동작으로 DLL의 COM 통신 및 Modbus RTU Emulator를 Stop한다. |
-| FR-LIFE-004 | `ReadSwitch`는 CAPL UI 입력이며 값 변경 Handler가 `M485E_Core_StartMonitoring()` 또는 `M485E_Core_StopMonitoring()`을 호출한다. DLL은 ReadSwitch 복제 상태를 별도로 두지 않고 하나의 `MonitoringEnabled` 상태만 관리한다. |
+| FR-LIFE-004 | `ReadSwitch`는 CAPL UI 입력이며 값 변경 Handler가 `M485E_Monitoring_Start()` 또는 `M485E_Monitoring_Stop()`을 호출한다. Monitoring 함수는 CAPL 출력 Timer를 함께 시작·중지하면서 각각 `M485E_Core_StartMonitoring()` 또는 `M485E_Core_StopMonitoring()`을 호출한다. DLL은 ReadSwitch 복제 상태를 별도로 두지 않고 하나의 `MonitoringEnabled` 상태만 관리한다. |
 | FR-LIFE-005 | Connect 상태라도 `ReadSwitch`가 ON이 아니면 Monitoring을 시작하지 않는다. |
 | FR-LIFE-006 | `ReadSwitch`가 OFF여도 Modbus RTU 통신은 계속 동작한다. |
 | FR-LIFE-007 | Connect와 ReadSwitch 조건이 처음 충족되어 Monitoring을 시작할 때 현재 Applied ReadOption Rule을 기존 `0x80` Periodic Pending으로 즉시 한 번 등록하고 이후 1,000ms 공통 Cycle을 적용한다. |
@@ -347,7 +347,7 @@
 | FR-CAN-048 | Cycle Deadline Miss 또는 CANalyzer Performance Monitor 값만으로 Monitoring을 자동 정지하지 않는다. bounded Output Pump, Latest-Wins Coalescing과 Queue Overflow 진단으로 Best-effort 처리를 계속한다. |
 | FR-CAN-049 | CAN Header Byte 4~5의 Address는 CSV와 CAPL API에서 사용하는 16bit 직접 Address를 High Byte 우선으로 저장하며 Function Code 기반 변환이나 `±1` 보정을 하지 않는다. |
 | FR-CAN-050 | Rule Quantity는 최대 125 Register이며 하나의 Rule Snapshot은 최대 Header 1개와 Data Message 32개, 총 33개 CAN Message로 제한한다. |
-| FR-CAN-051 | `ReadSwitch`는 CAPL Core의 Start/Stop API를 통해 DLL의 단일 `MonitoringEnabled` 상태를 제어하는 모든 활성 Port의 Master Switch이며 `0x80` Periodic과 `0x81` Change Snapshot 생성·출력을 모두 제어한다. ReadSwitch OFF는 Modbus RTU와 Register/Signal API 동작을 중단하지 않는다. |
+| FR-CAN-051 | `ReadSwitch`는 CAPL Monitoring의 Start/Stop 진입점을 통해 CAPL 출력 Timer와 DLL의 단일 `MonitoringEnabled` 상태를 함께 제어하는 모든 활성 Port의 Master Switch이며 `0x80` Periodic과 `0x81` Change Snapshot 생성·출력을 모두 제어한다. ReadSwitch OFF는 Modbus RTU와 Register/Signal API 동작을 중단하지 않는다. |
 | FR-CAN-052 | 개별 `ReadOption`은 해당 `Index + RuleId`의 `0x80` Periodic 선택에만 적용한다. ReadSwitch가 ON이면 ReadOption이 OFF인 Rule도 값 변경 원인에 따라 `0x81` 대상이 될 수 있다. |
 | FR-CAN-053 | ReadSwitch OFF Handler가 `StopMonitoring`을 호출하거나 다른 CAPL 코드가 같은 API를 호출하면 모든 Periodic Pending과 Port별 Change Queue를 제거한다. 제거된 Change Snapshot 수는 Port별 `SuppressedCount`에 포화 합산하고 과거 Snapshot은 다음 Start에서 재생하지 않는다. |
 | FR-CAN-054 | ReadSwitch OFF 중 RTU Write, CAPL Direct Write 및 Default Reset은 Register에 정상 적용하되 `0x81` Snapshot을 Queue에 적재하지 않고 생성됐어야 할 Rule Snapshot 수만큼 해당 Port의 `SuppressedCount`만 증가시킨다. Suppressed Snapshot에는 Sequence를 할당하지 않는다. |
@@ -849,7 +849,7 @@
 | DES-IF-001 | CAPL 사용자는 `M485E_Core_WriteRegisters`만 호출하며 `M485E_Dll_WriteRegisters`의 `ArrayLength`는 Core Wrapper가 자동으로 채운다. |
 | DES-IF-002 | 배열 길이와 Write 유효성에 대한 최종 판단 및 오류 반환은 DLL이 담당하고 CAPL은 반환 오류를 Write Window에 출력한다. |
 | DES-IF-003 | Register Read는 범용 Core API가 호출자 소유의 `OutRegisters[]` 출력 Buffer를 받는 방식을 유지한다. Panel 전용 Wrapper는 이 범용 API를 내부 호출할 수 있지만 전역 결과 Buffer를 사용하지 않는다. |
-| DES-IF-004 | Panel Signal, 수동 Register 및 CAN Monitoring 경로는 동일한 상태 코드와 caller-owned 출력 계약을 사용하고, CAPL Core가 출력값을 System Variable·Panel 또는 CAN Message로 전달한다. |
+| DES-IF-004 | Panel Signal, 수동 Register 및 CAN Monitoring 경로는 동일한 상태 코드와 caller-owned 출력 계약을 사용한다. CAPL Core는 DLL ABI와 Context를 감추고 호출자가 제공한 결과 Buffer에 기록하며, UI는 그 결과를 System Variable·Panel에, Monitoring은 CAN Message에 전달한다. |
 | DES-IF-005 | Panel System Variable은 UI 입력·표시 Adapter로만 사용하고, 실행할 수동 Register 요청의 기준 상태는 `Send` 시점에 생성한 Private CAPL 구조체 Snapshot으로 관리한다. 이를 통해 Panel 편집 중간 상태와 DLL 실행 상태를 분리한다. |
 
 ### 5.6 Signal 인터페이스
@@ -1291,7 +1291,7 @@
 | AC-128 | IF-RET-001~006, IF-SIG-005 | Signal Read 성공 시 상태 코드와 `OutPhysicalValue`가 함께 유효하고, Signal을 찾지 못하거나 정밀도 오류가 발생하면 해당 상태 코드를 반환하면서 호출 전 `OutPhysicalValue`를 유지한다. |
 | AC-129 | IF-RET-002~004, IF-REG-010~012 | Register Read 성공 시 정확히 Quantity개의 `OutRegisters[]`만 갱신하고 Index·Address·Quantity·Buffer 오류 시 출력 배열 전체를 호출 전 상태로 유지한다. |
 | AC-130 | IF-RET-002~004, IF-MON-007~010 | Monitoring Snapshot Dequeue 성공 시 Metadata와 Register Buffer를 함께 갱신하고 No Data 또는 오류 상태에서는 두 출력과 Queue를 변경하지 않는다. |
-| AC-131 | IF-RET-002, DES-IF-004 | Signal Read 출력은 CAPL이 System Variable과 Panel에 반영하고 Snapshot 출력은 CAPL Core가 `0x80`/`0x81` CAN Message로 변환하며 DLL 출력 파라미터 자체를 Panel이나 CAN Message로 취급하지 않는다. |
+| AC-131 | IF-RET-002, DES-IF-004 | Signal Read 출력은 CAPL UI가 System Variable과 Panel에 반영하고 Snapshot 출력은 CAPL Monitoring이 `0x80`/`0x81` CAN Message로 변환하며 DLL 출력 파라미터 자체를 Panel이나 CAN Message로 취급하지 않는다. |
 | AC-132 | IF-CORE-001~008 | CAPL 사용자는 `M485E_Core_*` 계층에서 설정, Connect/Disconnect, Monitoring, Register, Signal 및 진단 기능을 호출할 수 있고 DLL 내부 Worker·Queue·Memory·Serial Handle을 직접 조작할 수 없다. |
 | AC-133 | FR-PORT-001~002, FR-PORT-018~020 | DeviceMap에서 COM3에 여러 Slave_ID, COM4에 하나의 Slave_ID가 있어도 CAPL은 COM3과 COM4 설정 및 서로 다른 PortSlot을 각각 한 번만 전달하고 같은 Port의 모든 Device가 해당 설정과 Slot을 공유한다. |
 | AC-134 | FR-PORT-003~005 | Port 설정 API에는 Flow Control, Response Timeout 및 Inter-frame Timeout 입력이 없고 DLL은 Flow Control None과 계산된 RTU Timing으로 동작한다. |
@@ -1391,7 +1391,7 @@
 | AC-227 | IF-LIMIT-006, ERR-032, PERF-014 | Change Queue와 Error Event FIFO Capacity는 각각 256으로 조회되며 257번째 이벤트에서 확정된 oldest-drop·Counter·Latch 정책을 적용하고 RTU 요청 처리를 중단하지 않는다. |
 | AC-228 | FR-RTU-034~035, PERF-017~018 | 여러 활성 Port에서 조각난 RTU Frame과 연속 요청을 동시에 입력해도 Port별 Frame 순서와 응답이 보존되고 다른 Port가 장시간 차단되지 않는다. 최대 Configuration과 Refresh 임시 복사 Peak 메모리가 목표 x86 CANalyzer Process에서 측정·기록된다. |
 | AC-229 | ENV-014~015, FR-PORT-022~023 | 자동 방향 제어 USB-RS485 Adapter에서는 RTU 요청·응답이 정상 동작하고 DLL이 RTS를 방향 제어용으로 변경하지 않는다. Local Echo 또는 수동 DE/RE 제어가 필요한 Adapter는 지원 대상으로 판정하지 않는다. |
-| AC-230 | FR-LIFE-004 | ReadSwitch ON/OFF Handler가 각각 Core Start/Stop API를 한 번 호출하고 DLL에는 UI 상태와 별개인 중복 Switch 없이 하나의 MonitoringEnabled 상태만 존재한다. |
+| AC-230 | FR-LIFE-004 | ReadSwitch ON/OFF Handler가 각각 Monitoring Start/Stop 진입점을 한 번 호출하고, 해당 진입점이 CAPL Timer와 Core Start/Stop API를 함께 제어하며, DLL에는 UI 상태와 별개인 중복 Switch 없이 하나의 MonitoringEnabled 상태만 존재한다. |
 | AC-231 | FR-LOAD-006, FR-LOAD-019, PERF-019 | CAPL 코드의 `MaxFramesPerTick` 상수가 33 이상임을 확인하고 Quantity 125의 33 Frame Snapshot이 Tick 중간에서 분할되거나 영구 대기하지 않는다. 실제 실행시간이 Tick 예산을 초과하면 묶음을 완료한 뒤 Overrun을 진단하며 최종 예산은 CANalyzer 9.x SP8 실측값으로 기록한다. |
 | AC-232 | DES-REG-006, DES-THREAD-001~005 | 여러 활성 Port의 RTU Write와 CAPL Direct Write/Read/Reset을 동시에 반복해도 부분 Register 변경, Snapshot 순서 역전, Deadlock, COM Handle 다중 접근 또는 Finalize 후 Worker 접근이 발생하지 않는다. |
 | AC-233 | NFR-012 | 로컬 CSV 경로는 읽기 전용으로 열리고 UNC·네트워크 경로와 권한 부족 경로는 권한 상승 없이 명시적 오류로 거부된다. 구성된 Port의 Modbus 요청에는 별도 인증 절차를 적용하지 않는다. |
@@ -1642,7 +1642,7 @@
 | CON-016 | 1차 공개 숫자·문자열·CSV·Device/Rule/Signal·Queue 한도를 고정했다. 기존 최대값 축소와 같은 ABI에서 Buffer 의미 변경은 호환성을 깨는 변경으로 관리한다. | `IF-LIMIT-001`~`008`, `DATA-022`~`023`, `ERR-042`, `PERF-014`, `PERF-018`, `COMP-014`, `AC-224`~`228`, `TBD-062` |
 | CON-017 | 1차 RS-485 하드웨어를 자동 방향 제어 USB-RS485 Adapter로 한정하고 DLL의 RTS/GPIO 방향 제어와 Local Echo 제거를 후속 범위로 분리했다. | `ENV-014`~`015`, `FR-PORT-022`~`023`, `OOS-014`, `AC-229` |
 | CON-018 | Performance 기반 Critical Latch 제거에 맞춰 범용 Critical 상태 Latch도 추가하지 않는다. Lifecycle 결과와 Change/Error Queue 손실은 각 전용 Status, Latch 및 Counter로 조회한다. | `IF-ERR-015`, `LOG-005`, `LOG-013`, `AC-149`~`150`, `TBD-025` |
-| CON-019 | ReadSwitch는 CAPL UI에서 Core Start/Stop을 호출하는 입력으로만 사용하고 DLL에는 하나의 MonitoringEnabled 상태만 둔다. | `FR-LIFE-004`~`006`, `AC-230` |
+| CON-019 | ReadSwitch는 CAPL UI에서 Monitoring Start/Stop 진입점을 호출하는 입력으로만 사용하고, Monitoring은 CAPL Timer와 Core Start/Stop을 함께 제어하며, DLL에는 하나의 MonitoringEnabled 상태만 둔다. | `FR-LIFE-004`~`006`, `AC-230` |
 | CON-020 | Port별 Worker 단독 COM 소유, Device별 Register Lock, Port별 Change Queue Lock과 고정 Lock 순서로 동시성 구조를 확정하고 Runtime Queue는 사전 할당된 bounded 저장소를 사용한다. | `DES-REG-006`, `DES-THREAD-001`~`005`, `AC-232`, `TBD-057` |
 | CON-021 | DBC 변환기, UNC CSV 경로 및 범용 Driver Plug-in 구조는 1차 Emulator 범위에서 제외하고 필요한 데이터와 최소 시험 경계만 유지한다. | `DES-RTU-005`, `NFR-012`, `COMP-006`, `OOS-013`, `OOS-015`, `AC-233`, `AC-235`~`236` |
 

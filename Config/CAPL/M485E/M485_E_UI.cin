@@ -1,5 +1,8 @@
 /*@!Encoding:949*/
 
+// UI는 Panel/System Variable 입력을 요청으로 변환하고 처리 결과를 다시 표시한다.
+// DLL을 직접 호출하지 않으며 Core 또는 Monitoring의 공개 CAPL 함수만 사용한다.
+
 variables
 {
      // 수동 Register Read 요청이다. Quantity는 16-bit Register 개수이다.
@@ -90,7 +93,7 @@ long M485E_UI_ExecuteWrite(struct M485E_ManualWriteRequest request)
      return result;
 }
 
-// ConnectSwitch가 바뀌면 두 Serial Port의 Connect 또는 Disconnect를 요청한다.
+// ConnectSwitch가 바뀌면 모든 활성 Serial Port의 Connect 또는 Disconnect를 요청한다.
 on sysvar_update sysvar::M485E::Connection::ConnectSwitch
 {
      long result;

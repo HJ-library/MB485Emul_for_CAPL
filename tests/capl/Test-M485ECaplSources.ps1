@@ -20,6 +20,38 @@ $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
 $ui = Get-Content -LiteralPath $uiPath -Raw
 $main = Get-Content -LiteralPath $mainPath -Raw
 
+# CAPL 모듈은 Core를 단일 DLL 경계로 사용한다. 이 검사는 기능 이름의 존재 여부뿐 아니라
+# 의존 방향까지 고정하여 UI/Monitoring의 편의 코드가 Core 책임을 침범하는 회귀를 막는다.
+if ($ui -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL UI must not call M485E_Dll_* directly; use a Core wrapper.'
+}
+if ($monitoring -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Monitoring must not call M485E_Dll_* directly; use a Core wrapper.'
+}
+if ($ui -match '\b(?:gM485E_Context(?:Handle|Registered|Initialized)|registerCAPLDLL)\b' -or
+    $monitoring -match '\b(?:gM485E_Context(?:Handle|Registered|Initialized)|registerCAPLDLL)\b') {
+    throw 'CAPL UI and Monitoring must not access the DLL Context or registration API.'
+}
+if ($core -match '\bM485E_(?:UI|Monitoring)_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Core must not depend on UI or Monitoring functions.'
+}
+if ($monitoring -match '\bM485E_UI_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Monitoring must not depend on UI functions.'
+}
+if ($core -match '(?:@?sysvar::|\bsys(?:Get|Set)Variable[A-Za-z0-9_]*\s*\()') {
+    throw 'CAPL Core must not depend on System Variables; keep adapters in UI.'
+}
+if ($monitoring -match '(?:@?sysvar::|\bsys(?:Get|Set)Variable[A-Za-z0-9_]*\s*\()') {
+    throw 'CAPL Monitoring must not depend on System Variables; synchronize them through UI.'
+}
+if ($core -match '\b(?:msTimer|timer)\s+[A-Za-z_]' -or
+    $core -match '\b(?:setTimer|cancelTimer|output)\s*\(') {
+    throw 'CAPL Core must not own timers or CAN output.'
+}
+if ($ui -match '\boutput\s*\(') {
+    throw 'CAPL UI must not output CAN messages; keep CAN serialization in Monitoring.'
+}
+
 $apiNames = [regex]::Matches($apiHeader, 'M485E_API\s+(M485E_Dll_[A-Za-z0-9_]+)\s*\(') |
     ForEach-Object { $_.Groups[1].Value }
 if ($apiNames.Count -ne 21) { throw "Expected 21 public APIs, found $($apiNames.Count)." }
@@ -170,4 +202,4 @@ foreach ($device in Import-Csv -LiteralPath $deviceMapPath) {
     }
 }
 
-Write-Output 'M485E CAPL source contract checks PASS: 21 wrappers, monitoring policy, UI adapter, XML, and probe inputs.'
+Write-Output 'M485E CAPL source contract checks PASS: 21 wrappers, module boundaries, monitoring policy, UI adapter, XML, and probe inputs.'
