@@ -164,6 +164,13 @@ int main(int argc, char** argv)
     return Fail("Fixture LoadLibrary failed: " + std::to_string(GetLastError()));
   }
 
+  if (GetProcAddress(productionModule, "VIARegisterCDLL") == nullptr)
+  {
+    FreeLibrary(fixtureModule);
+    FreeLibrary(productionModule);
+    return Fail("Production VIARegisterCDLL export is missing.");
+  }
+
   CAPL_DLL_INFO4* table = LoadTable(productionModule);
   CAPL_DLL_INFO4* fixtureTable = LoadTable(fixtureModule);
   if (!VerifyTable(table, kProductionExpected, std::size(kProductionExpected), "Production table") ||
@@ -334,6 +341,6 @@ int main(int argc, char** argv)
 
   FreeLibrary(fixtureModule);
   FreeLibrary(productionModule);
-  std::cout << "PASS: Win32/x86 production table has exactly 21 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
+  std::cout << "PASS: Win32/x86 VIA registration export and production table with exactly 21 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
   return 0;
 }

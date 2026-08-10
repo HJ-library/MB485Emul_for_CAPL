@@ -52,12 +52,14 @@
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
+      <ModuleDefinitionFile>M485E.def</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="M485E_CaplTable.cpp" />
     <ClCompile Include="M485E_DllApi.cpp" />
+    <ClCompile Include="M485E_ViaRegistration.cpp" />
     <ClCompile Include="M485E_Win32Serial.cpp" />
     <ClCompile Include="M485E_Connection.cpp" />
   </ItemGroup>
@@ -67,6 +69,9 @@
     <ClInclude Include="M485E_DllApi.h" />
     <ClInclude Include="M485E_Win32Serial.h" />
     <ClInclude Include="M485E_Connection.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="M485E.def" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\M485E.Core\M485E.Core.vcxproj">
