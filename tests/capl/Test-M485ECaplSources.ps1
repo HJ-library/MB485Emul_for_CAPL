@@ -125,12 +125,23 @@ $requiredFiles = @(
     'tests\capl\M485E_Phase9_CoreMonitoringProbe.can',
     'Config\CAPL\M485E\M485_E_Main.can',
     'Config\Maps\M485E_DeviceMap.csv',
-    'Config\Maps\M485E_FrameRule.csv',
-    'Config\Maps\M485E_RegisterMap.csv'
+    'Config\Maps\M485E_FrameRule.csv'
 )
 foreach ($relativePath in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf)) {
         throw "Missing CAPL verification input: $relativePath"
+    }
+}
+
+$deviceMapPath = Join-Path $root 'Config\Maps\M485E_DeviceMap.csv'
+$deviceMapDirectory = Split-Path -Parent $deviceMapPath
+foreach ($device in Import-Csv -LiteralPath $deviceMapPath) {
+    if ([string]::IsNullOrWhiteSpace($device.CSV_DB_Name)) {
+        throw "Device Index $($device.Index) has no CSV_DB_Name."
+    }
+    $registerMapPath = Join-Path $deviceMapDirectory $device.CSV_DB_Name
+    if (-not (Test-Path -LiteralPath $registerMapPath -PathType Leaf)) {
+        throw "Device Index $($device.Index) references a missing Register Map: $($device.CSV_DB_Name)"
     }
 }
 

@@ -1,3 +1,3 @@
 Index,Port,Slave_ID,Device_Name,CSV_DB_Name
-0,COM11,1,Phase9 Device A,
-1,COM12,1,Phase9 Device B,
+0,COM11,1,Phase9 Device A,M485E_DeviceA_RegisterMap.csv
+1,COM12,1,Phase9 Device B,M485E_DeviceB_RegisterMap.csv

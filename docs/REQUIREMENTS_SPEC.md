@@ -119,21 +119,21 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| FR-REG-001 | `M485E_RegisterMap.csv`에 정의된 Register 값은 DLL 메모리에 로딩한다. |
+| FR-REG-001 | DeviceMap이 참조한 Register Map에 정의된 Register 값은 DLL 메모리에 로딩한다. |
 | FR-REG-002 | DLL의 유효 Register 집합에 할당된 모든 Address는 CAPL에서 직접 읽고 변경할 수 있다. |
 | FR-REG-003 | CAPL 수동 Read는 Debug 기능으로 동작하며 Function Code를 받지 않는다. |
 | FR-REG-004 | CAPL 수동 Read에서는 `0x03`과 `0x04` Rule에 속한 Address를 모두 읽을 수 있어야 한다. |
 | FR-REG-005 | CAPL 수동 Write 데이터는 `Index`, `Start Address`, `Quantity`, 16bit `Data[]`로 구성한다. |
 | FR-REG-006 | CAPL 직접 Register 변경은 `SourceType 0x02` 변경 Snapshot을 발생시킨다. |
 | FR-REG-007 | Register 저장소는 Function Code별로 분리하지 않고 `Index + Address`로 식별되는 하나의 공유 Register Memory를 사용한다. |
-| FR-REG-008 | `M485E_FrameRule.csv` Rule 범위 또는 `M485E_RegisterMap.csv` Signal Frame 범위에 의해 할당된 모든 Address는 CAPL Direct API에서 Function Code 없이 Read/Write할 수 있다. |
+| FR-REG-008 | `M485E_FrameRule.csv` Rule 범위 또는 해당 Device의 Register Map Signal Frame 범위에 의해 할당된 모든 Address는 CAPL Direct API에서 Function Code 없이 Read/Write할 수 있다. |
 | FR-REG-009 | 동일한 `Index + Address`가 `0x03` Rule과 `0x04` Rule에 함께 포함되면 두 Rule은 같은 Register 값을 참조한다. |
 | FR-REG-010 | Register Write 후 실제 값이 변경된 경우에만 변경 범위와 겹치는 모든 Rule에 Rule당 한 번씩 변경 Snapshot을 생성한다. |
 | FR-REG-011 | 외부 RTU `0x10`에 의한 변경 Snapshot은 `SourceType 0x01`, CAPL Direct Write에 의한 변경 Snapshot은 `SourceType 0x02`를 사용한다. |
 | FR-REG-012 | 기존 값과 동일한 값을 다시 Write한 경우 변경 Snapshot을 생성하지 않는다. |
-| FR-REG-013 | Device Index별 유효 Register 집합은 모든 `M485E_FrameRule.csv` 범위 `[Address, Address+Quantity-1]`와 모든 `M485E_RegisterMap.csv` Frame 범위 `[Address, Address+(Length/2)-1]`의 합집합이다. |
+| FR-REG-013 | Device Index별 유효 Register 집합은 모든 `M485E_FrameRule.csv` 범위 `[Address, Address+Quantity-1]`와 해당 Device의 Register Map Frame 범위 `[Address, Address+(Length/2)-1]`의 합집합이다. |
 | FR-REG-014 | 최초 Load와 Refresh는 유효 Register 집합 전체를 0으로 초기화한 뒤 Signal `Init_Value`를 합성한다. Signal Map이 없는 Rule 전용 Register와 Signal이 사용하지 않는 Frame Bit는 0을 유지한다. |
-| FR-REG-015 | CAPL Direct Read/Write 요청은 요청 범위의 모든 Register가 유효 Register 집합에 빈틈없이 포함될 때만 허용한다. Signal API는 `M485E_RegisterMap.csv`에 정의된 Signal에만 접근한다. |
+| FR-REG-015 | CAPL Direct Read/Write 요청은 요청 범위의 모든 Register가 유효 Register 집합에 빈틈없이 포함될 때만 허용한다. Signal API는 해당 Device의 Register Map에 정의된 Signal에만 접근한다. |
 | FR-REG-016 | 외부 FC03, FC04 및 FC10 권한은 유효 Register 집합과 별도로 Function별 Rule 범위 합집합으로 관리한다. Map에만 존재하고 해당 Function Rule에 포함되지 않은 Register는 CAPL Direct API로는 접근할 수 있지만 외부 RTU에서는 접근할 수 없다. |
 | FR-REG-017 | 하나의 Direct 또는 RTU 요청 범위에 할당 또는 Function 권한 공백이 하나라도 있으면 부분 Read/Write하지 않고 전체 요청을 거부한다. |
 | FR-REG-018 | 하나의 원자적 Write가 여러 Rule 범위와 겹치면 실제 값이 변경된 Rule을 중복 제거하고 각 영향 Rule에 대해 한 번씩 전체 Rule Snapshot을 생성한다. |
@@ -244,9 +244,9 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| FR-CSV-001 | 세 CSV의 프로젝트별 상대경로는 CAPL `Main.can`에서 각각 관리하고 CANalyzer 시작 시 설정한다. |
-| FR-CSV-002 | 문서와 기본 예시의 논리 파일명은 `M485E_DeviceMap.csv`, `M485E_FrameRule.csv`, `M485E_RegisterMap.csv`로 하되 실제 파일명은 프로젝트마다 다르게 지정할 수 있으며, 지정된 세 파일을 DLL 메모리로 로딩한다. |
-| FR-CSV-003 | CAPL에서 세 CSV 설정을 재로딩할 수 있어야 한다. |
+| FR-CSV-001 | `M485E_DeviceMap.csv`와 `M485E_FrameRule.csv`의 프로젝트별 상대경로는 CAPL `Main.can`에서 각각 관리하고 CANalyzer 시작 시 설정한다. 각 Register Map 경로는 DeviceMap의 `CSV_DB_Name`으로 지정한다. |
+| FR-CSV-002 | 문서와 기본 예시의 논리 파일명은 `M485E_DeviceMap.csv`, `M485E_FrameRule.csv` 및 장치 유형별 Register Map으로 한다. 실제 파일명은 프로젝트마다 변경할 수 있고 Register Map 수는 장치 유형 구성에 따라 달라질 수 있다. |
+| FR-CSV-003 | CAPL에서 DeviceMap, FrameRule 및 그 DeviceMap이 참조하는 모든 Register Map 설정을 함께 재로딩할 수 있어야 한다. |
 | FR-CSV-004 | CSV 재로딩은 기존 Register 값을 유지하는 갱신이 아니라 전체 메모리 Refresh로 동작한다. |
 | FR-CSV-005 | Refresh 성공 시 기존 런타임 Register 값을 폐기하고 새 CSV의 `Init_Value`를 적용한다. |
 | FR-CSV-006 | Refresh는 Emulator가 Disconnect 상태일 때만 허용한다. |
@@ -254,15 +254,17 @@
 | FR-CSV-008 | CSV 파일 자체는 런타임 Register 변경으로 수정하지 않는다. |
 | FR-CSV-009 | 최초 Load와 Refresh는 신규 Register Memory를 0으로 초기화한 임시 구성에 모든 Init 변환을 적용하고, 전체 검증과 변환이 성공한 경우에만 현재 설정과 Memory를 원자적으로 교체한다. |
 | FR-CSV-010 | Signal Map에 의해 초기화되지 않은 할당 Register 및 Frame Bit의 초기값은 0으로 한다. |
-| FR-CSV-011 | CAPL은 각 CSV 상대경로를 `getAbsFilePath()`로 현재 CANalyzer Configuration(`*.cfg`) 디렉터리 기준의 절대경로로 변환한 후 DLL에 전달한다. |
+| FR-CSV-011 | CAPL은 DeviceMap과 FrameRule 상대경로를 `getAbsFilePath()`로 현재 CANalyzer Configuration(`*.cfg`) 디렉터리 기준의 절대경로로 변환한 후 DLL에 전달한다. |
 | FR-CSV-012 | CAPL 코드와 System Variable에는 PC 또는 프로젝트 위치에 종속되는 절대경로를 하드코딩하지 않는다. |
-| FR-CSV-013 | DLL은 `Maps` 디렉터리를 검색하거나 고정 파일명을 조합하지 않고 CAPL이 논리 파일 종류별로 지정한 정확한 파일만 사용한다. |
-| FR-CSV-014 | DLL에 전달하는 CSV 경로는 절대경로여야 하며, DLL은 상대경로의 기준 디렉터리를 추정하지 않는다. |
-| FR-CSV-015 | 세 CSV 경로가 모두 유효하게 설정되어야 최초 Load, Refresh 및 Connect를 진행할 수 있다. |
-| FR-CSV-016 | 최초 Load와 Refresh Worker는 요청 접수 시점의 Pending CSV Path 3개를 하나의 세대로 Snapshot하고, 처리 중 현재 Active Path, Configuration 및 Register Memory를 변경하지 않는다. |
-| FR-CSV-017 | Refresh 성공 시 Pending Path 세대, 신규 Configuration 및 신규 Init Register Memory를 함께 원자적으로 Active 상태로 승격한다. Periodic Pending과 Change Queue를 제거하고 Change Sequence, Change Queue Counter, Overflow/Suppressed Latch를 초기화하되 Error Queue와 Port 설정은 유지한다. Refresh 직후 CAN Monitoring은 자동 시작하지 않는다. |
+| FR-CSV-013 | DLL은 임의 파일을 검색하지 않는다. DeviceMap과 FrameRule은 CAPL이 지정한 정확한 파일을 사용하고, Register Map은 DeviceMap의 `CSV_DB_Name` 상대경로를 DeviceMap 디렉터리 기준으로 해석한다. |
+| FR-CSV-014 | CAPL API로 DLL에 전달하는 DeviceMap과 FrameRule 경로는 절대경로여야 하며, DLL은 이 두 경로의 기준 디렉터리를 추정하지 않는다. Register Map 상대경로의 기준은 `FR-CSV-013`처럼 DeviceMap 디렉터리로 고정한다. |
+| FR-CSV-015 | DeviceMap과 FrameRule 경로가 설정되어 있고 DeviceMap이 참조하는 모든 Register Map이 유효해야 최초 Load, Refresh 및 Connect를 진행할 수 있다. |
+| FR-CSV-016 | 최초 Load와 Refresh Worker는 요청 접수 시점의 Pending DeviceMap/FrameRule Path를 하나의 세대로 Snapshot하고, 해당 DeviceMap에서 참조되는 Register Map 집합을 같은 작업에서 로딩한다. 처리 중 현재 Active Path, Configuration 및 Register Memory를 변경하지 않는다. |
+| FR-CSV-017 | Refresh 성공 시 Pending Path 세대, 참조 Register Map 집합, 신규 Configuration 및 신규 Init Register Memory를 함께 원자적으로 Active 상태로 승격한다. Periodic Pending과 Change Queue를 제거하고 Change Sequence, Change Queue Counter, Overflow/Suppressed Latch를 초기화하되 Error Queue와 Port 설정은 유지한다. Refresh 직후 CAN Monitoring은 자동 시작하지 않는다. |
 | FR-CSV-018 | Refresh 실패 시 임시 Path 세대, Configuration 및 Memory를 적용하지 않고 Last-good Active Path, Configuration과 Register 현재값을 유지한다. 실패한 Pending Path는 수정·재시도할 수 있도록 유지하고 Error Event를 기록하며, Last-good Configuration이 존재해도 다음 Refresh가 성공하기 전까지 Connect를 거부한다. |
 | FR-CSV-019 | 1차 구현은 Refresh 실패 후 Last-good Configuration으로 Connect를 강제 허용하는 Override API나 Panel 제어를 제공하지 않는다. 사용자는 CSV 또는 Path를 수정한 뒤 Refresh를 다시 성공시켜야 한다. |
+| FR-CSV-020 | 동일한 `CSV_DB_Name`을 여러 Device Index가 참조할 수 있다. Register Map 파일은 한 번 읽고 검증할 수 있지만 Signal 정의와 Register Memory는 Device Index마다 독립적으로 생성하며 한 장치의 Write가 다른 장치 값에 영향을 주어서는 안 된다. |
+| FR-CSV-021 | `CSV_DB_Name`은 DeviceMap 파일이 있는 디렉터리 아래의 상대경로만 허용한다. 절대경로 또는 `..`로 해당 디렉터리를 벗어나는 경로는 CSV 검증 오류로 처리한다. |
 
 ### 3.5 CAPL 구조 및 Panel
 
@@ -615,7 +617,7 @@
 
 | ID | 공개 상수 요구사항 |
 | --- | --- |
-| IF-CONST-001 | CSV 논리 파일 종류는 `M485E_FILE_DEVICE_MAP=1`, `M485E_FILE_MODBUS_RULE=2`, `M485E_FILE_EMULATOR_MAP=3`으로 정의한다. |
+| IF-CONST-001 | CSV 논리 파일 종류 상수는 ABI 호환을 위해 `M485E_FILE_DEVICE_MAP=1`, `M485E_FILE_MODBUS_RULE=2`, `M485E_FILE_EMULATOR_MAP=3`으로 유지한다. 신규 구성에서 `M485E_FILE_EMULATOR_MAP` 경로는 Refresh 필수 입력이 아니며 DeviceMap의 `CSV_DB_Name`이 실제 Register Map을 결정한다. |
 | IF-CONST-002 | Parity는 `M485E_PARITY_NONE=0`, `M485E_PARITY_EVEN=1`, `M485E_PARITY_ODD=2`로 정의한다. |
 | IF-CONST-003 | Lifecycle 상태는 `M485E_STATE_UNINITIALIZED=0`, `M485E_STATE_DISCONNECTED=1`, `M485E_STATE_REFRESHING=2`, `M485E_STATE_CONNECTING=3`, `M485E_STATE_CONNECTED=4`, `M485E_STATE_DISCONNECTING=5`, `M485E_STATE_ERROR=6`으로 정의한다. |
 | IF-CONST-004 | Port Slot은 `M485E_PORT_SLOT_0=0`, `M485E_PORT_SLOT_1=1`, `M485E_PORT_SLOT_COUNT=2`로 정의한다. |
@@ -874,27 +876,27 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| DATA-001 | `M485E_DeviceMap.csv`, `M485E_FrameRule.csv`, `M485E_RegisterMap.csv`는 세 논리 파일의 기본 예시명이며 실제 파일명은 프로젝트별로 변경할 수 있다. 파일명과 관계없이 각 파일은 본 문서에 정의된 해당 스키마를 따라야 한다. |
-| DATA-002 | 세 CSV의 상대경로는 `Main.can`에서 각각 지정하고 `getAbsFilePath()`로 변환된 절대경로를 DLL에 전달한다. 상대경로의 기준은 현재 CANalyzer Configuration(`*.cfg`) 디렉터리다. |
-| DATA-003 | 세 파일은 Device Index를 기준으로 연계한다. |
+| DATA-001 | `M485E_DeviceMap.csv`와 `M485E_FrameRule.csv`는 기본 예시명이며 실제 파일명은 프로젝트별로 변경할 수 있다. 장치 유형별 Register Map도 각 프로젝트가 파일명을 정하되 본 문서의 Register Map 스키마를 따라야 한다. |
+| DATA-002 | DeviceMap과 FrameRule 상대경로는 `Main.can`에서 지정하고 `getAbsFilePath()`로 변환된 절대경로를 DLL에 전달한다. Register Map은 DeviceMap의 `CSV_DB_Name` 상대경로로 지정한다. |
+| DATA-003 | FrameRule은 Device Index로 DeviceMap과 연계하고 Register Map 템플릿은 DeviceMap의 `CSV_DB_Name`으로 Device Index에 할당한다. |
 | DATA-004 | CSV의 관리용 필드는 DLL 내부 제어에 불필요한 경우 사용하지 않는다. |
 | DATA-005 | 모든 CSV, CAPL API, DLL Register Memory 및 RTU PDU는 동일한 16bit 직접 Address를 사용하며 Address 값에 `3xxxx/4xxxx` Function Code 의미를 포함하거나 `±1` 보정을 적용하지 않는다. |
 | DATA-006 | CSV Header에는 공백을 사용하지 않고 복합 단어 구분이 필요한 기존 공백 위치를 `_`로 대체한다. 각 파일은 아래 표의 정식 Header 이름과 순서를 사용하며 `Slave ID`와 같은 공백 기반 이전 이름은 별칭으로 허용하지 않는다. |
 | DATA-007 | 정수 필드인 `Index`, `Slave_ID`, `Rule_ID`, `Function_Code`, `Address`, `Quantity`, `Length`, `Start_Bit`, `Size`는 부호 없는 Decimal 또는 `0x`/`0X` 접두사의 Hex 표기를 허용하며 Parsing 후 각 필드의 요구 범위를 별도로 검증한다. |
 | DATA-008 | 실수 필드인 `Scale`, `Offset`, `Init_Value`, `Min`, `Max`는 선택적 부호, Decimal 정수부·소수부 및 `e`/`E` 지수 표기를 허용한다. 소수 구분자는 `.`만 사용하고 천 단위 구분 쉼표와 Hex 실수 표기는 허용하지 않는다. |
 | DATA-009 | `Init_Value`는 `Signed`/`Unsigned`에서도 물리값이므로 소수 또는 지수 표기를 사용할 수 있으며 DLL은 확정된 Scale/Offset 및 반올림 규칙으로 정수 Raw 값으로 변환한다. IEEE Float/Double의 `Init_Value`는 동일한 IEEE 실수값으로 직접 Encode한다. |
-| DATA-010 | `Device_Name`, `CSV_DB_Name`, `Request_Name`, `Unit`은 관리·표시용 문자열이므로 빈 Cell을 허용한다. `Offset`, `Value_Table`, `Min`, `Max`도 각 필드의 확정된 의미에 따라 빈 Cell을 허용한다. |
+| DATA-010 | `Device_Name`, `Request_Name`, `Unit`은 관리·표시용 문자열이므로 빈 Cell을 허용한다. `CSV_DB_Name`은 Register Map 할당에 사용하므로 필수다. `Offset`, `Value_Table`, `Min`, `Max`는 각 필드의 확정된 의미에 따라 빈 Cell을 허용한다. |
 | DATA-011 | 빈 Cell 허용은 해당 행의 Cell 값만 비울 수 있다는 의미이며 Header 또는 칼럼 자체를 생략할 수 있다는 의미가 아니다. 모든 행은 파일별 정식 칼럼 개수를 유지해야 한다. |
 | DATA-012 | `SignalName`, `Type`, `Scale`, `Init_Value` 및 모든 식별·Port·주소·크기 필드는 필수 Cell이며 비어 있으면 안 된다. |
 | DATA-013 | Header를 제외한 모든 데이터 Cell은 CSV Quote를 해석한 뒤 앞뒤 ASCII Space와 Tab을 제거하고 의미를 검증한다. Cell 내부 공백은 유지하며 Header는 이 정규화를 적용하지 않고 `DATA-006`의 정식 이름과 정확히 비교한다. |
 | DATA-014 | 앞뒤 공백 제거 후 비어 있는 선택 Cell은 빈 Cell로 처리하고 필수 Cell은 `ERR-022`의 CSV 검증 오류로 처리한다. |
-| DATA-015 | 세 CSV 파일은 UTF-8로 읽으며 파일 시작 위치의 UTF-8 BOM은 선택적으로 한 번 허용하고 Header 비교 전에 제거한다. 파일 중간의 BOM 또는 유효하지 않은 UTF-8 Byte Sequence는 허용하지 않는다. |
+| DATA-015 | DeviceMap, FrameRule 및 모든 참조 Register Map은 UTF-8로 읽으며 파일 시작 위치의 UTF-8 BOM은 선택적으로 한 번 허용하고 Header 비교 전에 제거한다. 파일 중간의 BOM 또는 유효하지 않은 UTF-8 Byte Sequence는 허용하지 않는다. |
 | DATA-016 | CSV 필드 구분자는 쉼표 `,`를 사용하고 CRLF와 LF 개행을 모두 허용한다. CR 단독 개행은 허용하지 않는다. |
 | DATA-017 | 쉼표 또는 큰따옴표가 포함된 Cell은 전체를 큰따옴표로 감싸고 Cell 내용의 큰따옴표는 `""`로 이스케이프하는 RFC 4180 방식의 Quote 규칙을 사용한다. Quote가 없는 Cell의 큰따옴표, 닫히지 않은 Quote 및 잘못된 이스케이프는 허용하지 않는다. |
 | DATA-018 | 큰따옴표로 감싼 Cell 내부에도 CR 또는 LF 줄바꿈을 허용하지 않는다. 하나의 물리적 CSV 줄은 Header 또는 하나의 데이터 행에 대응해야 한다. |
 | DATA-019 | 파일 끝의 빈 물리적 줄은 무시하되 데이터 행 사이의 빈 줄은 잘못된 칼럼 개수의 행으로 처리하여 CSV 검증 오류로 한다. |
 | DATA-020 | Device Index별 유효 Register 집합은 Rule 범위와 Signal Frame 범위의 합집합이며 외부 RTU Function 권한은 `M485E_FrameRule.csv`의 Function별 범위 합집합으로 별도 구성한다. |
-| DATA-021 | 모든 `M485E_FrameRule.csv` 및 `M485E_RegisterMap.csv`의 Index는 `M485E_DeviceMap.csv`에 존재해야 하며 Address 끝값 계산은 32bit 이상의 중간값을 사용하여 결과가 `65535`를 넘으면 CSV 검증 오류로 처리한다. |
+| DATA-021 | 모든 `M485E_FrameRule.csv`의 Index는 `M485E_DeviceMap.csv`에 존재해야 한다. Register Map에는 Index 칼럼을 두지 않고 이를 참조한 DeviceMap 행의 Index를 적용한다. Address 끝값 계산은 32bit 이상의 중간값을 사용하여 결과가 `65535`를 넘으면 CSV 검증 오류로 처리한다. |
 | DATA-022 | CSV File Byte 수, 물리적 행 Byte 수, 데이터 행 수와 문자열 Cell Byte 길이는 `IF-LIMIT-003~005`를 초과할 수 없다. UTF-8 문자열 한도는 문자 수가 아니라 인코딩된 Byte 수로 검사한다. |
 | DATA-023 | Resource 한도 검사는 임시 Configuration을 Active 상태로 승격하기 전에 수행하며 하나라도 초과하면 전체 Load 또는 Refresh를 실패시키고 Last-good Configuration과 Register Memory를 유지한다. |
 | DATA-024 | Rule 범위와 Signal Frame 범위가 겹치는 것은 정상이며 같은 `Index + Address`의 공유 Register를 참조한다. Signal Frame끼리의 겹침은 기존 `DATA-MAP-011~014` 규칙을 따른다. |
@@ -905,7 +907,7 @@
 | --- | --- |
 | DATA-LAYOUT-001 | 프로젝트의 CANalyzer Configuration Root는 `Config`이며 그 아래에 `CAPL`, `Panel`, `System Variables`, `Maps`, `Data` 디렉터리와 `CANalyzerConfig.cfg`를 배치한다. |
 | DATA-LAYOUT-002 | `Config/CAPL/DLL`에는 x86 `M485E.dll`을 배치하고 `Config/CAPL/M485E`에는 `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_UI.cin`을 배치한다. |
-| DATA-LAYOUT-003 | `Config/Maps`에는 세 논리 CSV를 배치하되 실제 파일명은 프로젝트마다 변경할 수 있으며 `Main.can`이 각 상대경로를 개별 지정한다. |
+| DATA-LAYOUT-003 | `Config/Maps`에는 DeviceMap, FrameRule 및 하나 이상의 장치 유형별 Register Map을 배치한다. `Main.can`은 DeviceMap과 FrameRule 경로를 지정하고 DeviceMap은 각 Register Map 상대경로를 지정한다. |
 | DATA-LAYOUT-004 | Panel 및 System Variable의 세부 파일명과 파일 형식은 해당 산출물을 설계할 때 확정하되 `Config/Panel`, `Config/System Variables` 디렉터리 경계는 유지한다. |
 
 ### 6.2 M485E_DeviceMap.csv
@@ -916,7 +918,7 @@
 | 2 | `Port` | 장치가 연결된 COM Port |
 | 3 | `Slave_ID` | 해당 Port의 Modbus Slave ID |
 | 4 | `Device_Name` | 선택 입력 장치명, CAPL/DLL 로직에서는 사용하지 않음 |
-| 5 | `CSV_DB_Name` | 선택 입력 CSV DB 파일명, CAPL/DLL 로직에서는 사용하지 않음 |
+| 5 | `CSV_DB_Name` | DeviceMap 디렉터리 기준 장치 유형별 Register Map 상대경로 |
 
 | ID | 검증 요구사항 |
 | --- | --- |
@@ -926,6 +928,8 @@
 | DATA-DEV-004 | Index를 통해 Port와 Slave ID를 조회할 수 있어야 한다. |
 | DATA-DEV-005 | `Index`는 `0~255`, `Slave_ID`는 `1~247`이어야 한다. Slave ID `0`과 예약값 `248~255`는 1차 Configuration에서 허용하지 않는다. |
 | DATA-DEV-006 | DeviceMap 데이터 행은 최대 256개이며 각 Index에 대해 하나의 Device Register 공간만 생성한다. |
+| DATA-DEV-007 | `CSV_DB_Name`은 필수이며 여러 Device 행이 같은 값을 참조할 수 있다. 같은 Map을 참조하더라도 Index별 Register 공간과 현재값은 독립적이다. |
+| DATA-DEV-008 | 장치 인스턴스 식별은 `Index`, RTU 식별은 `Port + Slave_ID`, 장치 유형 Map 식별은 `CSV_DB_Name`으로 구분한다. |
 
 ### 6.3 M485E_FrameRule.csv
 
@@ -953,25 +957,24 @@
 | DATA-RULE-011 | `Rule_ID`는 `0~255`이며 전체 Rule 데이터 행은 최대 200개다. |
 | DATA-RULE-012 | Function별 접근 권한은 동일 Index의 해당 Function Rule 범위 합집합으로 계산한다. 인접하거나 겹치는 Rule로 권한이 빈틈없이 이어지면 하나의 외부 RTU 요청이 여러 Rule 경계를 가로지를 수 있다. |
 
-### 6.4 M485E_RegisterMap.csv
+### 6.4 장치 유형별 Register Map
 
 | 순서 | 칼럼 | 설명 |
 | ---: | --- | --- |
-| 1 | `Index` | DeviceMap의 장치 식별자 |
-| 2 | `Address` | Signal 시작 Register Address |
-| 3 | `SignalName` | Signal 식별 이름 |
-| 4 | `Type` | Signal 데이터 타입 |
-| 5 | `Length` | Address부터 시작하는 Signal Frame의 전체 Byte 크기 |
-| 6 | `Byte_Order` | `BigEndian` 또는 `LittleEndian` |
-| 7 | `Start_Bit` | Length Byte Frame 기준 0-based LSB0 Signal 시작 Bit |
-| 8 | `Size` | Signal Bit 크기 |
-| 9 | `Scale` | 물리값 배율 |
-| 10 | `Offset` | 물리값 Offset, 빈 Cell은 `0` |
-| 11 | `Unit` | 선택 입력 물리 단위 |
-| 12 | `Init_Value` | 메모리 최초 로딩 및 Refresh 시 적용값 |
-| 13 | `Value_Table` | CAN DBC 변환 전용 Raw-to-Label 값 테이블 본문 |
-| 14 | `Min` | 최소 물리값 |
-| 15 | `Max` | 최대 물리값 |
+| 1 | `Address` | Signal 시작 Register Address |
+| 2 | `SignalName` | Signal 식별 이름 |
+| 3 | `Type` | Signal 데이터 타입 |
+| 4 | `Length` | Address부터 시작하는 Signal Frame의 전체 Byte 크기 |
+| 5 | `Byte_Order` | `BigEndian` 또는 `LittleEndian` |
+| 6 | `Start_Bit` | Length Byte Frame 기준 0-based LSB0 Signal 시작 Bit |
+| 7 | `Size` | Signal Bit 크기 |
+| 8 | `Scale` | 물리값 배율 |
+| 9 | `Offset` | 물리값 Offset, 빈 Cell은 `0` |
+| 10 | `Unit` | 선택 입력 물리 단위 |
+| 11 | `Init_Value` | 메모리 최초 로딩 및 Refresh 시 적용값 |
+| 12 | `Value_Table` | CAN DBC 변환 전용 Raw-to-Label 값 테이블 본문 |
+| 13 | `Min` | 최소 물리값 |
+| 14 | `Max` | 최대 물리값 |
 
 | ID | 요구사항 |
 | --- | --- |
@@ -981,23 +984,23 @@
 | DATA-MAP-004 | `Init_Value`는 최초 메모리 구성과 CSV Refresh 시 사용한다. |
 | DATA-MAP-005 | `Value_Table`은 CAN DBC 변환 전용 데이터이며 DLL의 Modbus RTU Slave, Register/Signal API 및 CAN Monitoring 동작에서 사용하지 않는다. |
 | DATA-MAP-006 | 모든 Address는 CAPL 내부 제어 관점에서 R/W 가능하다. |
-| DATA-MAP-007 | SignalName은 Index와 함께 Signal 조회 키로 사용한다. |
+| DATA-MAP-007 | SignalName은 DeviceMap에서 Map을 할당받은 Device Index와 함께 Signal 조회 키로 사용한다. |
 | DATA-MAP-008 | `IEEE Float`의 Size는 32bit, `IEEE Double`의 Size는 64bit로 고정하며 다른 Size는 허용하지 않는다. |
 | DATA-MAP-009 | `IEEE Float`와 `IEEE Double` 행의 `Scale`은 반드시 명시적인 `1`이어야 하고 `Offset`은 빈 Cell 또는 `0`이어야 한다. 다른 값이 있으면 CSV Load 또는 Refresh 전체를 실패 처리한다. |
-| DATA-MAP-010 | 1차 `M485E_RegisterMap.csv`에는 `Word_Order` 칼럼을 추가하지 않으며 모든 다중 Register Signal은 고정 `HighWordFirst`로 해석한다. |
-| DATA-MAP-011 | `Length`, `Start_Bit`, `Size`의 Frame 범위 검증은 같은 CSV 행의 값만으로 수행하고 Frame 범위 및 Signal Bit 중복·겹침 검증은 같은 Index의 전체 Map을 대상으로 별도 수행한다. |
+| DATA-MAP-010 | 1차 Register Map에는 `Word_Order` 칼럼을 추가하지 않으며 모든 다중 Register Signal은 고정 `HighWordFirst`로 해석한다. |
+| DATA-MAP-011 | `Length`, `Start_Bit`, `Size`의 Frame 범위 검증은 같은 CSV 행의 값만으로 수행하고 Frame 범위 및 Signal Bit 중복·겹침 검증은 같은 Register Map 템플릿 전체를 대상으로 별도 수행한다. |
 | DATA-MAP-012 | Frame이 겹치는지는 실제 Signal Bit 사용 여부가 아니라 `Address`부터 `Length / 2`개 Register의 점유 범위를 기준으로 판단한다. |
 | DATA-MAP-013 | Length가 `2`, `4`, `6`, `8` 중 하나가 아니면 완전한 16bit Register Frame 또는 최대 8Byte CAN Payload 제한을 만족하지 않으므로 CSV 검증 오류로 처리한다. |
 | DATA-MAP-014 | `Byte_Order`는 Signal별 독립 배치가 아니라 Frame 공통 속성으로 검증하며 동일 Frame 안에서 `BigEndian`과 `LittleEndian`을 혼용하지 않는다. |
 | DATA-MAP-015 | Signed/Unsigned 행의 `Scale`은 필수이며 유한하고 0이 아니어야 한다. 음수 Scale은 허용한다. `Offset`은 빈 Cell을 허용하고 빈 경우 `0`으로 해석하며, 값이 있으면 유한한 수여야 한다. |
 | DATA-MAP-016 | `Min`과 `Max`는 각각 독립적으로 빈 Cell을 허용한다. `Min`만 있으면 하한, `Max`만 있으면 상한, 둘 다 있으면 경계를 포함한 범위를 적용하고 둘 다 정의된 경우 `Min <= Max`여야 한다. `Min`, `Max` 및 `Init_Value`에 `NaN`이나 무한대를 허용하지 않는다. |
-| DATA-MAP-017 | `Value_Table` Cell에는 전체 DBC `VAL_` 문장이 아니라 `0 "ON" 1 "OFF" 2 "None"` 또는 `0x01 "OFF" 0x02 "None"`과 같은 Raw-to-Label 쌍의 본문만 입력하며 빈 Cell도 허용한다. Raw 값은 Decimal 또는 `0x`/`0X` Hex 표기를 사용할 수 있고 `Index`와 `SignalName`은 같은 CSV 행의 값을 사용한다. |
+| DATA-MAP-017 | `Value_Table` Cell에는 전체 DBC `VAL_` 문장이 아니라 `0 "ON" 1 "OFF" 2 "None"` 또는 `0x01 "OFF" 0x02 "None"`과 같은 Raw-to-Label 쌍의 본문만 입력하며 빈 Cell도 허용한다. Raw 값은 Decimal 또는 `0x`/`0X` Hex 표기를 사용할 수 있고 Device Index는 이 Map을 참조한 DeviceMap 행에서, `SignalName`은 같은 Register Map 행에서 가져온다. |
 | DATA-MAP-018 | DLL의 CSV 검증은 `Value_Table` Cell 내부의 DBC 문법, Raw 값 중복 또는 Label 유효성을 검사하지 않는다. 단, 해당 Cell을 포함한 CSV 파일 자체는 `DATA-015~019`의 공통 CSV 인코딩, Quote 및 행·열 구조를 만족해야 한다. |
 | DATA-MAP-019 | 모든 Signal Type에서 빈 `Offset`은 명시적인 `Offset=0`과 동일하게 처리한다. 빈 Cell 기본값은 `Offset`에만 적용하며 잘못된 문자열을 `0`으로 대체하지 않는다. |
 | DATA-MAP-020 | 후속 DBC 변환 단계는 `Value_Table`의 Decimal과 Hex Raw 값을 동일한 정수 도메인으로 해석하고 최종 DBC `VAL_` 출력에는 Decimal로 정규화한다. 따라서 `1`과 `0x01`은 같은 Raw 값이며 문법 및 중복 검사는 Emulator DLL이 아니라 후속 DBC 변환 단계에서 수행한다. |
 | DATA-MAP-021 | `DATA-MAP-017`의 예시는 Cell의 논리 내용이다. `0 "ON" 1 "OFF" 2 "None"`의 실제 CSV 원문 Cell은 `"0 ""ON"" 1 ""OFF"" 2 ""None"""`으로 표기한다. |
-| DATA-MAP-022 | Modbus485EmulMap 데이터 행은 최대 4,096개이며 Signal Frame의 끝 Address `Address + (Length / 2) - 1`은 `65535`를 넘을 수 없다. |
-| DATA-MAP-023 | `SignalName` 조회는 대소문자를 구분하는 정확 일치를 사용한다. 같은 Device Index 안의 중복 SignalName은 CSV 검증 오류이며 서로 다른 Device Index에서는 같은 이름을 재사용할 수 있다. |
+| DATA-MAP-022 | Register Map 파일 하나의 데이터 행과 모든 Device Index에 적용된 Signal 인스턴스 합계는 각각 최대 4,096개다. Signal Frame의 끝 Address `Address + (Length / 2) - 1`은 `65535`를 넘을 수 없다. |
+| DATA-MAP-023 | `SignalName` 조회는 대소문자를 구분하는 정확 일치를 사용한다. 하나의 Register Map 템플릿 안에서 중복 SignalName은 CSV 검증 오류이며 같은 템플릿을 적용한 서로 다른 Device Index에서는 같은 이름을 독립적으로 사용한다. |
 
 ## 7. 오류 처리
 
@@ -1014,7 +1017,7 @@
 | ERR-009 | CSV 검증 오류가 하나라도 있으면 Configuration을 Invalid 상태로 두고 성공적인 Load 또는 Refresh 전까지 Connect를 거부한다. |
 | ERR-010 | CSV의 `Start_Bit + Size`가 `Length × 8`을 초과하면 인접 Frame 또는 Register를 변경하지 않고 CSV 검증 오류로 처리한다. |
 | ERR-011 | 같은 Index의 서로 다른 Frame이 Register를 중복 점유하거나 동일 Frame의 Signal Bit 영역이 겹치면 CSV 검증 오류로 처리한다. |
-| ERR-012 | `M485E_RegisterMap.csv`의 Length가 `2`, `4`, `6`, `8` 중 하나가 아니면 CSV 검증 오류로 처리하고 Connect를 거부한다. |
+| ERR-012 | Register Map의 Length가 `2`, `4`, `6`, `8` 중 하나가 아니면 CSV 검증 오류로 처리하고 Connect를 거부한다. |
 | ERR-013 | 동일 Frame의 Signal 행들이 서로 다른 `Byte_Order`를 사용하면 CSV 검증 오류로 처리하고 Connect를 거부한다. |
 | ERR-014 | `Init_Value`의 Parsing, 물리값 변환 또는 Frame 적용 중 하나라도 실패하면 임시 구성을 폐기하고 현재 설정과 Register Memory를 부분 변경하지 않는다. |
 | ERR-015 | Default Reset 검증 또는 재구성에 실패하면 대상 Device Register를 부분 변경하거나 Reset Snapshot을 생성하지 않는다. |
@@ -1124,7 +1127,7 @@
 | COMP-004 | 프로젝트별 CSV 파일명과 무관하게 세 논리 파일의 확정된 칼럼 구조를 지원해야 한다. |
 | COMP-005 | Modbus RTU `0x03`, `0x04`, `0x10` 요청과 호환되어야 한다. |
 | COMP-006 | Signal `Value_Table`은 후속 DBC 변환 도구가 `VAL_` 문장을 생성할 수 있는 Raw-to-Label 쌍의 본문 형식이어야 한다. 후속 변환 도구는 Decimal과 `0x`/`0X` Hex 입력을 받아 최종 DBC Raw 값을 Decimal로 출력하고 Emulator DLL은 이 내용을 해석하지 않는다. |
-| COMP-007 | `M485E_RegisterMap.csv`의 `Byte_Order` 표기 `BigEndian` 및 `LittleEndian`을 처리해야 한다. |
+| COMP-007 | Register Map의 `Byte_Order` 표기 `BigEndian` 및 `LittleEndian`을 처리해야 한다. |
 | COMP-008 | x86과 향후 x64 바이너리는 동일한 CAPL-visible 논리 API를 유지해야 한다. 단, 아키텍처별 DLL은 별도로 빌드·배포한다. |
 | COMP-009 | 기존 Prototype의 `M485_` Export API, DLL 바이너리 및 동작은 신규 개발의 하위 호환 대상이 아니다. |
 | COMP-010 | 구현 단계에서는 기존 Prototype 소스·API·빌드 설정·샘플·설명 정보를 신규 `M485E` 요구사항과 구조에 맞는 산출물로 교체하고, 최종 산출물에 혼재시키지 않는다. |
@@ -1267,7 +1270,7 @@
 | AC-107 | FR-SIG-035 | Signal Write의 검증 또는 변환이 실패하면 관련 Register가 일부도 변경되지 않고 `SourceType 0x02` Snapshot도 생성되지 않는다. |
 | AC-108 | DATA-MAP-005, DATA-MAP-017~018 | `Value_Table`이 빈 행, `0 "ON" 1 "OFF" 2 "None"` 또는 `0x01 "OFF" 0x02 "None"` 형식의 행은 모두 CSV 구조 검사를 통과하며 Modbus RTU, Register/Signal API 및 CAN Monitoring 결과가 `Value_Table` 내용에 따라 달라지지 않는다. |
 | AC-109 | DATA-MAP-018 | 공통 CSV Quote와 행·열 구조가 유효하면 DBC 문법상 잘못된 `Value_Table` 내용도 DLL Load/Refresh와 Connect를 실패시키지 않는다. |
-| AC-110 | DATA-006, ERR-020 | 세 CSV가 `Slave_ID`, `Function_Code`, `Byte_Order`, `Start_Bit`, `Init_Value`, `Value_Table` 등 정식 Header를 정확한 순서로 사용하면 Header 검사를 통과하고, 공백 기반 이전 Header를 하나라도 사용하면 Load/Refresh가 실패하고 Connect가 거부된다. |
+| AC-110 | DATA-006, ERR-020 | DeviceMap, FrameRule 및 모든 참조 Register Map이 `Slave_ID`, `Function_Code`, `Byte_Order`, `Start_Bit`, `Init_Value`, `Value_Table` 등 정식 Header를 정확한 순서로 사용하면 Header 검사를 통과하고, 공백 기반 이전 Header를 하나라도 사용하면 Load/Refresh가 실패하고 Connect가 거부된다. |
 | AC-111 | DATA-007 | `Function_Code`의 `0x03`과 `3`, `Address`의 `40000`과 `0x9C40`, `Rule_ID`의 `10`과 `0x0A`는 각각 동일한 정수값으로 Parsing되고 각 필드 범위 검사를 수행한다. |
 | AC-112 | DATA-008~009 | `Scale=0.1`, `Offset=-40`, `Init_Value=12.5`, `Min=-4.0E1`, `Max=1.25e2`는 유효하며 Signed/Unsigned의 `Init_Value`도 물리값으로 변환된다. |
 | AC-113 | DATA-008, ERR-021 | 실수 필드의 `1,000`, 소수점 쉼표 `12,5`, Hex `0x1.8` 또는 숫자 뒤 임의 문자가 포함된 값은 CSV 검증 오류가 되어 Load/Refresh가 실패하고 Connect가 거부된다. |
@@ -1275,7 +1278,7 @@
 | AC-115 | FR-SIG-030, FR-SIG-036, DATA-MAP-016 | `Min`과 `Max`가 모두 비어 있어도 Size 8 Unsigned Signal Write는 변환 후 Raw `0~255`만 허용하며 범위를 벗어나는 값은 기존 Register와 Snapshot 상태를 유지한다. |
 | AC-116 | FR-SIG-031, DATA-MAP-016 | `Min`만 있으면 같은 값 이상의 물리값, `Max`만 있으면 같은 값 이하의 물리값을 허용하고 둘 다 있으면 양쪽 경계를 포함하며 `Min > Max`인 CSV는 거부한다. |
 | AC-117 | FR-SIG-037 | Size 8 Unsigned, Scale `-2`, Offset `500`의 표현 가능한 물리값 범위는 Raw 0과 255를 변환한 `500`과 `-10` 중 작은 값부터 큰 값인 `-10~500`으로 판단한다. |
-| AC-118 | DATA-010~012, ERR-022 | `Device_Name`, `CSV_DB_Name`, `Request_Name`, `Unit`이 비어 있어도 정식 칼럼 개수를 유지하면 CSV 검증을 통과한다. `SignalName`, `Type`, `Scale`, `Init_Value` 또는 식별·주소·크기 필드가 비어 있거나 칼럼 자체가 생략되면 Load/Refresh가 실패하고 Connect가 거부된다. |
+| AC-118 | DATA-010~012, ERR-022 | `Device_Name`, `Request_Name`, `Unit`이 비어 있어도 정식 칼럼 개수를 유지하면 CSV 검증을 통과한다. `CSV_DB_Name`, `SignalName`, `Type`, `Scale`, `Init_Value` 또는 식별·주소·크기 필드가 비어 있거나 칼럼 자체가 생략되면 Load/Refresh가 실패하고 Connect가 거부된다. |
 | AC-119 | DATA-013~014, ERR-022 | 데이터 Cell `[ Power12V ]`와 `[Power12V]`는 모두 `Power12V`로 정규화되고 `[Power 12V]`의 내부 공백은 유지된다. Space 또는 Tab만 있는 선택 Cell은 빈 Cell로 처리하고 필수 Cell은 Load/Refresh 실패와 Connect 거부를 발생시킨다. |
 | AC-120 | DATA-MAP-020, COMP-006 | DBC 변환 단계에서 `1 "ON"`과 `0x01 "ON"`은 동일한 Raw 값으로 해석되고 최종 `VAL_` Raw 값은 Decimal `1`로 출력된다. 동일 Cell에 `1`과 `0x01`이 함께 정의되면 DBC 변환 단계의 중복 오류가 된다. |
 | AC-121 | DATA-015~016 | 동일한 유효 CSV를 UTF-8 BOM 유무와 CRLF/LF 개행 조합으로 각각 Load해도 같은 Configuration과 Register Memory가 생성된다. |
@@ -1299,8 +1302,9 @@
 | AC-139 | FR-PORT-013~015, ERR-028 | 첫 Port Open 성공 후 두 번째 Port Open 또는 Worker 준비를 강제로 실패시키면 첫 Port와 모든 Worker가 정리되고 Emulator는 Disconnected이며 RTU와 CAN Monitoring이 동작하지 않는다. |
 | AC-140 | FR-PORT-016~017 | Connect 실패 후 CSV Configuration, Register Memory와 Port 설정은 그대로 유지되고 실패 원인 수정 후 재시도한 Connect가 성공하며 오류에는 실패 Port와 단계가 포함된다. |
 | AC-141 | FR-CSV-001~002, FR-CSV-011~014, DATA-001~002 | Configuration이 `D:\\Work\\ProjectA\\Config\\CANalyzerConfig.cfg`에 있고 CAPL이 `.\\Maps\\ProjectA_Device.csv`를 지정하면 `getAbsFilePath()` 결과인 `D:\\Work\\ProjectA\\Config\\Maps\\ProjectA_Device.csv`가 DeviceMap 논리 파일의 절대경로로 DLL에 전달된다. 프로젝트 전체를 다른 위치로 이동해도 동일한 상대 폴더 구조이면 CAPL 경로 상수를 수정하지 않는다. |
-| AC-142 | FR-CSV-002, FR-CSV-013, COMP-004 | `Maps` 디렉터리에 세 대상 외의 CSV가 존재하고 대상 CSV 파일명이 프로젝트별 이름으로 변경되어도 DLL은 CAPL이 지정한 세 파일만 각 논리 스키마로 로딩한다. |
-| AC-143 | FR-CSV-015, ERR-029~030 | `getAbsFilePath()` 실패, 상대경로의 DLL 직접 전달 또는 세 논리 경로 중 하나의 누락 시 Load/Refresh/Connect가 시작되지 않고 기존 유효 경로와 로딩된 설정이 유지된다. |
+| AC-142 | FR-CSV-002, FR-CSV-013, COMP-004 | `Maps` 디렉터리에 대상 외 CSV가 존재하고 파일명이 프로젝트별로 변경되어도 DLL은 CAPL이 지정한 DeviceMap/FrameRule과 DeviceMap이 참조한 Register Map만 각 논리 스키마로 로딩한다. |
+| AC-143 | FR-CSV-015, FR-CSV-021, ERR-029~030 | `getAbsFilePath()` 실패, DeviceMap/FrameRule 상대경로의 DLL 직접 전달, 둘 중 하나의 누락, 빈 `CSV_DB_Name`, 절대 Register Map 경로 또는 상위 디렉터리 이탈 경로가 있으면 Load/Refresh/Connect가 시작되지 않고 기존 유효 경로와 로딩된 설정이 유지된다. |
+| AC-144 | FR-CSV-020, DATA-DEV-007~008 | 서로 다른 Index·Port·Slave 조합의 장치 여러 개가 같은 `CSV_DB_Name`을 참조하면 동일한 Signal 집합과 Init 값을 갖되, 한 Index의 Register/Signal Write가 다른 Index의 현재값을 변경하지 않는다. |
 | AC-144 | IF-ERR-001~007, LOG-010 | 동기 업무 Export가 실패하면 signed `long` 상태 코드가 반환되고 CAPL Core가 같은 Context Handle의 `LastSyncError`를 즉시 조회하여 일치하는 ErrorCode와 동적 Context를 한 번 출력한다. |
 | AC-145 | IF-ERR-002~003 | 두 CAPL Context에서 발생한 동기 오류는 서로의 `LastSyncError`를 변경하지 않고 COM 또는 RTU Worker 오류가 발생해도 저장된 동기 오류 Snapshot은 유지된다. |
 | AC-146 | IF-ERR-005~006, ERR-031 | 오류 조회 Export를 여러 번 호출해도 동일한 Snapshot이 반환되고 이후 동기 업무 Export가 성공하면 이전 `LastSyncError`가 현재 오류로 조회되지 않는다. 오류 조회 Buffer가 부족해도 원래 오류 Snapshot은 유지된다. |
@@ -1526,7 +1530,7 @@
 | `-1034` | `M485E_ERR_CSV_DUPLICATE_SIGNAL` | Error | `ERR_CSV_DUPLICATE_SIGNAL` | 같은 Index의 SignalName 중복 |
 | `-1035` | `M485E_ERR_CSV_SIGNAL_PARAMETER` | Error | `ERR_CSV_SIGNAL_PARAMETER` | Scale, Offset, Min, Max 또는 타입별 제약 위반 |
 | `-1036` | `M485E_ERR_CSV_INIT_VALUE` | Error | `ERR_CSV_INIT_VALUE` | Init Value Parsing·변환·합성 실패 |
-| `-1090` | `M485E_ERR_CSV_VALIDATION_FAILED` | Error | `ERR_CSV_VALIDATION_FAILED` | 세 CSV 교차 검증의 최종 실패 요약 |
+| `-1090` | `M485E_ERR_CSV_VALIDATION_FAILED` | Error | `ERR_CSV_VALIDATION_FAILED` | DeviceMap, FrameRule 및 참조 Register Map 교차 검증의 최종 실패 요약 |
 | `-2000` | `M485E_ERR_INVALID_STATE` | Error | `ERR_INVALID_STATE` | 현재 Lifecycle 상태에서 허용되지 않는 API 호출 |
 | `-2001` | `M485E_ERR_OPERATION_BUSY` | Warning | `ERR_OPERATION_BUSY` | 다른 Lifecycle 작업이 진행 중이거나 Command Slot 사용 중 |
 | `-2002` | `M485E_ERR_CONFIGURATION_NOT_READY` | Error | `ERR_CONFIGURATION_NOT_READY` | Connect에 필요한 CSV 또는 Port 설정이 준비되지 않음 |
@@ -1689,7 +1693,7 @@
 | OOS-002 | 사용자 요청 없는 커밋, Push, 릴리스 및 파일 삭제 |
 | OOS-003 | Modbus485Master 기능 구현 |
 | OOS-004 | 런타임 Register 값을 원본 CSV 파일에 저장하는 기능 |
-| OOS-005 | `Device_Name`과 `CSV_DB_Name`을 이용한 DLL 내부 제어 |
+| OOS-005 | `Device_Name`을 이용한 DLL 내부 제어 |
 | OOS-006 | 연결 중 CSV Hot Refresh |
 | OOS-007 | CSV 파일 변경 자동 감지 |
 | OOS-008 | 상세 Panel 화면 배치와 디자인 |

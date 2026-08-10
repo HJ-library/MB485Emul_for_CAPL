@@ -21,8 +21,8 @@ variables
 
   char gM485EProbeDevicePath[128] = ".\\Config\\Maps\\M485E_DeviceMap.csv";
   char gM485EProbeFrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
-  char gM485EProbeRegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
   struct M485E_ProbePortConfig gM485EProbePortConfigs[2];
+  long gM485E_VirtualCanChannels[2];
   long gM485EProbeLifecycle[9];
   msTimer tM485EProbeLifecycle;
 }
@@ -42,6 +42,9 @@ void M485E_Probe_InitializePortConfigs()
   gM485EProbePortConfigs[1].dataBits = 8;
   gM485EProbePortConfigs[1].parity = M485E_PARITY_NONE;
   gM485EProbePortConfigs[1].stopBits = 1;
+
+  gM485E_VirtualCanChannels[0] = 1;
+  gM485E_VirtualCanChannels[1] = 2;
 }
 
 long M485E_Probe_ApplyPortConfigs()
@@ -83,8 +86,6 @@ on start
   result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485EProbeDevicePath);
   if (result == M485E_OK)
     result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485EProbeFrameRulePath);
-  if (result == M485E_OK)
-    result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485EProbeRegisterMapPath);
   if (result == M485E_OK) result = M485E_Probe_ApplyPortConfigs();
   if (result == M485E_OK) result = M485E_Core_RefreshCsv();
   write("M485E Phase 9 probe setup result: %d", result);

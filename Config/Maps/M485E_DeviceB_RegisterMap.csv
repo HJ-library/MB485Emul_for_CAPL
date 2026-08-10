@@ -1,0 +1,2 @@
+Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_Value,Value_Table,Min,Max
+20000,Counter,Unsigned,8,BigEndian,0,32,1,0,,100,,,

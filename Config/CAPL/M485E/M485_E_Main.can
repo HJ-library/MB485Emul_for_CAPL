@@ -27,7 +27,6 @@ variables
      // 아래 상대 경로는 CANalyzer 구성 파일 기준으로 절대 경로로 변환되어 DLL에 전달된다.
      char gM485E_DeviceMapPath[128] = ".\\Config\\Maps\\M485E_DeviceMap.csv";
      char gM485E_FrameRulePath[128] = ".\\Config\\Maps\\M485E_FrameRule.csv";
-     char gM485E_RegisterMapPath[128] = ".\\Config\\Maps\\M485E_RegisterMap.csv";
      struct M485E_PortConfig gM485E_PortConfigs[2];
      // Port Slot 0/1이 출력할 CANalyzer 가상 CAN 채널 번호이다.
      // 회사 Configuration의 채널 배치가 다르면 아래 두 값만 변경한다.
@@ -95,8 +94,6 @@ on start
      result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
      if (result == M485E_OK)
           result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE, gM485E_FrameRulePath);
-     if (result == M485E_OK)
-          result = M485E_Core_SetCsvPath(M485E_FILE_EMULATOR_MAP, gM485E_RegisterMapPath);
      if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
      if (result == M485E_OK) result = M485E_Core_RefreshCsv();
      @sysvar::M485E::Connection::ResultCode = result;

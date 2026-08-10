@@ -215,9 +215,9 @@ Monitoring 경로를 확인한다. 회사 시험 결과를 보고 Main 초기화
 
 ## 12. Origin 기반 예제 적용
 
-기본 Map 시험을 모두 통과한 뒤 `examples/M485E_Test`의 세 CSV를 적용한다. Configuration
-위치에 따라 Main의 세 상대경로를 바꾸거나, 별도 시험 Configuration의 `Maps` 폴더에
-세 파일을 복사한다. 절대경로를 CAPL에 하드코딩하지 않는다.
+기본 Map 시험을 모두 통과한 뒤 `examples/M485E_Test`의 DeviceMap, FrameRule 및 장치
+유형별 Register Map을 적용한다. Main에서는 DeviceMap과 FrameRule 상대경로만 바꾸고,
+Register Map은 DeviceMap의 `CSV_DB_Name`으로 선택한다. 절대경로를 CAPL에 하드코딩하지 않는다.
 
 - [ ] 실제 회사 COM 번호로 DeviceMap 수정
 - [ ] B-HVAC 실제 Address 배열과 예제 비교

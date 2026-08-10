@@ -38,7 +38,8 @@ Modbus485Emulator\
 │  ├─ Maps\
 │  │  ├─ M485E_DeviceMap.csv
 │  │  ├─ M485E_FrameRule.csv
-│  │  └─ M485E_RegisterMap.csv
+│  │  ├─ M485E_DeviceA_RegisterMap.csv
+│  │  └─ M485E_DeviceB_RegisterMap.csv
 │  └─ System Variables\M485E.vsysvar
 └─ examples\M485E_Test\
 ```
@@ -83,8 +84,8 @@ gM485E_PortConfigs[1].comPortNumber = 12;
 
 ```csv
 Index,Port,Slave_ID,Device_Name,CSV_DB_Name
-0,COM11,1,Phase9 Device A,
-1,COM12,1,Phase9 Device B,
+0,COM11,1,Phase9 Device A,M485E_DeviceA_RegisterMap.csv
+1,COM12,1,Phase9 Device B,M485E_DeviceB_RegisterMap.csv
 ```
 
 CAPL의 Port Slot 0/1 순서와 Device Map의 고유 Port 등장 순서가 일치해야 한다. 두 Port는
@@ -116,7 +117,7 @@ Panel을 만들기 전에 CANalyzer의 System Variable 창만 사용한다.
 | System Variable | 정상값 | 의미 |
 |---|---:|---|
 | `M485E::Connection::State` | `1` | Disconnected, CSV 조작 가능 |
-| `M485E::Connection::ConfigurationValid` | `1` | 세 CSV 검증 성공 |
+| `M485E::Connection::ConfigurationValid` | `1` | DeviceMap, FrameRule 및 참조 Register Map 검증 성공 |
 | `M485E::Connection::LastResult` | `0` | 마지막 비동기 작업 성공 |
 | `M485E::Connection::ResultCode` | `0` | 시작 요청 접수 성공 |
 
@@ -278,7 +279,7 @@ Configuration에서 `tests/capl/M485E_Phase9_CoreMonitoringProbe.can`을 사용�
 
 ## 11. Origin 기반 예제 Map으로 전환
 
-작은 Map 시험이 끝난 뒤에만 예제 Map으로 전환한다. Main의 세 경로를 다음처럼 변경하면
+작은 Map 시험이 끝난 뒤에만 예제 Map으로 전환한다. Main의 두 경로를 다음처럼 변경하면
 기본 Map을 덮어쓰지 않고 사용할 수 있다. Configuration은 저장소 루트에 있어야 한다.
 
 ```c
@@ -286,9 +287,10 @@ char gM485E_DeviceMapPath[128] =
     ".\\examples\\M485E_Test\\M485E_DeviceMap.csv";
 char gM485E_FrameRulePath[128] =
     ".\\examples\\M485E_Test\\M485E_FrameRule.csv";
-char gM485E_RegisterMapPath[128] =
-    ".\\examples\\M485E_Test\\M485E_RegisterMap.csv";
 ```
+
+Register Map은 Main에서 따로 지정하지 않는다. 예제 `M485E_DeviceMap.csv`의
+`CSV_DB_Name`이 같은 폴더의 장치 유형별 Register Map을 선택한다.
 
 예제 Device Map의 COM11/COM12를 회사 COM 번호로 변경하고 Main Port 설정도 함께 맞춘다.
 이 예제는 과거 `Origin.can`을 기준으로 재구성한 초안이므로 다음 항목은 Board Frame과 실제

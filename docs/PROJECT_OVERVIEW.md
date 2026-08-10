@@ -26,18 +26,19 @@ RS-485 Port Slot 0과 1은 각각 가상 CAN Channel 1과 2에 대응한다. 가
 물리 장치에 송신하기 위한 것이 아니라 Emulator 내부 Register 상태를 Trace에서 보기
 위한 진단 경로다.
 
-## 2. 세 CSV가 만드는 실행 모델
+## 2. CSV가 만드는 실행 모델
 
 | 파일 | 핵심 내용 | DLL에서 만들어지는 정보 |
 |---|---|---|
 | `M485E_DeviceMap.csv` | `Index`, COM Port, Slave ID | Device Index를 `Port + Slave ID`로 연결 |
 | `M485E_FrameRule.csv` | `Index`, `Rule_ID`, FC, Address, Quantity | RTU 접근 권한과 CAN Monitoring 범위 |
-| `M485E_RegisterMap.csv` | Address, SignalName, Type, Bit 배치, Scale, Init Value | Register 초기값과 물리 Signal 변환 정보 |
+| 장치 유형별 `*_RegisterMap.csv` | Address, SignalName, Type, Bit 배치, Scale, Init Value | Register 초기값과 물리 Signal 변환 정보 |
 
-위 세 이름은 저장소의 기본 예시명이다. 프로젝트마다 실제 파일명과 경로를 바꿀 수 있고,
-CAPL이 세 경로를 각각 DLL에 전달한다. DLL 공개 인터페이스에서는 기존 논리 FileType인
-`M485E_FILE_DEVICE_MAP`, `M485E_FILE_MODBUS_RULE`, `M485E_FILE_EMULATOR_MAP`을 계속
-사용한다. 따라서 이번 기본 파일명 변경으로 DLL ABI는 바뀌지 않는다.
+CAPL은 DeviceMap과 FrameRule 두 경로만 DLL에 전달한다. 각 DeviceMap 행의
+`CSV_DB_Name`이 DeviceMap 파일이 있는 디렉터리를 기준으로 장치 유형별 Register Map을
+지정한다. 같은 실물 유형의 장치는 같은 Map을 공유할 수 있지만 Register 현재값은 Index별로
+독립적이다. `M485E_FILE_EMULATOR_MAP` 상수와 API는 ABI 호환을 위해 남아 있으나 신규
+Refresh에서는 필수 경로로 사용하지 않는다.
 
 Device Index는 CAPL과 DLL에서 장치를 선택하는 공통 식별자다. 같은 COM Port에 여러
 Slave ID가 있어도 각 장치는 서로 다른 Index를 갖고, Port 설정은 고유 Port마다 한 번만
@@ -47,7 +48,7 @@ Slave ID가 있어도 각 장치는 서로 다른 Index를 갖고, Port 설정�
 Device Index
     ├─ M485E_DeviceMap.csv  → COM Port + Slave ID
     ├─ M485E_FrameRule.csv  → FC03/FC04 범위 + Rule ID
-    └─ M485E_RegisterMap.csv → Register + Signal 정의 + Init Value
+    └─ CSV_DB_Name          → 장치 유형 Register Map + Signal 정의 + Init Value
 ```
 
 Address는 CSV에 적힌 숫자를 그대로 Modbus PDU Address로 사용한다. `40001` 표기 변환이나
@@ -61,8 +62,8 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 
 1. CANalyzer가 `M485_E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
 2. CAPL `preStart`에서 DLL Context를 초기화한다.
-3. CAPL `start`에서 CSV 3개 경로와 Port 2개의 Serial 설정을 전달한다.
-4. DLL이 CSV를 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
+3. CAPL `start`에서 DeviceMap/FrameRule 경로와 Port 2개의 Serial 설정을 전달한다.
+4. DLL이 DeviceMap에서 참조하는 Register Map까지 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
 5. `ConnectSwitch`가 켜지면 두 COM Port를 모두 연다. 하나라도 실패하면 전체 Connect를 실패시킨다.
 6. Connected 상태에서 Board RTU 요청, CAPL 수동 조작과 CAN Monitoring을 병행한다.
 7. Measurement 종료 시 Monitoring과 Timer를 중지하고 Worker를 취소·Join한 뒤 COM과 Context를 정리한다.
@@ -188,7 +189,7 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 | `src/M485E.Dll` | CAPL Export Table, Context, Lifecycle, Win32 Serial Adapter |
 | `Config/CAPL/M485E` | Main, Core, Monitoring, UI CAPL 코드 |
 | `Config/System Variables/M485E.vsysvar` | Panel 연동 System Variable 정의 |
-| `Config/Maps` | 실행용 CSV 3개 |
+| `Config/Maps` | DeviceMap, FrameRule 및 장치 유형별 Register Map |
 | `spec` | 오류 코드와 공개 상수의 단일 원본 |
 | `generated` | spec에서 생성한 C++·CAPL 계약 |
 | `tests` | ABI, Core, Integration, CAPL 계약과 실환경 Probe |

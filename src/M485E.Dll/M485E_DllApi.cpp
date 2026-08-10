@@ -533,10 +533,9 @@ std::int32_t __stdcall M485E_Dll_RefreshCsv(const std::uint32_t contextHandle)
       gContext->activeOperation != M485E_OPERATION_NONE)
     return RecordFailure(*gContext, M485E_ERR_INVALID_STATE,
                          "CSV refresh requires an idle disconnected context.");
-  for (const auto& path : gContext->csvPaths)
-    if (path.empty())
-      return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
-                           "All three CSV paths must be set before refresh.");
+  if (gContext->csvPaths[0].empty() || gContext->csvPaths[1].empty())
+    return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
+                         "DeviceMap and FrameRule paths must be set before refresh.");
   CsvPaths paths{gContext->csvPaths};
   Context* const context = gContext.get();
   const std::uint32_t generation = NextSequence(gContext->activeGeneration);

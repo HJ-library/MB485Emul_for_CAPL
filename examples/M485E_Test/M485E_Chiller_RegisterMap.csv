@@ -1,0 +1,4 @@
+Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_Value,Value_Table,Min,Max
+300,Chiller_Setting2_00,Unsigned,2,BigEndian,0,16,1,0,,0,,,
+301,Chiller_Setting2_01,Unsigned,2,BigEndian,0,16,1,0,,0,,,
+302,Chiller_Setting2_02,Unsigned,2,BigEndian,0,16,1,0,,0,,,

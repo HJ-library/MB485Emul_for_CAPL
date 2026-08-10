@@ -147,7 +147,7 @@ def main():
 
     add_heading(doc, "1. 시험 전 준비", 1)
     add_bullets(doc, [
-        "Release/Win32 M485E.dll과 CAPL 파일, M485E.vsysvar, 시험 CSV 3개를 동일 Baseline에서 준비한다.",
+        "Release/Win32 M485E.dll과 CAPL 파일, M485E.vsysvar, DeviceMap/FrameRule/참조 Register Map을 동일 Baseline에서 준비한다.",
         "CANalyzer 9.x SP8 x86 Configuration에 가상 CAN 채널 2개를 생성하고 PortSlot 0→채널 1, PortSlot 1→채널 2로 사용한다.",
         "SystemBase Multi USB 485의 두 Port를 Board RS-485에 연결한다. Adapter의 자동 송수신 방향 제어를 사용하며 DLL은 RTS 방향 제어를 수행하지 않는다.",
         "Board Modbus Master의 Response Timeout, 요청 주기, 실제 COM 번호와 Serial 설정을 결과 파일 Environment 시트에 기록한다.",
@@ -159,7 +159,7 @@ def main():
         "tools/Prepare-M485EPackage.ps1 -Configuration Release를 실행해 DLL과 생성 계약을 Config/CAPL에 배치한다.",
         "CAPL Program Node에 Config/CAPL/M485E/M485_E_Main.can을 연결한다. Main은 생성 계약, Core, Monitoring, UI를 포함한다.",
         "Config/System Variables/M485E.vsysvar를 Configuration에 추가한다.",
-        "Main.can에서 세 CSV 상대경로를 지정한다. Core가 getAbsFilePath()로 Configuration 기준 절대경로를 DLL에 전달한다.",
+        "Main.can에서 DeviceMap과 FrameRule 상대경로를 지정한다. Core가 getAbsFilePath()로 절대경로를 DLL에 전달하고 Register Map은 DeviceMap의 CSV_DB_Name으로 선택한다.",
         "두 PortSlot의 COM 이름과 BaudRate/DataBits/Parity/StopBits를 설정하고 Refresh 완료를 Polling한 뒤 Connect한다.",
         "ReadOption 정적 매핑을 설정하고 ReadSwitch ON에서 Monitoring을 시작한다.",
     ]

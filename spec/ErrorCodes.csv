@@ -34,7 +34,7 @@
 "-1034","M485E_ERR_CSV_DUPLICATE_SIGNAL","Error","ERR_CSV_DUPLICATE_SIGNAL","같은 Index의 SignalName 중복"
 "-1035","M485E_ERR_CSV_SIGNAL_PARAMETER","Error","ERR_CSV_SIGNAL_PARAMETER","Scale, Offset, Min, Max 또는 타입별 제약 위반"
 "-1036","M485E_ERR_CSV_INIT_VALUE","Error","ERR_CSV_INIT_VALUE","Init Value Parsing·변환·합성 실패"
-"-1090","M485E_ERR_CSV_VALIDATION_FAILED","Error","ERR_CSV_VALIDATION_FAILED","세 CSV 교차 검증의 최종 실패 요약"
+"-1090","M485E_ERR_CSV_VALIDATION_FAILED","Error","ERR_CSV_VALIDATION_FAILED","DeviceMap, FrameRule 및 참조 Register Map 교차 검증의 최종 실패 요약"
 "-2000","M485E_ERR_INVALID_STATE","Error","ERR_INVALID_STATE","현재 Lifecycle 상태에서 허용되지 않는 API 호출"
 "-2001","M485E_ERR_OPERATION_BUSY","Warning","ERR_OPERATION_BUSY","다른 Lifecycle 작업이 진행 중이거나 Command Slot 사용 중"
 "-2002","M485E_ERR_CONFIGURATION_NOT_READY","Error","ERR_CONFIGURATION_NOT_READY","Connect에 필요한 CSV 또는 Port 설정이 준비되지 않음"
