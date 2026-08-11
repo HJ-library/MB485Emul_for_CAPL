@@ -54,10 +54,8 @@ class RtuStreamParser final
   /** @return CRC-valid known-shape frames recovered after appending this chunk. */
   RtuParseBatch PushBytes(const std::uint8_t* data, std::size_t size);
   void Reset() noexcept;
-  std::uint64_t DiscardedFrameCount() const noexcept;
 
  private:
   std::vector<std::uint8_t> buffer_;
-  std::uint64_t discardedFrameCount_ = 0;
 };
 }  // namespace m485e::core

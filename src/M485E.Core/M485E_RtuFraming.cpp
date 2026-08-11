@@ -198,17 +198,11 @@ RtuParseBatch RtuStreamParser::PushBytes(const std::uint8_t* data, std::size_t s
     buffer_.erase(buffer_.begin(), buffer_.end() - kMaxRetainedPrefix);
     ++batch.discardedSegments;
   }
-  discardedFrameCount_ += batch.discardedSegments;
   return batch;
 }
 
 void RtuStreamParser::Reset() noexcept
 {
   buffer_.clear();
-}
-
-std::uint64_t RtuStreamParser::DiscardedFrameCount() const noexcept
-{
-  return discardedFrameCount_;
 }
 }  // namespace m485e::core

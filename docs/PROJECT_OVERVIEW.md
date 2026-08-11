@@ -1,5 +1,7 @@
 # Modbus485Emulator 한눈에 보기
 
+> Release baseline: v0.1.0 (2026-08-12)
+
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
 그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 x86 CAPL DLL이다.
 Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Emulator의 설정,
@@ -193,7 +195,10 @@ Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별
 
 동기 API 오류는 Context별 Last Sync Error에, Worker·연결 같은 비동기 오류는 bounded
 Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Count로 손실을
-진단하며, Worker가 CANalyzer Write Window를 직접 호출하지 않는다.
+진단하며, Worker가 CANalyzer Write Window를 직접 호출하지 않는다. CAPL Control은
+100ms 상태 Polling에서 Error Queue 통계를 함께 조회하고, DropCount가 변하거나 Overflow
+Latch가 처음 1로 전환될 때만 Pending·Capacity·High-water Mark·DropCount·Latch를 Write
+Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않으면서 진단 손실은 확인할 수 있다.
 
 ## 8. 코드와 파일 위치
 
@@ -207,11 +212,9 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 | `spec` | 오류 코드와 공개 상수의 단일 원본 |
 | `generated` | spec에서 생성한 C++·CAPL 계약 |
 | `tests` | ABI, Core, Integration, CAPL 계약과 실환경 Probe |
-| `examples/M485E_Test` | 기존 Origin.can을 옮긴 회사 시험용 Map·Panel 시안 |
-| `docs/05_Test` | 회사 실환경 검증 가이드와 결과 기록서 |
+| `examples/M485E_Test` | 저장소 자체 완결형 Device A/B Map, Panel 가이드와 검증 체크리스트 |
+| `docs/05_Test` | 대상 실환경 검증 가이드와 결과 기록서 |
 | `dist/M485E.dll` | CANalyzer에 배치할 Release/Win32 DLL |
-
-`src/Modbus485EmulatorDll`은 참고용 Prototype이며 신규 Solution의 구현·평가 대상이 아니다.
 
 ## 9. 처음 실행하는 순서
 
@@ -225,20 +228,20 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 8. 자동 Connect가 실패했다면 USB-RS485와 Board 연결을 확인하고 `ConnectSwitch`를 다시 켠다.
 9. FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
 
-회사에서 수행할 상세 순서는
-[`examples/M485E_Test/COMPANY_TEST_CHECKLIST.md`](../examples/M485E_Test/COMPANY_TEST_CHECKLIST.md)를
+대상 환경에서 수행할 상세 순서는
+[`examples/M485E_Test/VALIDATION_CHECKLIST.md`](../examples/M485E_Test/VALIDATION_CHECKLIST.md)를
 따르고 결과는 `docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx`에 기록한다.
 
 ## 10. 현재 완료 상태와 남은 검증
 
 자동 Build, ABI Probe, Core Unit Test, DLL Integration Test와 CAPL 소스 계약 검사는
-완료되어 있다. 다음은 실제 회사 환경에서 확인해야 한다.
+완료되어 있다. 다음은 실제 대상 환경에서 확인해야 한다.
 
 - CANalyzer 9.x SP8에서 x86 DLL Load와 전체 Main CAPL Compile/Measurement
 - SystemBase Multi USB-485와 실제 Board의 FC03·FC04·FC10 응답시간
 - COM 분리·복구와 3초 x 10회 자동 재연결
 - 두 가상 CAN Channel의 Extended Header/Data Message
-- 실제 B-HVAC·Chiller Address와 Gas Reset Address
+- 프로젝트별 Device, Rule 및 Register CSV의 실제 Address 매핑
 - 최대 200 Rule, Change Burst와 장시간 안정성
 - SystemBase Multi USB 485와 실제 Board에서 RTU Chunk 분할·병합, 응답 Timing 및 Noise 재동기화 검증
 - 장치별 탭을 포함한 실제 CANalyzer Panel `.xvp`

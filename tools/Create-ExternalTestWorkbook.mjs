@@ -8,13 +8,14 @@ const { SpreadsheetFile, Workbook } = await import(pathToFileURL(modulePath).hre
 const root = process.cwd();
 const outputDir = `${root}/docs/05_Test`;
 const previewDir = `${root}/build/external-test-workbook-render`;
+const outputPath = `${outputDir}/Modbus485Emulator_External_Test_Result.xlsx`;
 await fs.mkdir(outputDir, { recursive: true });
 await fs.mkdir(previewDir, { recursive: true });
 
 const tests = [
   ["EV-001", "1/2", "IF-API-001~021, COMP-001, COMP-015", "CANalyzer 9.x SP8 x86", "CAPL Compile 및 #pragma library 로드", "21개 API가 중복·누락 없이 Compile되고 Measurement가 시작됨"],
-  ["EV-002", "3/8", "FR-CSV-001~018, FR-LIFE-010~015", "CANalyzer 9.x SP8 x86", "상대경로 3개 설정 후 비동기 Refresh Polling", "Disconnected, ConfigurationValid=1, LastResult=0"],
-  ["EV-003", "7/8", "FR-PORT-007~017, TBD-038", "CANalyzer + Multi USB 485", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback"],
+  ["EV-002", "3/8", "FR-CSV-001~018, FR-LIFE-010~015", "CANalyzer 9.x SP8 x86", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling", "Disconnected, ConfigurationValid=1, LastResult=0"],
+  ["EV-003", "7/8/9", "FR-PORT-007~020, TBD-038", "CANalyzer + Multi USB 485", "1~4개 활성 COM Port 전체 Connect와 CAPL/CSV 활성 Port 수 확인", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback; ActivePortCount와 Device CSV 고유 Port 수 일치"],
   ["EV-004", "5/7", "FR-RTU-002, FR-RTU-017, FR-RTU-028", "Board + Serial trace", "Port별 Slave FC03 Quantity 1/125", "직접 Address Holding 값과 올바른 CRC 응답"],
   ["EV-005", "5/7", "FR-RTU-003, FR-RTU-011, FR-RTU-020", "Board + Serial trace", "FC04 정상 및 권한 공백", "정상값 또는 Exception 0x02, 부분 응답 없음"],
   ["EV-006", "4/5/7", "FR-RTU-004~005, FR-RTU-031, FR-REG-010~018", "Board + CAN Trace", "FC10 정상·동일값·권한 공백 Write", "원자 적용; 동일값 Snapshot 없음; 공백은 0x02 및 무변경"],
@@ -24,10 +25,10 @@ const tests = [
   ["EV-010", "6/9", "FR-CAN-034~041", "1~4 virtual CAN channels", "여러 활성 Port 동시 Change Burst", "활성 Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할"],
   ["EV-011", "9/10", "FR-CAN-051~057, FR-LOAD-010, FR-LOAD-017", "CANalyzer Panel", "ReadSwitch OFF/ON 및 ReadOption 변경", "OFF 중 RTU 유지·CAN 억제, 다음 Cycle에 Candidate 원자 반영"],
   ["EV-012", "10", "FR-UI-003~005, FR-UI-008~013, TBD-063", "CANalyzer Panel", "Manual Write Data[122] 및 Signal Control", "Send 시 요청 Snapshot 사용, Quantity 1~122와 word 범위 검증, ResultCode 표시"],
-  ["EV-013", "10", "FR-UI-002, FR-SIG-001~040", "CANalyzer Panel", "Signal Float/Signed Read/Write", "12.5 등 물리값 왕복, 실패 시 기존 출력 유지"],
+  ["EV-013", "10", "FR-UI-002, FR-SIG-001~040", "CANalyzer Panel", "Signal Float/Signed Read/Write", "12.5 등 물리값 왕복, 실패 시 현재 출력 유지"],
   ["EV-014", "7/8", "FR-LIFE-023~031, FR-LIFE-033", "Multi USB 485 removal", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected"],
   ["EV-015", "8", "FR-LIFE-017~022, PERF-022", "CANalyzer + Process monitor", "Disconnect/Connect와 Finalize", "Disconnect 값 보존; Finalize Join/Close 후 Context 폐기"],
-  ["EV-016", "9/10", "PERF-004~021, TBD-027, TBD-030, TBD-039", "200 Rule stress profile", "200 Rule, Quantity 125, 0x81 Burst", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표와 bounded Queue 진단"],
+  ["EV-016", "6/9/10", "PERF-004~021, LOG-011~017, REQ-DIAG-002, TBD-027, TBD-030, TBD-039", "200 Rule stress profile", "200 Rule, Quantity 125, 0x81 Burst 및 Error Queue overflow", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표를 유지하고 DropCount 또는 OverflowLatch 변화 시 CAPL이 Pending/Capacity/High-water를 한 번 진단"],
 ];
 
 const workbook = Workbook.create();
@@ -37,75 +38,86 @@ const summary = workbook.worksheets.add("Summary");
 
 results.showGridLines = false;
 results.mergeCells("A1:J1");
-results.getRange("A1").values = [["Modbus485Emulator External Test Results"]];
+results.getRange("A1").values = [["Modbus485Emulator v0.1.0 External Test Results"]];
 results.mergeCells("A2:J2");
 results.getRange("A2").values = [["실행하지 않은 시험은 Result = Not Tested로 유지합니다."]];
-const headers = [["Test ID", "Phase", "Requirement ID", "Test Environment", "Test Description", "Expected Result", "Actual Result", "Result", "Evidence", "Notes"]];
-results.getRange("A4:J4").values = headers;
-const rows = tests.map((row) => [...row, "", "Not Tested", "", ""]);
-results.getRange(`A5:J${4 + rows.length}`).values = rows;
+results.getRange("A4:J4").values = [["Test ID", "Phase", "Requirement ID", "Test Environment", "Test Description", "Expected Result", "Actual Result", "Result", "Evidence", "Notes"]];
+const resultRows = tests.map((row) => [...row, "", "Not Tested", "", ""]);
+results.getRange(`A5:J${4 + resultRows.length}`).values = resultRows;
 results.freezePanes.freezeRows(4);
 results.getRange("A1:J1").format = {
-  fill: "#17365D", font: { bold: true, color: "#FFFFFF", size: 18 },
-  horizontalAlignment: "left", verticalAlignment: "center"
+  fill: "#17365D", font: { bold: true, color: "#FFFFFF", fontSize: 18 },
+  horizontalAlignment: "left", verticalAlignment: "center",
 };
 results.getRange("A2:J2").format = {
-  fill: "#D9EAF7", font: { italic: true, color: "#17365D", size: 10 },
-  horizontalAlignment: "left"
+  fill: "#D9EAF7", font: { italic: true, color: "#17365D", fontSize: 10 },
+  horizontalAlignment: "left",
 };
 results.getRange("A4:J4").format = {
   fill: "#2F75B5", font: { bold: true, color: "#FFFFFF" },
   horizontalAlignment: "center", verticalAlignment: "center", wrapText: true,
-  borders: { preset: "all", style: "thin", color: "#9CA3AF" }
+  borders: { preset: "all", style: "thin", color: "#9CA3AF" },
 };
-results.getRange(`A5:J${4 + rows.length}`).format = {
+results.getRange(`A5:J${4 + resultRows.length}`).format = {
   verticalAlignment: "top", wrapText: true,
-  borders: { preset: "all", style: "thin", color: "#D1D5DB" }
+  borders: { preset: "all", style: "thin", color: "#D1D5DB" },
 };
-results.getRange(`A5:A${4 + rows.length}`).format.font = { bold: true, color: "#17365D" };
-results.getRange(`H5:H${4 + rows.length}`).dataValidation = {
-  rule: { type: "list", values: ["Not Tested", "PASS", "FAIL", "Blocked", "N/A"] }
+results.getRange(`A5:A${4 + resultRows.length}`).format.font = { bold: true, color: "#17365D" };
+results.getRange(`H5:H${4 + resultRows.length}`).dataValidation = {
+  rule: { type: "list", values: ["Not Tested", "PASS", "FAIL", "Blocked", "N/A"] },
 };
-results.getRange(`H5:H${4 + rows.length}`).conditionalFormats.add("cellIs", {
-  operator: "equal", formula: '"PASS"', format: { fill: "#E2F0D9", font: { color: "#006100", bold: true } }
+results.getRange(`H5:H${4 + resultRows.length}`).conditionalFormats.add("cellIs", {
+  operator: "equal", formula: '"PASS"', format: { fill: "#E2F0D9", font: { color: "#006100", bold: true } },
 });
-results.getRange(`H5:H${4 + rows.length}`).conditionalFormats.add("cellIs", {
-  operator: "equal", formula: '"FAIL"', format: { fill: "#FCE4D6", font: { color: "#9C0006", bold: true } }
+results.getRange(`H5:H${4 + resultRows.length}`).conditionalFormats.add("cellIs", {
+  operator: "equal", formula: '"FAIL"', format: { fill: "#FCE4D6", font: { color: "#9C0006", bold: true } },
 });
-results.getRange(`H5:H${4 + rows.length}`).conditionalFormats.add("cellIs", {
-  operator: "equal", formula: '"Not Tested"', format: { fill: "#FFF2CC", font: { color: "#7F6000" } }
+results.getRange(`H5:H${4 + resultRows.length}`).conditionalFormats.add("cellIs", {
+  operator: "equal", formula: '"Not Tested"', format: { fill: "#FFF2CC", font: { color: "#7F6000" } },
 });
-const widths = [12, 9, 34, 25, 34, 48, 42, 14, 28, 30];
-widths.forEach((width, index) => results.getRangeByIndexes(0, index, 4 + rows.length, 1).format.columnWidth = width);
+[12, 9, 34, 25, 34, 48, 42, 14, 28, 30].forEach((width, index) =>
+  results.getRangeByIndexes(0, index, 4 + resultRows.length, 1).format.columnWidth = width);
 results.getRange("1:1").format.rowHeight = 30;
 results.getRange("2:2").format.rowHeight = 21;
 results.getRange("4:4").format.rowHeight = 30;
-results.getRange(`5:${4 + rows.length}`).format.autofitRows();
+results.getRange(`5:${4 + resultRows.length}`).format.autofitRows();
 
 environment.showGridLines = false;
 environment.mergeCells("A1:D1");
 environment.getRange("A1").values = [["Test Environment"]];
 environment.getRange("A3:D3").values = [["Category", "Item", "Value", "Evidence / Notes"]];
-const envRows = [
+const environmentRows = [
+  ["Baseline", "Release Version", "0.1.0", "Release Baseline"],
+  ["Baseline", "Baseline Date", "2026-08-12", "docs/REQUIREMENTS_SPEC.md"],
   ["Baseline", "Git Commit", "", ""],
   ["Baseline", "M485E.dll SHA-256", "", ""],
+  ["Baseline", "Generated Contracts", "ErrorCodes=90; PublicConstants=185", "tests/contracts/Test-M485EContractGeneration.ps1"],
   ["CANalyzer", "Version / Service Pack", "CANalyzer 9.x SP8 x86", ""],
   ["Vector", "Driver / License", "", ""],
   ["Adapter", "Model", "SystemBase Multi USB 485", "Automatic direction control"],
   ["Serial Port 0", "COM / Baud / Data / Parity / Stop", "", ""],
   ["Serial Port 1", "COM / Baud / Data / Parity / Stop", "", ""],
+  ["Serial Port 2", "COM / Baud / Data / Parity / Stop", "", ""],
+  ["Serial Port 3", "COM / Baud / Data / Parity / Stop", "", ""],
   ["Board", "Model / Firmware", "", ""],
   ["Board", "Modbus Master Response Timeout", "", "ms"],
-  ["CAN", "Channel mapping", "PortSlot 0→Virtual CAN 1; PortSlot 1→Virtual CAN 2", ""],
+  ["CAN", "Channel mapping", "PortSlot 0~3→Virtual CAN 1~4 (활성 Port만)", ""],
   ["Test", "Operator / Date", "", ""],
 ];
-environment.getRange(`A4:D${3 + envRows.length}`).values = envRows;
+environment.getRange(`A4:D${3 + environmentRows.length}`).values = environmentRows;
 environment.freezePanes.freezeRows(3);
-environment.getRange("A1:D1").format = { fill: "#17365D", font: { bold: true, color: "#FFFFFF", size: 18 } };
-environment.getRange("A3:D3").format = { fill: "#2F75B5", font: { bold: true, color: "#FFFFFF" }, wrapText: true, borders: { preset: "all", style: "thin", color: "#9CA3AF" } };
-environment.getRange(`A4:D${3 + envRows.length}`).format = { wrapText: true, verticalAlignment: "top", borders: { preset: "all", style: "thin", color: "#D1D5DB" } };
-[18, 36, 58, 36].forEach((width, index) => environment.getRangeByIndexes(0, index, 3 + envRows.length, 1).format.columnWidth = width);
-environment.getRange(`4:${3 + envRows.length}`).format.autofitRows();
+environment.getRange("A1:D1").format = { fill: "#17365D", font: { bold: true, color: "#FFFFFF", fontSize: 18 } };
+environment.getRange("A3:D3").format = {
+  fill: "#2F75B5", font: { bold: true, color: "#FFFFFF" }, wrapText: true,
+  borders: { preset: "all", style: "thin", color: "#9CA3AF" },
+};
+environment.getRange(`A4:D${3 + environmentRows.length}`).format = {
+  wrapText: true, verticalAlignment: "top",
+  borders: { preset: "all", style: "thin", color: "#D1D5DB" },
+};
+[18, 36, 58, 36].forEach((width, index) =>
+  environment.getRangeByIndexes(0, index, 3 + environmentRows.length, 1).format.columnWidth = width);
+environment.getRange(`4:${3 + environmentRows.length}`).format.autofitRows();
 
 summary.showGridLines = false;
 summary.mergeCells("A1:D1");
@@ -121,32 +133,49 @@ summary.getRange("B4:B8").formulas = [
 ];
 summary.getRange("A10:D10").values = [["Rule", "PASS", "FAIL", "Pending"]];
 summary.getRange("A11:D11").values = [["판정 원칙", "Expected Result + Evidence", "Actual Result에 원인 기록", "Not Tested는 PASS 추정 금지"]];
-summary.getRange("A1:D1").format = { fill: "#17365D", font: { bold: true, color: "#FFFFFF", size: 18 } };
+summary.getRange("A1:D1").format = { fill: "#17365D", font: { bold: true, color: "#FFFFFF", fontSize: 18 } };
 summary.getRange("A3:B3").format = { fill: "#2F75B5", font: { bold: true, color: "#FFFFFF" }, borders: { preset: "all", style: "thin", color: "#9CA3AF" } };
 summary.getRange("A4:B8").format = { borders: { preset: "all", style: "thin", color: "#D1D5DB" } };
 summary.getRange("A10:D10").format = { fill: "#2F75B5", font: { bold: true, color: "#FFFFFF" }, borders: { preset: "all", style: "thin", color: "#9CA3AF" } };
 summary.getRange("A11:D11").format = { wrapText: true, borders: { preset: "all", style: "thin", color: "#D1D5DB" } };
 [22, 30, 30, 34].forEach((width, index) => summary.getRangeByIndexes(0, index, 11, 1).format.columnWidth = width);
 
+const formulaError = /#REF!|#DIV\/0!|#VALUE!|#NAME\?|#N\/A/i;
+for (const sheet of workbook.worksheets.items) {
+  const used = sheet.getUsedRange(true);
+  for (const matrix of [used?.values ?? [], used?.formulas ?? []]) {
+    for (const row of matrix) {
+      for (const value of row) {
+        const text = String(value ?? "");
+        if (formulaError.test(text)) throw new Error(`Formula error in ${sheet.name}: ${text}`);
+      }
+    }
+  }
+}
+if (resultRows.length !== 16 || resultRows.some((row) => row[7] !== "Not Tested")) {
+  throw new Error("External verification status must remain 16 x Not Tested");
+}
+if (tests.find((row) => row[0] === "EV-002")?.[4] !== "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling") {
+  throw new Error("EV-002 current configuration contract mismatch");
+}
+if (environmentRows[0][2] !== "0.1.0" || environmentRows[1][2] !== "2026-08-12") {
+  throw new Error("External verification release baseline mismatch");
+}
+if (!environmentRows.some((row) => row[1] === "Generated Contracts" && row[2] === "ErrorCodes=90; PublicConstants=185")) {
+  throw new Error("Generated contract baseline mismatch");
+}
+
 const output = await SpreadsheetFile.exportXlsx(workbook);
-await output.save(`${outputDir}/Modbus485Emulator_External_Test_Result.xlsx`);
+await output.save(outputPath);
+await fs.rm(`${outputPath}.inspect.ndjson`, { force: true });
 
 for (const [sheetName, range, fileName] of [
   ["Test Results", "A1:J20", "test-results.png"],
-  ["Environment", "A1:D14", "environment.png"],
+  ["Environment", `A1:D${3 + environmentRows.length}`, "environment.png"],
   ["Summary", "A1:D11", "summary.png"],
 ]) {
   const preview = await workbook.render({ sheetName, range, autoCrop: "all", scale: 1, format: "png" });
   await fs.writeFile(`${previewDir}/${fileName}`, new Uint8Array(await preview.arrayBuffer()));
 }
 
-const inspection = await workbook.inspect({
-  kind: "region,formula",
-  sheetId: "Test Results",
-  range: "A1:J20",
-  maxChars: 12000,
-  tableMaxRows: 24,
-  tableMaxCols: 10,
-});
-await fs.writeFile(`${previewDir}/inspection.txt`, inspection.ndjson ?? String(inspection), "utf8");
-console.log(`${outputDir}/Modbus485Emulator_External_Test_Result.xlsx`);
+console.log(outputPath);

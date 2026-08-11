@@ -837,12 +837,6 @@ std::shared_ptr<const ActiveConfiguration> ConfigurationStore::Snapshot() const 
   return active_;
 }
 
-std::uint32_t ConfigurationStore::Generation() const noexcept
-{
-  std::lock_guard<std::mutex> lock(mutex_);
-  return generation_;
-}
-
 bool ConfigurationStore::IsStale() const noexcept
 {
   std::lock_guard<std::mutex> lock(mutex_);

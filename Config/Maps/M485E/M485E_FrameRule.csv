@@ -1,4 +1,4 @@
 Index,Rule_ID,Function_Code,Address,Quantity,Request_Name
-0,1,0x03,10000,6,Holding Values
-0,2,0x04,10006,2,Input Values
-1,1,0x03,20000,4,Same Port Device
+0,1,0x03,10000,6,Device A Holding Values
+0,2,0x04,10006,2,Device A Input Values
+1,1,0x03,20000,4,Device B Holding Values

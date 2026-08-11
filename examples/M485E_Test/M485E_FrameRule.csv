@@ -1,35 +1,4 @@
 Index,Rule_ID,Function_Code,Address,Quantity,Request_Name
-0,1,0x03,300,3,Chiller Setting Block 2
-1,1,0x03,0,1,E-HVAC Version
-1,2,0x03,256,5,E-HVAC Running Status
-1,3,0x03,1280,8,E-HVAC Sensor Status
-1,4,0x03,1536,33,E-HVAC Alarm Status
-1,5,0x03,1792,11,E-HVAC Parameter Setting
-1,6,0x03,2048,2,E-HVAC Remote Control
-2,1,0x03,260,1,B-HVAC Version
-2,2,0x03,7,16,B-HVAC System Parameters
-2,3,0x03,512,13,B-HVAC Remote Range
-2,4,0x03,768,29,B-HVAC Alarm Range
-2,5,0x03,4096,34,B-HVAC Operation and Sensor Range
-3,1,0x03,260,1,B-HVAC Version
-3,2,0x03,7,16,B-HVAC System Parameters
-3,3,0x03,512,13,B-HVAC Remote Range
-3,4,0x03,768,29,B-HVAC Alarm Range
-3,5,0x03,4096,34,B-HVAC Operation and Sensor Range
-4,1,0x03,260,1,B-HVAC Version
-4,2,0x03,7,16,B-HVAC System Parameters
-4,3,0x03,512,13,B-HVAC Remote Range
-4,4,0x03,768,29,B-HVAC Alarm Range
-4,5,0x03,4096,34,B-HVAC Operation and Sensor Range
-5,1,0x04,30001,33,Gas Input Registers
-5,2,0x03,40106,1,Gas Monitor State
-5,3,0x03,40200,1,Gas Reset Alarm Register
-5,4,0x03,40221,6,Gas Calibration Status
-5,5,0x03,41001,7,Gas Calibration Commands
-5,6,0x03,41101,2,Gas Feature Password
-6,1,0x04,30001,33,Gas Input Registers
-6,2,0x03,40106,1,Gas Monitor State
-6,3,0x03,40200,1,Gas Reset Alarm Register
-6,4,0x03,40221,6,Gas Calibration Status
-6,5,0x03,41001,7,Gas Calibration Commands
-6,6,0x03,41101,2,Gas Feature Password
+0,1,0x03,10000,6,Device A Holding Values
+0,2,0x04,10006,2,Device A Input Values
+1,1,0x03,20000,4,Device B Holding Values

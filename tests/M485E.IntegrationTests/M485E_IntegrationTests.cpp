@@ -153,9 +153,12 @@ int main(int argc, char** argv)
                 physical == 12.5,
             "DLL Default Reset failed");
 
-    Require(setPort(handle, 0, 5, "COM11", 115200, 8, M485E_PARITY_NONE, 1) == M485E_OK &&
-                setPort(handle, 1, 5, "COM12", 115200, 8, M485E_PARITY_NONE, 1) == M485E_OK,
-            "Port configuration failed");
+    Require(setPort(handle, 0, 5, "COM11", 115200, 8, M485E_PARITY_NONE, 1) == M485E_OK,
+            "Port 0 configuration failed");
+    Require(connect(handle) == M485E_ERR_PORT_CONFIG_INCOMPLETE,
+            "two-Port Connect did not reject the missing active PortSlot");
+    Require(setPort(handle, 1, 5, "COM12", 115200, 8, M485E_PARITY_NONE, 1) == M485E_OK,
+            "Port 1 configuration failed");
     Require(connect(handle) == M485E_OK, "asynchronous Connect was not accepted");
     for (int attempt = 0; attempt < 500; ++attempt)
     {

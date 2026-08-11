@@ -62,12 +62,6 @@ void SnapshotQueueService::StopMonitoring() noexcept
   }
 }
 
-bool SnapshotQueueService::IsMonitoringEnabled() const noexcept
-{
-  std::lock_guard<std::mutex> lock(stateMutex_);
-  return monitoringEnabled_;
-}
-
 void SnapshotQueueService::ResetForRefresh() noexcept
 {
   std::lock_guard<std::mutex> stateLock(stateMutex_);
@@ -300,12 +294,4 @@ ErrorQueueStats ErrorQueue::GetStats() const noexcept
   return stats_;
 }
 
-void ErrorQueue::Clear() noexcept
-{
-  std::lock_guard<std::mutex> lock(mutex_);
-  head_ = 0;
-  size_ = 0;
-  nextSequence_ = 1;
-  stats_ = {};
-}
 }  // namespace m485e::core

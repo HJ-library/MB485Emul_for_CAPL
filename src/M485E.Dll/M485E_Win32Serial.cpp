@@ -103,11 +103,6 @@ void Win32SerialTransport::Close() noexcept
   }
 }
 
-bool Win32SerialTransport::IsOpen() const noexcept
-{
-  return Handle() != INVALID_HANDLE_VALUE;
-}
-
 HANDLE Win32SerialTransport::Handle() const noexcept
 {
   std::lock_guard<std::mutex> lock(mutex_);

@@ -11,8 +11,11 @@ out/
 *.dll
 !src/M485E.Dll/
 !src/M485E.Dll/**
+/src/M485E.Dll/build/
 *.lib
 *.exp
 *.cbf
+__pycache__/
+*.py[cod]
 dist/*
 !dist/M485E.dll

@@ -64,7 +64,6 @@
     <ClCompile Include="M485E_Connection.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="M485E_Contracts.h" />
     <ClInclude Include="..\..\generated\cpp\M485E_Contracts.generated.h" />
     <ClInclude Include="M485E_DllApi.h" />
     <ClInclude Include="M485E_Win32Serial.h" />
@@ -72,6 +71,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="M485E.def" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="M485E_Version.rc" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\M485E.Core\M485E.Core.vcxproj">

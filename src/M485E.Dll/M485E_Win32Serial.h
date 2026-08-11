@@ -27,7 +27,6 @@ class Win32SerialTransport final : public core::ISerialTransport
                     std::uint32_t& osError) noexcept;
   /** @brief Cancels pending I/O and closes the handle; safe to call repeatedly. */
   void Close() noexcept;
-  bool IsOpen() const noexcept;
 
   core::SerialReadResult Read(std::uint8_t* data, std::size_t capacity,
                               std::uint32_t waitMs) noexcept override;
