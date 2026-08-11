@@ -9,14 +9,16 @@
 
 | 파일 | 이미 구현된 기능 |
 |---|---|
-| `M485_E_Core.cin` | DLL Context, 21개 DLL API Wrapper, CSV 경로 변환, 공통 오류 처리 |
-| `M485_E_Monitoring.cin` | ReadOption, 1초 Cycle, 10ms Pump, 가상 CAN Message 생성 |
-| `M485_E_ReadOption.cin` | FrameRule별 ReadOption Slot, Index, Rule_ID 고정 목록 |
-| `M485_E_UI.cin` | System Variable 이벤트, 수동 Read/Write, Signal Read/Write, Auto Read |
+| `M485E_Core.cin` | DLL Context, 21개 DLL API Wrapper, CSV 경로 변환, 공통 오류 처리 |
+| `M485E_Monitoring.cin` | ReadOption, 1초 Cycle, 10ms Pump, 가상 CAN Message 생성 |
+| `M485E_ReadOption.cin` | FrameRule별 ReadOption Slot, Index, Rule_ID 고정 목록 |
+| `M485E_Connection.cin` | ConnectSwitch, 500ms 자동 연결, Connect/Disconnect 제어 |
+| `M485E_Control.cin` | Refresh와 100ms Lifecycle 상태·LED·문자열 갱신 |
+| `M485E_UI.cin` | System Variable 이벤트, 수동 Register Write, Signal Read/Write |
 | `M485E_Contracts.generated.cin` | 오류 코드, 상태, 배열 Layout, 공개 상수 |
 
-사용자가 직접 해야 하는 CAPL 작업은 `M485_E_Main.can`의 프로젝트별 통신 설정과
-`M485_E_ReadOption.cin`의 Rule 목록이다.
+사용자가 직접 해야 하는 CAPL 작업은 `M485E_Main.can`의 프로젝트별 통신 설정과
+`M485E_ReadOption.cin`의 Rule 목록이다.
 
 1. CSV 경로 설정
 2. 활성 COM Port 수와 통신 조건 설정
@@ -34,11 +36,13 @@ ProjectConfig\
 ├─ CAPL\
 │  ├─ Dll\M485E.dll
 │  └─ M485E\
-│     ├─ M485_E_Main.can
-│     ├─ M485_E_Core.cin
-│     ├─ M485_E_Monitoring.cin
-│     ├─ M485_E_ReadOption.cin
-│     ├─ M485_E_UI.cin
+│     ├─ M485E_Main.can
+│     ├─ M485E_Core.cin
+│     ├─ M485E_Monitoring.cin
+│     ├─ M485E_ReadOption.cin
+│     ├─ M485E_Connection.cin
+│     ├─ M485E_Control.cin
+│     ├─ M485E_UI.cin
 │     └─ M485E_Contracts.generated.cin
 ├─ Maps\
 │  └─ M485E\
@@ -49,7 +53,7 @@ ProjectConfig\
    └─ M485E.vsysvar
 ```
 
-`M485_E_Main.can`만 CAPL Program Node에 연결한다. `.cin` 파일은 Main이 `#include`하므로
+`M485E_Main.can`만 CAPL Program Node에 연결한다. `.cin` 파일은 Main이 `#include`하므로
 별도 Program Node로 등록하지 않는다.
 
 ## 3. Main CAPL에서 수정할 부분
@@ -71,17 +75,18 @@ Device CSV와 같은 폴더 또는 그 하위 폴더의 Register Map을 선택�
 `M485E_Main_InitializePortConfigs()`에서 실제 환경에 맞는 값을 설정한다.
 
 ```c
-gM485E_ActivePortCount = 2;
+gM485E_ActivePortCount = 1;
 
 gM485E_PortConfigs[0].portSlot = 0;
-gM485E_PortConfigs[0].comPortNumber = 11;
+gM485E_PortConfigs[0].comPortNumber = 8;
 gM485E_PortConfigs[0].baudRate = 115200;
 gM485E_PortConfigs[0].dataBits = 8;
 gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
 gM485E_PortConfigs[0].stopBits = 1;
 
 gM485E_PortConfigs[1].portSlot = 1;
-gM485E_PortConfigs[1].comPortNumber = 12;
+// Slot 1의 COM9는 예비 설정이며 ActivePortCount=1인 동안 DLL에 전달되지 않는다.
+gM485E_PortConfigs[1].comPortNumber = 9;
 gM485E_PortConfigs[1].baudRate = 115200;
 gM485E_PortConfigs[1].dataBits = 8;
 gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
@@ -95,7 +100,7 @@ gM485E_VirtualCanChannels[1] = 2;
 
 - `gM485E_ActivePortCount`는 Device CSV의 고유 `Port` 개수와 같아야 한다.
 - Device CSV에 처음 나타나는 Port가 Slot 0, 다음 Port가 Slot 1이 된다.
-- `comPortNumber=11`은 DLL에 `COM11`로 전달된다.
+- `comPortNumber=8`은 DLL에 `COM8`로 전달된다.
 - 지원 범위는 활성 Port 1~4개, Data Bits 8이다.
 - Parity는 `M485E_PARITY_NONE`, `M485E_PARITY_EVEN`, `M485E_PARITY_ODD` 중 하나다.
 - 가상 CAN Channel 번호는 회사 Configuration에서 실제로 만든 채널 번호와 같아야 한다.
@@ -103,7 +108,7 @@ gM485E_VirtualCanChannels[1] = 2;
 ### 3.3 Monitoring ReadOption 등록 함수
 
 `Check_ReadOption[]`의 배열 위치만으로는 DLL이 어떤 Rule인지 알 수 없다.
-`M485_E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에서 각 배열 slot을
+`M485E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에서 각 배열 slot을
 `Index + Rule_ID`에 연결한다. Main이나 Monitoring 함수 내부에 프로젝트 Rule 목록을
 흩어 놓지 않는다.
 
@@ -112,11 +117,9 @@ long M485E_ReadOption_ConfigureAll()
 {
      long result;
 
-     result = M485E_Monitoring_ConfigureReadOption(0, 0, 1);
+     result = M485E_ReadOption_ConfigureDevice(0, 0, 1);
      if (result != M485E_OK) return result;
-     result = M485E_Monitoring_ConfigureReadOption(1, 0, 2);
-     if (result != M485E_OK) return result;
-     result = M485E_Monitoring_ConfigureReadOption(2, 1, 1);
+     result = M485E_ReadOption_ConfigureDevice(1, 2, 2);
      if (result != M485E_OK) return result;
      return M485E_OK;
 }
@@ -128,14 +131,21 @@ Slot은 0부터 빈칸 없이 등록해야 하며 같은 `Index + Rule_ID`를 �
 거부된다. Main의 `M485E_Main_Startup()`이 이 함수를 한 번 호출하므로 별도 `on start` 코드를
 추가하지 않는다.
 
+기본 Helper는 장치별 Rule ID가 `1..N`으로 연속된 프로젝트를 위한 것이다. 공개 DLL/CSV
+계약은 여전히 `Rule_ID 0..255`를 허용한다. 회사 FrameRule이 0부터 시작하거나 다른 연속
+범위를 사용하면 공개 계약을 바꾸지 말고 `M485E_ReadOption_ConfigureAll()`의 명시 매핑을
+FrameRule과 동일하게 작성한다.
+
 ### 3.4 CAPL에서 수정하지 않을 부분
 
 - `registerCAPLDLL()` Handle 값을 고정값으로 바꾸지 않는다. Handle 0도 정상값일 수 있다.
 - UI나 Monitoring에서 `M485E_Dll_*`을 직접 호출하지 않는다.
-- `M485_E_Core.cin`, `M485_E_UI.cin`, `M485_E_Monitoring.cin`과 Main 연결 Timer 주기를 회사별로
+- `M485E_Core.cin`, `M485E_UI.cin`, `M485E_Monitoring.cin`, `M485E_Connection.cin`과
+  `M485E_Control.cin`의 Timer 주기를 회사별로
   임의 변경하지 않는다.
-- Panel 버튼용 별도 CAPL Event를 중복 작성하지 않는다. ConnectSwitch 이벤트는 Main에,
-  나머지 기본 Namespace 이벤트는 `M485_E_UI.cin`에 이미 구현되어 있다.
+- Panel 버튼용 별도 CAPL Event를 중복 작성하지 않는다. ConnectSwitch와 연결 명령은
+  `M485E_Connection.cin`, Refresh·상태 표시는 `M485E_Control.cin`, 나머지
+  기본 Namespace 이벤트는 `M485E_UI.cin`에 이미 구현되어 있다.
 
 ## 4. 최소 공통 Panel에 만들 Control
 
@@ -143,10 +153,10 @@ Slot은 0부터 빈칸 없이 등록해야 하며 같은 `Index + Rule_ID`를 �
 
 | 방식 | 의미 | 대상 |
 |---|---|---|
-| Toggle | 사용자가 바꾼 0/1 상태를 유지 | ConnectSwitch, ReadSwitch, AutoReadManual, Rule Checkbox |
+| Toggle | 사용자가 바꾼 0/1 상태를 유지 | ConnectSwitch, ReadSwitch, Rule Checkbox |
 | Momentary Button | 누를 때 1, CAPL 처리 후 0으로 복귀 | Refresh, Send, Signal Read, Signal Write |
 | Input | 사용자가 값 입력 | Index, Address, Quantity, Write Data, SignalName, PhysicalValue |
-| Display | Panel에서 편집하지 않고 상태만 표시 | State, ResultCode, LastResult, ConfigurationValid, Read Data |
+| Display | Panel에서 편집하지 않고 상태만 표시 | State, ResultCode, LastResult, ConfigurationValid |
 
 System Variable DB에서 쓰기 가능한 변수라도 State나 ResultCode처럼 CAPL이 기록하는 값은
 Panel Control 속성에서 사용자 편집을 막고 표시 전용으로 사용한다.
@@ -182,40 +192,23 @@ State 표시값은 다음과 같다.
 `ConnectedLed`에 연결하고, 진행 상태와 오류는 각각 `BusyLed`, `ErrorLed`에 연결한다.
 네 표시 변수는 100ms Lifecycle Polling에서 갱신되며 Panel Control은 읽기 전용으로 설정한다.
 
-### 4.3 Manual Read 영역
-
-| Panel 표시 | System Variable | Control |
-|---|---|---|
-| Device Index | `M485E::ManualRead::Index` | Numeric Input |
-| Start Address | `M485E::ManualRead::StartAddress` | Numeric Input |
-| Quantity | `M485E::ManualRead::Quantity` | Numeric Input, 1~125 |
-| Read | `M485E::ManualRead::Send` | Momentary Button |
-| Auto Read 1s | `M485E::ManualRead::AutoReadManual` | Checkbox/Toggle |
-| Result | `M485E::ManualRead::ResultCode` | Numeric Display |
-| Data 0~7 | `M485E::ManualRead::Data[0..7]` | Numeric/Hex Display |
-
-처음에는 Data 0~7만 만들어도 된다. DLL과 System Variable은 최대 125 Register를 지원하므로
-필요해질 때 표시 칸을 늘린다. Auto Read는 마지막으로 성공한 Manual Read 요청을 반복한다.
-
-CANalyzer 9.x Panel Editor에서 `int32[]`의 개별 원소를 직접 Control에 연결할 수 있는지는
-회사 설치 버전에서 확인한다. 연결 메뉴에 배열 원소가 나타나지 않으면 첫 시험은 System Variable
-창에서 배열을 확인하고, 즉시 System Variable 구조를 변경하지 않는다.
-
-### 4.4 Manual Write 영역
+### 4.3 Manual Write 영역
 
 | Panel 표시 | System Variable | Control |
 |---|---|---|
 | Device Index | `M485E::ManualWrite::Index` | Numeric Input |
 | Start Address | `M485E::ManualWrite::StartAddress` | Numeric Input |
-| Quantity | `M485E::ManualWrite::Quantity` | Numeric Input, 1~125 |
-| Data 0~7 | `M485E::ManualWrite::Data[0..7]` | Numeric/Hex Input |
+| Quantity | `M485E::ManualWrite::Quantity` | Numeric Input, 1~122 |
+| Data 0~121 | `M485E::ManualWrite::Data[0..121]` | Numeric/Hex Input |
 | Write | `M485E::ManualWrite::Send` | Momentary Button |
 | Result | `M485E::ManualWrite::ResultCode` | Numeric Display |
 
 Data 배열의 System Variable 원소는 32bit 정수지만 입력 허용값은 16bit Register 범위인
-0~65535다. CAPL이 `word[]`로 변환하고 DLL은 앞에서 Quantity개만 사용한다.
+0~65535다. CAPL이 실제 배열 길이와 Quantity를 검증한 뒤 `word[]`로 변환하고 DLL은 앞에서
+Quantity개만 사용한다. 122개 입력을 한 화면에 나열하기보다는 장치 Tab 안에서 16~32개씩
+그룹으로 나누되, 각 Control은 같은 `Data[0]`~`Data[121]` 원소에 연결한다.
 
-### 4.5 Signal Control 영역
+### 4.4 Signal Control 영역
 
 | Panel 표시 | System Variable | Control |
 |---|---|---|
@@ -305,17 +298,17 @@ Monitoring Checkbox에는 slot 번호뿐 아니라 다음 이름을 함께 표�
 | 33 | 6 | 6 | Gas-2 - Feature Password |
 
 첫 Panel은 공통 Control 하나로 만드는 것을 권장한다. Device 탭을 만들더라도 초기에는 각 탭에
-해당 장치의 Index와 Rule Checkbox label만 안내하고, 실제 Read/Write는 공통
-`M485E::SignalControl`과 `M485E::ManualRead/Write`를 사용한다.
+해당 장치의 Index와 Rule Checkbox label만 안내하고, 실제 Signal 제어와 Register Write는 공통
+`M485E::SignalControl`과 `M485E::ManualWrite`를 사용한다.
 
 장치 탭마다 독립적인 `SelectedSignal`, `PhysicalValue`, `Read`, `Write` 변수를 만들고 탭을
 여는 즉시 Index까지 자동 지정하려면 추가 System Variable Namespace와 CAPL Adapter가 필요하다.
-이는 현재 기본 `M485E.vsysvar`와 `M485_E_UI.cin`에 구현된 범위가 아니므로 첫 시험에는 넣지 않는다.
+이는 현재 기본 `M485E.vsysvar`와 `M485E_UI.cin`에 구현된 범위가 아니므로 첫 시험에는 넣지 않는다.
 
 ## 6. Panel을 만든 뒤 시험 순서
 
 1. Measurement 시작 후 `State=1`, `ConfigurationValid=1`, `ResultCode=0`을 확인한다.
-2. Connect OFF 상태에서 Signal Read/Write와 Manual Read/Write를 먼저 확인한다.
+2. Connect OFF 상태에서 Signal Read/Write와 Manual Write를 먼저 확인한다.
 3. 실제 COM 연결 후 Connect를 ON으로 바꾸고 `State=4`를 기다린다.
 4. Board의 FC03, FC04, FC10 요청과 응답을 확인한다.
 5. Monitoring Checkbox 하나만 선택하고 ReadSwitch를 ON으로 바꾼다. Connect 전에 이미
@@ -326,7 +319,7 @@ Monitoring Checkbox에는 slot 번호뿐 아니라 다음 이름을 함께 표�
 
 ## 7. 완료 체크리스트
 
-- [ ] `M485_E_Main.can` 하나만 Program Node에 연결했다.
+- [ ] `M485E_Main.can` 하나만 Program Node에 연결했다.
 - [ ] Main의 DLL 상대경로에 실제 `M485E.dll`이 있다.
 - [ ] CSV 경로가 `.cfg` 위치를 기준으로 올바르다.
 - [ ] Device CSV의 고유 Port 수와 `gM485E_ActivePortCount`가 같다.
@@ -335,7 +328,7 @@ Monitoring Checkbox에는 slot 번호뿐 아니라 다음 이름을 함께 표�
 - [ ] FrameRule의 모든 Monitoring 대상에 ReadOption slot을 등록했다.
 - [ ] Panel Button과 Toggle의 동작 방식을 구분했다.
 - [ ] State/Result/Data 출력 Control을 Panel에서 편집 불가로 설정했다.
-- [ ] Connect 전에 CSV Valid와 수동 Read/Write를 확인했다.
+- [ ] Connect 전에 CSV Valid와 수동 Register Write 및 Signal Read/Write를 확인했다.
 - [ ] 실제 Board와 가상 CAN 시험 결과를 Write Window·Trace와 함께 기록했다.
 
 Panel 배치 시안은

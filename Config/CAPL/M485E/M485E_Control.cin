@@ -1,0 +1,182 @@
+/*@!Encoding:949*/
+
+// Control 모듈은 Connection Panel 명령과 DLL의 실제 Lifecycle 표시를 연결한다.
+// ConnectSwitch는 사용자 요청이고 ConnectedLed는 실제 상태이므로 서로 독립적으로 갱신한다.
+
+variables
+{
+     msTimer tM485E_LifecycleStatus;
+     long gM485E_ControlLifecycleStatus[9];
+     long gM485E_ControlLastLifecycleState = -1;
+}
+
+/*
+ * 함수명: M485E_Control_UpdateConnectionIndicators
+ * 기능: DLL Lifecycle 상태를 Panel 표시 전용 LED와 문자열로 변환한다.
+ * 파라미터: currentState - M485E_STATE_* 값 중 현재 DLL Lifecycle 상태
+ */
+void M485E_Control_UpdateConnectionIndicators(long currentState)
+{
+     @sysvar::M485E::Connection::ConnectedLed =
+          currentState == M485E_STATE_CONNECTED;
+     @sysvar::M485E::Connection::BusyLed =
+          currentState == M485E_STATE_REFRESHING ||
+          currentState == M485E_STATE_CONNECTING ||
+          currentState == M485E_STATE_DISCONNECTING;
+     @sysvar::M485E::Connection::ErrorLed =
+          currentState == M485E_STATE_ERROR;
+
+     switch (currentState)
+     {
+          case M485E_STATE_UNINITIALIZED:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Uninitialized");
+               break;
+          case M485E_STATE_DISCONNECTED:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Disconnected");
+               break;
+          case M485E_STATE_REFRESHING:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Refreshing");
+               break;
+          case M485E_STATE_CONNECTING:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Connecting");
+               break;
+          case M485E_STATE_CONNECTED:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Connected");
+               break;
+          case M485E_STATE_DISCONNECTING:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Disconnecting");
+               break;
+          case M485E_STATE_ERROR:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Error");
+               break;
+          default:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Unknown");
+               break;
+     }
+}
+
+/*
+ * 함수명: M485E_Control_ResetDisplay
+ * 기능: 첫 Lifecycle Poll 전과 Measurement 종료 후 Panel 상태를 안전한 초기값으로 되돌린다.
+ * 파라미터: 없음
+ */
+void M485E_Control_ResetDisplay()
+{
+     @sysvar::M485E::Connection::State = M485E_STATE_UNINITIALIZED;
+     @sysvar::M485E::Connection::LastResult = M485E_OK;
+     @sysvar::M485E::Connection::ConfigurationValid = 0;
+     M485E_Control_UpdateConnectionIndicators(M485E_STATE_UNINITIALIZED);
+}
+
+/*
+ * 함수명: M485E_Control_Start
+ * 기능: Connection 상태 표시 Timer를 시작하고 이전 상태 추적값을 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_Control_Start()
+{
+     gM485E_ControlLastLifecycleState = -1;
+     M485E_Control_ResetDisplay();
+     setTimer(tM485E_LifecycleStatus, 100);
+}
+
+/*
+ * 함수명: M485E_Control_Stop
+ * 기능: Measurement 종료 시 Connection 상태 표시 Timer를 중지한다.
+ * 파라미터: 없음
+ */
+void M485E_Control_Stop()
+{
+     cancelTimer(tM485E_LifecycleStatus);
+     M485E_Control_ResetDisplay();
+}
+
+// 이벤트명: Connection::Refresh 변경
+// 기능: Disconnected 상태에서 CSV Refresh를 요청하고 Momentary Button을 다시 0으로 내린다.
+on sysvar_update sysvar::M485E::Connection::Refresh
+{
+     long result;
+     long state;
+
+     if (@this == 0) return;
+     result = M485E_Core_GetLifecycleStatus(gM485E_ControlLifecycleStatus);
+     if (result == M485E_OK)
+     {
+          state = gM485E_ControlLifecycleStatus[M485E_LS_STATE];
+          if (state != M485E_STATE_DISCONNECTED)
+               result = M485E_ERR_INVALID_STATE;
+          else
+               result = M485E_Core_RefreshCsv();
+     }
+     @sysvar::M485E::Connection::ResultCode = result;
+     M485E_Core_ReportSyncFailure("RefreshCsv", result);
+     @this = 0;
+}
+
+// 타이머명: tM485E_LifecycleStatus
+// 기능: DLL Lifecycle 상태와 오류를 100ms마다 확인하여 Connection Panel에 표시한다.
+on timer tM485E_LifecycleStatus
+{
+     long result;
+     long monitoringResult;
+     long currentState;
+     long previousState;
+
+     result = M485E_Core_GetLifecycleStatus(gM485E_ControlLifecycleStatus);
+     if (result == M485E_OK)
+     {
+          currentState = gM485E_ControlLifecycleStatus[M485E_LS_STATE];
+          previousState = gM485E_ControlLastLifecycleState;
+          @sysvar::M485E::Connection::State = currentState;
+          @sysvar::M485E::Connection::LastResult =
+               gM485E_ControlLifecycleStatus[M485E_LS_LAST_RESULT];
+          @sysvar::M485E::Connection::ConfigurationValid =
+               gM485E_ControlLifecycleStatus[M485E_LS_CONFIGURATION_VALID];
+          M485E_Control_UpdateConnectionIndicators(currentState);
+
+          // 자동 재연결 횟수를 모두 소진하면 사용자가 다시 연결하도록 Switch를 내린다.
+          if (currentState == M485E_STATE_DISCONNECTED &&
+               gM485E_ControlLifecycleStatus[M485E_LS_LAST_COMPLETED_OPERATION] ==
+               M485E_OPERATION_AUTO_RECONNECT &&
+               gM485E_ControlLifecycleStatus[M485E_LS_LAST_RESULT] < M485E_OK &&
+               @sysvar::M485E::Connection::ConnectSwitch != 0)
+          {
+               @sysvar::M485E::Connection::ResultCode =
+                    gM485E_ControlLifecycleStatus[M485E_LS_LAST_RESULT];
+               @sysvar::M485E::Connection::ConnectSwitch = 0;
+          }
+
+          // DLL이 Snapshot Queue를 중지한 상태에서는 CAPL Monitoring Timer도 함께 멈춘다.
+          if (currentState != M485E_STATE_CONNECTED &&
+               M485E_Monitoring_IsEnabled() != 0)
+          {
+               monitoringResult = M485E_Monitoring_Stop();
+               @sysvar::M485E::Monitoring::ResultCode = monitoringResult;
+               M485E_Core_ReportSyncFailure("MonitoringStop", monitoringResult);
+          }
+
+          // 연결 전에 ReadSwitch가 ON이면 Connected 진입 시 최신 선택값으로 한 번 시작한다.
+          if (currentState == M485E_STATE_CONNECTED &&
+               previousState != M485E_STATE_CONNECTED &&
+               @sysvar::M485E::Monitoring::ReadSwitch != 0 &&
+               M485E_Monitoring_IsEnabled() == 0)
+          {
+               // UI의 100ms 동기화 Timer가 후보 배열을 계속 갱신하므로 Control은
+               // UI 모듈을 역호출하지 않고 Monitoring 공개 진입점만 사용한다.
+               monitoringResult = M485E_Monitoring_Start();
+               @sysvar::M485E::Monitoring::ResultCode = monitoringResult;
+               M485E_Core_ReportSyncFailure("MonitoringStart", monitoringResult);
+          }
+          gM485E_ControlLastLifecycleState = currentState;
+     }
+     M485E_Core_PollOneErrorEvent();
+     setTimer(tM485E_LifecycleStatus, 100);
+}

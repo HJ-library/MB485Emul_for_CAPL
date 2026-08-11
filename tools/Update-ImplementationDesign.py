@@ -53,7 +53,7 @@ phase_status = {
     "Phase 7": "Implementation Complete / Automated Verification Complete / External Verification Pending. t1.5/t3.5, Partial I/O, Cancellation은 Fake Transport로 검증; SystemBase Multi USB-485 실제 통합은 회사 환경에서 수행.",
     "Phase 8": "Implementation Complete / Automated Verification Complete / External Verification Pending. 비동기 Refresh/Connect, 1~4개 활성 Port 전체 rollback, 21 Export 통합, Finalize 및 Phase 1 ABI 회귀 완료; 실제 Port 복구는 회사 환경에서 수행.",
     "Phase 9": "Implementation Complete / Automated and CANalyzer 13 Compile Verification Complete / External Verification Pending. CAPL Core/Monitoring, 1,000ms Cycle, 10ms Pump, 66/33 Frame budget, 활성 Port round-robin 및 Extended CAN 조립 완료. Phase 9 Probe는 CANalyzer 13 x86 컴파일러에서 경고 없이 컴파일되었으며 CANalyzer 9.x SP8 Measurement는 회사 환경에서 수행.",
-    "Phase 10": "Home-testable Scope Complete / External Verification Pending. CAPL UI System Variable Adapter, Manual Read/Write, 1초 AutoRead, Signal Control, 시험 CSV·Probe·외부 검증 패키지 준비 완료. 독립 CAPL 컴파일러는 System Variable DB를 로드하지 않으므로 Main의 최종 Compile/Panel 배치, Board E2E 및 성능 실측은 회사 Configuration에서 수행.",
+    "Phase 10": "Home-testable Scope Complete / External Verification Pending. CAPL UI System Variable Adapter, Manual Write Data[122], Signal Control, 시험 CSV·Probe·외부 검증 패키지 준비 완료. 수동 Register Read/AutoRead Panel은 제거했으며 공개 Read API만 유지한다. 독립 CAPL 컴파일러는 System Variable DB를 로드하지 않으므로 Main의 최종 Compile/Panel 배치, Board E2E 및 성능 실측은 회사 Configuration에서 수행.",
 }
 
 phase_table = document.tables[15]
@@ -97,7 +97,7 @@ if not any(paragraph.text == compiler_marker for paragraph in document.paragraph
         "생성한다. Signal Read CAPL Wrapper는 저수준 F[1] ABI를 사용자-facing float& 단일 출력으로 감춘다."
     )
     document.add_paragraph(
-        "M485_E_Main.can의 독립 컴파일은 M485E.vsysvar가 로드되지 않은 컴파일러 문맥에서 System Variable "
+        "M485E_Main.can의 독립 컴파일은 M485E.vsysvar가 로드되지 않은 컴파일러 문맥에서 System Variable "
         "심볼을 해석할 수 없어 완료할 수 없다. 이는 PASS로 간주하지 않으며 CANalyzer Configuration에 "
         "M485E.vsysvar를 등록한 뒤 CANalyzer 9.x SP8에서 Compile 및 Measurement로 검증한다."
     )

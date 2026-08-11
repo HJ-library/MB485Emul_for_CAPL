@@ -23,7 +23,7 @@ const tests = [
   ["EV-009", "6/9", "FR-CAN-021, FR-CAN-029~031", "Board + Panel + CAN Trace", "RTU/Direct/Reset 변경 Snapshot", "0x81 SourceType 01/02/03 및 변경 당시 값 보존"],
   ["EV-010", "6/9", "FR-CAN-034~041", "1~4 virtual CAN channels", "여러 활성 Port 동시 Change Burst", "활성 Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할"],
   ["EV-011", "9/10", "FR-CAN-051~057, FR-LOAD-010, FR-LOAD-017", "CANalyzer Panel", "ReadSwitch OFF/ON 및 ReadOption 변경", "OFF 중 RTU 유지·CAN 억제, 다음 Cycle에 Candidate 원자 반영"],
-  ["EV-012", "10", "FR-UI-003~005, FR-UI-008~013, TBD-063", "CANalyzer Panel", "Manual Read/Write 및 1초 AutoRead", "확정 요청 Snapshot 사용, word 범위 검증, ResultCode 표시"],
+  ["EV-012", "10", "FR-UI-003~005, FR-UI-008~013, TBD-063", "CANalyzer Panel", "Manual Write Data[122] 및 Signal Control", "Send 시 요청 Snapshot 사용, Quantity 1~122와 word 범위 검증, ResultCode 표시"],
   ["EV-013", "10", "FR-UI-002, FR-SIG-001~040", "CANalyzer Panel", "Signal Float/Signed Read/Write", "12.5 등 물리값 왕복, 실패 시 기존 출력 유지"],
   ["EV-014", "7/8", "FR-LIFE-023~031, FR-LIFE-033", "Multi USB 485 removal", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected"],
   ["EV-015", "8", "FR-LIFE-017~022, PERF-022", "CANalyzer + Process monitor", "Disconnect/Connect와 Finalize", "Disconnect 값 보존; Finalize Join/Close 후 Context 폐기"],

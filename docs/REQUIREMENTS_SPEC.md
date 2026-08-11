@@ -121,8 +121,8 @@
 | --- | --- |
 | FR-REG-001 | DeviceMap이 참조한 Register Map에 정의된 Register 값은 DLL 메모리에 로딩한다. |
 | FR-REG-002 | DLL의 유효 Register 집합에 할당된 모든 Address는 CAPL에서 직접 읽고 변경할 수 있다. |
-| FR-REG-003 | CAPL 수동 Read는 Debug 기능으로 동작하며 Function Code를 받지 않는다. |
-| FR-REG-004 | CAPL 수동 Read에서는 `0x03`과 `0x04` Rule에 속한 Address를 모두 읽을 수 있어야 한다. |
+| FR-REG-003 | CAPL Register Read API는 Debug 기능으로 유지하며 Function Code를 받지 않는다. 이 API를 사용하는 수동 Read Panel은 제공하지 않는다. |
+| FR-REG-004 | CAPL Register Read API에서는 `0x03`과 `0x04` Rule에 속한 Address를 모두 읽을 수 있어야 한다. |
 | FR-REG-005 | CAPL 수동 Write 데이터는 `Index`, `Start Address`, `Quantity`, 16bit `Data[]`로 구성한다. |
 | FR-REG-006 | CAPL 직접 Register 변경은 `SourceType 0x02` 변경 Snapshot을 발생시킨다. |
 | FR-REG-007 | Register 저장소는 Function Code별로 분리하지 않고 `Index + Address`로 식별되는 하나의 공유 Register Memory를 사용한다. |
@@ -278,26 +278,27 @@
 | FR-CAPL-001 | CAPL 프로그램은 `Core`, `Monitoring`, `UI`의 세 영역으로 구성한다. |
 | FR-CAPL-002 | Core는 DLL 초기화, CSV 설정, COM 설정 및 Connect/Disconnect를 담당한다. |
 | FR-CAPL-003 | Monitoring은 CAN Monitoring 제어를 담당한다. |
-| FR-CAPL-004 | UI는 Panel 이벤트, 수동 Register 제어 및 Signal 물리값 제어를 담당한다. |
+| FR-CAPL-004 | UI는 Panel 이벤트, 수동 Register Write 및 Signal 물리값 제어를 담당한다. |
 | FR-CAPL-005 | DLL이 반환한 오류 상태와 상세 Context는 CAPL Core가 해석하여 CANalyzer Write Window에 출력한다. |
 | FR-CAPL-006 | 초기 오류 처리 함수는 Core 내부의 구분된 Error Handling 구획에 모으고, 규모와 재사용성이 커질 때 별도 CAPL Include 모듈로 분리한다. |
-| FR-UI-001 | Panel은 수동 Register Read/Write 기능을 제공한다. |
+| FR-UI-001 | Panel은 수동 Register Write 기능을 제공한다. |
 | FR-UI-002 | Panel은 Signal과 System Variable을 이용한 물리값 Read/Write 기능을 제공한다. |
 | FR-UI-003 | Panel은 Connect/Disconnect 제어 기능을 제공한다. |
 | FR-UI-004 | Panel은 Monitoring을 제어하는 `ReadSwitch`를 제공한다. |
 | FR-UI-005 | Panel 또는 CAPL에서 정상적으로 변경된 값은 DLL의 Register 메모리에 즉시 반영한다. |
 | FR-UI-006 | Panel은 최대 200개의 ReadOption Checkbox를 제공할 수 있으며, 선택 상태는 `sysvar::M485E::Monitoring::Check_ReadOption[]` System Variable 배열로 관리한다. |
 | FR-UI-007 | Checkbox가 선택된 ReadOption만 주기 Monitoring 대상에 포함한다. |
-| FR-UI-008 | 수동 Read Panel은 `sysvar::M485E::ManualRead` Namespace 아래에 `Index`, `StartAddress`, `Quantity`, `ResultData[]`, `AutoReadEnable`, `Send`, `ResultCode`, `DataValid`를 제공한다. |
-| FR-UI-009 | 수동 Write Panel은 `sysvar::M485E::ManualWrite` Namespace 아래에 `Index`, `StartAddress`, `Quantity`, `Data[]`, `Send`, `ResultCode`를 제공한다. `Data[]` System Variable의 원소형은 CAPL `long`과 호환되는 32bit signed 정수로 한다. |
-| FR-UI-010 | 수동 Read/Write의 `Send`는 Momentary Trigger로 사용한다. CAPL UI는 `Send`가 활성화된 시점의 입력 전체를 하나의 요청으로 Snapshot한 뒤 검증·실행하고, Handler 완료 시 `Send`를 비활성 값으로 복귀시킨다. 개별 입력값 변경만으로 DLL 요청을 실행하거나 확정 요청을 변경하지 않는다. |
-| FR-UI-011 | 수동 Read의 `AutoReadEnable`은 마지막으로 `Send`하여 확정된 유효 Read 요청을 CAPL Timer로 1,000ms마다 반복한다. Panel의 `Index`, `StartAddress`, `Quantity`를 편집해도 다음 `Send` 전까지 반복 요청에는 반영하지 않으며, 확정된 요청이 없으면 Auto Read를 시작하지 않고 오류 상태를 표시한다. |
-| FR-UI-012 | 수동 Read 성공 시 CAPL UI는 요청 Quantity만큼의 Register 값을 `ResultData[]`에 게시하고 `DataValid=1`로 설정한다. 실패 시 기존 `ResultData[]`는 유지하고 `DataValid=0`과 실패 `ResultCode`를 게시하여 이전 값을 최신 결과로 오인하지 않게 한다. |
-| FR-UI-013 | 수동 Write의 `Quantity`는 `Data[]` 앞에서부터 사용할 유효 Register 개수이다. CAPL UI는 DLL 호출 전에 해당 원소가 모두 `0..65535`인지 검사한 뒤 `word[]`로 변환하며, 실패하면 DLL을 호출하지 않는다. DLL은 Buffer Capacity, Quantity, Index 및 Address를 다시 최종 검증하고 성공 시에만 전체 Write를 원자적으로 적용한다. |
+| FR-UI-008 | 수동 Register Read Panel과 `sysvar::M485E::ManualRead` Namespace는 제공하지 않는다. CAN Monitoring과 공개 Register Read API는 유지한다. |
+| FR-UI-009 | 수동 Write Panel은 `sysvar::M485E::ManualWrite` Namespace 아래에 `Index`, `StartAddress`, `Quantity`, `Data[122]`, `Send`, `ResultCode`를 제공한다. `Data[]` System Variable의 원소형은 CAPL `long`과 호환되는 32bit signed 정수로 한다. |
+| FR-UI-010 | 수동 Write의 `Send`는 Momentary Trigger로 사용한다. CAPL UI는 `Send`가 활성화된 시점의 입력 전체를 하나의 요청으로 Snapshot한 뒤 검증·실행하고, Handler 완료 시 `Send`를 비활성 값으로 복귀시킨다. 개별 입력값 변경만으로 DLL 요청을 실행하지 않는다. |
+| FR-UI-011 | 수동 Register Read와 1,000ms AutoRead Timer는 제공하지 않는다. |
+| FR-UI-012 | Register 값을 별도 `ReadValue`/`WriteValue` System Variable로 연결하는 Panel 기능은 인터페이스 확정 전까지 구현 범위에서 제외한다. |
+| FR-UI-013 | 수동 Write의 `Quantity`는 `Data[]` 앞에서부터 사용할 유효 Register 개수이며 Panel에서는 `1..122`만 허용한다. CAPL UI는 실제 System Variable 배열 길이를 조회하고 `Quantity`가 배열 길이를 넘으면 DLL을 호출하지 않는다. 유효 원소가 모두 `0..65535`이면 `word[]`로 변환하며, DLL은 Buffer Capacity, Quantity, Index 및 Address를 다시 최종 검증하고 성공 시에만 전체 Write를 원자적으로 적용한다. |
 | FR-UI-014 | CAPL Monitoring은 최대 200개의 정적 `ReadOption` 항목에 `SysvarIndex`, `Index`, `RuleId`를 명시한다. `SysvarIndex`는 `0..ReadOptionCount-1`의 연속된 고유값이고 `Index + RuleId` 조합도 중복될 수 없으며, `Check_ReadOption[]`의 논리 길이는 `ReadOptionCount`와 일치해야 한다. |
 | FR-UI-015 | 프로젝트의 모든 `M485E_FrameRule.csv` Rule은 CAPL `ReadOption`에 정확히 한 번 매핑하고 전체 Rule 수는 200개를 넘지 않는다. CAPL Table과 CSV의 일치 여부는 프로젝트 Configuration 검증 대상으로 관리하며 1차 구현에 Rule Catalog 조회용 신규 공개 DLL API를 추가하지 않는다. |
 | FR-UI-016 | CAPL은 Checkbox에서 읽은 Candidate ReadOption 집합과 실제 Monitoring에 사용하는 Applied ReadOption 집합을 분리한다. Candidate 전체가 검증된 경우에만 Applied 집합을 원자 교체하고 거부 시 Checkbox를 직전 Applied 값으로 복원한다. |
 | FR-UI-017 | CAPL UI는 100ms Lifecycle Polling 결과로 실제 연결, 진행 중, 오류 상태를 각각 `Connection::ConnectedLed`, `BusyLed`, `ErrorLed`에 배타적으로 게시하고, 같은 상태를 `Connection::StateText`의 읽을 수 있는 문자열로 게시한다. `ConnectSwitch`는 사용자 의도이므로 실제 연결 LED로 사용하지 않는다. |
+| FR-UI-018 | 기본 프로젝트용 `M485E_ReadOption_ConfigureDevice(Index, StartReadOption, EndReadOption)` Helper는 한 장치의 Rule을 `Rule_ID 1..N` 순서로 연속된 ReadOption Slot에 배치하고 Slot 사이의 공백을 거부한다. 이는 기본 CAPL Table 작성 규칙이며 DLL/CSV의 공개 `Rule_ID 0..255` 허용 범위를 축소하지 않는다. Rule ID가 `1..N`이 아닌 프로젝트는 이 Helper의 명시 매핑 부분을 해당 `M485E_FrameRule.csv`에 맞게 작성한다. |
 
 ### 3.6 CAN Monitoring
 
@@ -520,7 +521,7 @@
 | IF-004 | Emulator Connect/Start 인터페이스 |
 | IF-005 | Emulator Disconnect/Stop 인터페이스 |
 | IF-006 | Monitoring Start/Stop 인터페이스 |
-| IF-007 | Index 단위 수동 Register Read 인터페이스 |
+| IF-007 | Index 단위 CAPL Register Read 인터페이스(Panel 미제공) |
 | IF-008 | Index 단위 수동 Register Write 인터페이스 |
 | IF-009 | Index와 SignalName 기반 물리값 Read 인터페이스 |
 | IF-010 | Index와 SignalName 기반 물리값 Write 인터페이스 |
@@ -831,10 +832,10 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| IF-REG-001 | CAPL 수동 Read의 논리 입력은 `Index`, `Start Address`, `Quantity`이며, Read 결과는 DLL이 CAPL의 `OutData[]` 출력 Buffer에 기록한다. |
+| IF-REG-001 | CAPL Register Read API의 논리 입력은 `Index`, `Start Address`, `Quantity`이며, Read 결과는 DLL이 CAPL의 `OutData[]` 출력 Buffer에 기록한다. 수동 Read Panel은 이 API에 연결하지 않는다. |
 | IF-REG-002 | CAPL 수동 Write의 논리 입력은 `Index`, `Start Address`, `Quantity`, `InData[]`이다. |
 | IF-REG-003 | `InData[]`와 `OutData[]`의 각 원소는 하나의 16bit Register 값이다. |
-| IF-REG-004 | 수동 Read에는 Function Code를 전달하지 않는다. |
+| IF-REG-004 | CAPL Register Read API에는 Function Code를 전달하지 않는다. |
 | IF-REG-005 | 사용자용 `M485E_Core_WriteRegisters`는 `Index`, `StartAddress`, `Quantity`, `InData[]`의 네 개 논리 파라미터만 제공한다. |
 | IF-REG-006 | CAPL Core Wrapper는 `elcount(InData)`로 계산한 배열 원소 수를 Buffer Capacity로 해석하여 DLL의 `ArrayLength` 파라미터로 자동 전달한다. |
 | IF-REG-007 | DLL용 `M485E_Dll_WriteRegisters`는 CAPL Context Handle, `Index`, `StartAddress`, `Quantity`, `ArrayLength`, `InData[]`를 입력받는다. |
@@ -843,10 +844,11 @@
 | IF-REG-010 | 사용자용 Register Read API의 표기는 `M485E_Core_ReadRegisters(Index, StartAddress, Quantity, OutData[])`로 하여 배열이 출력 Buffer임을 명시한다. |
 | IF-REG-011 | CAPL은 배열을 함수 반환값으로 직접 받을 수 없으므로 Register 여러 개의 Read 결과는 호출자가 제공한 `OutData[]`에 기록한다. |
 | IF-REG-012 | Core Wrapper는 `elcount(OutData)`를 DLL에 출력 Buffer 길이로 전달하고 DLL은 값을 기록하기 전에 `Quantity`와 Buffer 길이를 검증한다. |
-| IF-REG-013 | CAPL UI 내부에는 `Index`, `StartAddress`, `Quantity`를 갖는 Private `M485E_ReadRequest`와 동일 Metadata 및 고정 `word Data[]`를 갖는 Private `M485E_WriteRequest`를 둔다. Read와 Write 요청 상태는 별도 인스턴스로 관리한다. |
-| IF-REG-014 | CAPL UI의 Read/Write 처리 함수는 `Send` 시점에 System Variable 전체를 Private 요청 구조체로 Snapshot하고, 검증 후 각각 `M485E_Core_ReadRegisters`와 `M485E_Core_WriteRegisters`를 호출한다. CAPL 코드에서 생성한 요청도 같은 처리 함수와 검증 경로를 재사용한다. |
-| IF-REG-015 | Private CAPL 요청 구조체는 DLL Export Table 또는 공개 CAPL Core API의 파라미터로 노출하지 않는다. Core와 DLL 경계에서는 `IF-API-014~015`의 Scalar 및 caller-owned `word[]` 계약만 사용한다. |
-| IF-REG-016 | Read 결과 Buffer는 요청 구조체에 포함하지 않고 호출자가 소유한다. Panel Wrapper는 Read 성공 직후 결과를 `ResultData[]`로 게시하며, 실패 시 출력 Buffer와 기존 Panel 결과값을 변경하지 않는다. |
+| IF-REG-013 | CAPL UI 내부에는 `Index`, `StartAddress`, `Quantity`와 고정 `word Data[]`를 갖는 Private `M485E_WriteRequest`를 둔다. 수동 Read용 Private 요청 구조체는 두지 않는다. |
+| IF-REG-014 | CAPL UI의 Write 처리 함수는 `Send` 시점에 System Variable 전체를 Private 요청 구조체로 Snapshot하고 검증 후 `M485E_Core_WriteRegisters`를 호출한다. CAPL 코드에서 생성한 Write 요청도 같은 처리 함수와 검증 경로를 재사용한다. |
+| IF-REG-015 | Private CAPL Write 요청 구조체는 DLL Export Table 또는 공개 CAPL Core API의 파라미터로 노출하지 않는다. Core와 DLL 경계에서는 `IF-API-014~015`의 Scalar 및 caller-owned `word[]` 계약만 사용한다. |
+| IF-REG-016 | 공개 Register Read API의 출력 Buffer는 호출자가 소유하며 실패 시 변경하지 않는다. CAPL UI는 `ManualRead` 결과 배열이나 AutoRead Timer를 제공하지 않는다. |
+| IF-REG-017 | `ManualWrite::Data`의 Panel System Variable 용량은 122개다. CAPL UI는 `SysGetVariableArrayLength`로 실제 용량을 확인하여 `Quantity`가 용량을 넘으면 `M485E_ERR_INVALID_ARGUMENT`를 반환한다. 내부 `word[125]` Buffer와 DLL Direct Write의 1~125 공개 계약은 ABI 호환을 위해 유지한다. |
 
 ### 설계 결정
 
@@ -912,7 +914,7 @@
 | ID | 요구사항 |
 | --- | --- |
 | DATA-LAYOUT-001 | 프로젝트의 CANalyzer Configuration Root는 `Config`이며 그 아래에 `CAPL`, `Panel`, `System Variables`, `Maps`, `Data` 디렉터리와 `CANalyzerConfig.cfg`를 배치한다. |
-| DATA-LAYOUT-002 | `Config/CAPL/DLL`에는 x86 `M485E.dll`을 배치하고 `Config/CAPL/M485E`에는 `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_ReadOption.cin`, `M485_E_UI.cin`을 배치한다. |
+| DATA-LAYOUT-002 | `Config/CAPL/DLL`에는 x86 `M485E.dll`을 배치하고 `Config/CAPL/M485E`에는 `M485E_Main.can`, `M485E_Core.cin`, `M485E_Monitoring.cin`, `M485E_ReadOption.cin`, `M485E_Connection.cin`, `M485E_Control.cin`, `M485E_UI.cin`을 배치한다. |
 | DATA-LAYOUT-003 | `Config/Maps`에는 DeviceMap, FrameRule 및 하나 이상의 장치 유형별 Register Map을 배치한다. `Main.can`은 DeviceMap과 FrameRule 경로를 지정하고 DeviceMap은 각 Register Map 상대경로를 지정한다. |
 | DATA-LAYOUT-004 | Panel 및 System Variable의 세부 파일명과 파일 형식은 해당 산출물을 설계할 때 확정하되 `Config/Panel`, `Config/System Variables` 디렉터리 경계는 유지한다. |
 
@@ -1172,7 +1174,7 @@
 | AC-003 | FR-RTU-004 | 유효한 `0x10` 요청 후 대상 Register가 요청값으로 변경된다. |
 | AC-004 | FR-RTU-005 | `0x04` 전용 영역에 대한 외부 `0x10` 요청이 거부된다. |
 | AC-005 | FR-RTU-007 | 같은 Port의 서로 다른 Slave ID 요청이 각각 올바른 Index의 Register에 접근한다. |
-| AC-006 | FR-REG-004 | CAPL 수동 Read로 `0x03` 및 `0x04` Rule 영역을 Function Code 없이 조회할 수 있다. |
+| AC-006 | FR-REG-004 | CAPL Register Read API로 `0x03` 및 `0x04` Rule 영역을 Function Code 없이 조회할 수 있다. |
 | AC-007 | FR-SIG-002 | Signal 물리값 Write 후 `Scale`, `Offset`, `Type`, `Byte_Order`에 맞는 Register Raw 값이 저장된다. |
 | AC-008 | FR-SIG-005 | Signal Size를 벗어나는 값은 오류를 반환하고 기존 Register 값은 유지된다. |
 | AC-009 | FR-CSV-005 | Disconnect 상태에서 Refresh하면 기존 런타임 값이 사라지고 새 `Init_Value`가 적용된다. |
@@ -1350,9 +1352,9 @@
 | AC-180 | IF-ESTAT-001~002, IF-CSTAT-001~002, IF-QSTAT-001~004 | Error Queue Stats 11개와 Change Queue Stats 12개가 정의된 순서로 반환되고 Counter 포화, Sequence 순환 및 조회 비파괴 규칙을 만족한다. |
 | AC-181 | IF-EMETA-024~025, IF-QSTAT-003 | Error 또는 Stats 출력 Buffer가 부족하면 출력과 원본 오류/Queue를 변경하지 않고, 조회할 오류가 없으면 No Data와 불변 출력 Buffer를 반환한다. |
 | AC-182 | IF-API-012~013, IF-MON-006~012, IF-CSTAT-001~002 | CAPL Output Pump가 활성 PortSlot 0~N-1을 순환하여 전달하면 각 Slot의 Change Queue와 Stats만 조회하고 Port 문자열 비교 없이 Metadata의 동일 PortSlot로 가상 CAN 채널을 선택한다. |
-| AC-183 | FR-UI-008~011, IF-REG-013~015 | Panel의 수동 Read/Write 입력 일부를 편집하는 동안 DLL 호출이 발생하지 않고, `Send` 시점의 전체 입력만 Private CAPL 요청 구조체로 Snapshot되어 한 번 실행된다. |
-| AC-184 | FR-UI-011 | 유효 Read를 `Send`한 뒤 Auto Read를 활성화하면 같은 `Index`, `StartAddress`, `Quantity`가 1,000ms마다 반복되고, Panel 입력 편집은 다음 `Send` 전까지 반복 요청을 변경하지 않는다. 확정 요청 없이 활성화하면 DLL을 호출하지 않고 오류 상태를 게시한다. |
-| AC-185 | FR-UI-012, IF-REG-016 | 수동 Read 성공 시 요청 Quantity와 같은 길이의 `ResultData[]` 및 `DataValid=1`을 게시하고, 실패 시 기존 결과값은 유지하면서 `DataValid=0`과 실패 `ResultCode`를 게시한다. |
+| AC-183 | FR-UI-008~011, IF-REG-013~015 | Panel의 수동 Write 입력 일부를 편집하는 동안 DLL 호출이 발생하지 않고, `Send` 시점의 전체 입력만 Private CAPL Write 요청 구조체로 Snapshot되어 한 번 실행된다. |
+| AC-184 | FR-UI-011 | CAPL UI와 System Variable DB에 수동 Register Read Send Handler, `ManualRead` Namespace 및 1,000ms AutoRead Timer가 존재하지 않는다. |
+| AC-185 | FR-UI-012, IF-REG-016 | 수동 Read Panel 제거 후에도 공개 Register Read API의 caller-owned 출력 Buffer 보호 및 `0x03`/`0x04` 공통 조회 회귀 시험이 통과한다. |
 | AC-186 | FR-UI-013, IF-REG-006~009 | 고정 Write Buffer의 Capacity가 Quantity 이상이면 앞의 Quantity개만 원자적으로 기록하고, Capacity 부족 또는 `long` 입력값의 `word` 범위 초과 시 Register를 하나도 변경하지 않는다. |
 | AC-187 | IF-REG-015 | CAPL DLL Export Table에는 Private `M485E_ReadRequest` 또는 `M485E_WriteRequest` 구조체가 노출되지 않고 공개 API는 `IF-API-014~015`의 Scalar와 `word[]` 계약만 사용한다. |
 | AC-188 | FR-LIFE-016, IF-CTX-007, IF-CTX-012 | 첫 Core Context Initialize 후 같은 Handle의 중복 및 다른 Handle의 Initialize는 기존 Context를 변경하지 않고 거부되며, Handle `0`도 같은 계약을 따른다. 성공적인 Finalize 후 다음 Measurement의 Initialize는 성공한다. |
@@ -1473,7 +1475,7 @@
 | TBD-046 ◆ | 기존 `GetState`를 9개 필드의 Versioned `GetLifecycleStatus`로 교체하고 Lifecycle 완료 결과를 Error FIFO와 독립된 Latch에 보존한다. | CANalyzer 9.x `long[]` 출력 ABI, Generation Polling, Refresh 성공·실패와 Error FIFO Overflow 시험 |
 | TBD-052 ◆ | Change Queue Dequeue와 Stats API는 설정용 Port 문자열을 반복 전달하지 않고 `long PortSlot`으로 Port별 Queue를 선택한다. | CANalyzer 9.x 숫자 ABI, 활성 Port Round-robin, 잘못된 Slot 및 Metadata Routing 시험 |
 | TBD-051 ◆ | Write Buffer 길이는 Capacity로 정의하고 `InCount >= Quantity`이면 앞의 Quantity개만 사용한다. Core는 `elcount()`를 전달하고 DLL이 최종 검증한다. | CANalyzer 9.x 고정 `word[]`의 `elcount()` 전달, Quantity 경계 및 Buffer 부족 시험 |
-| TBD-063 ◆ | 수동 Register Panel은 `M485E::ManualRead`/`ManualWrite` System Variable을 UI Adapter로 사용하고, `Send` 시 Private CAPL 요청 구조체 Snapshot을 만든다. Auto Read는 마지막 확정 Read를 1,000ms마다 반복한다. | CANalyzer 9.x Private struct, `SysGet/SetVariableLongArray`, Momentary Send 및 Timer 컴파일·Panel 연동 시험 |
+| TBD-063 ◆ | 수동 Register Panel은 `M485E::ManualWrite` System Variable만 UI Adapter로 사용하고, `Send` 시 Private CAPL 요청 구조체 Snapshot을 만든다. 수동 Read 및 AutoRead UI는 제공하지 않으며 공개 Register Read API는 유지한다. | CANalyzer 9.x Private struct, `SysGetVariableLongArray`, Momentary Send 컴파일·Panel 연동 시험 |
 | TBD-047 ◆ | 단일 활성 Core Context를 사용하고 Finalize는 모든 초기화 상태에서 Worker 취소·Join과 COM Close를 완료한 뒤 Context 데이터를 폐기하는 동기 Failsafe로 동작한다. 강제 Thread 종료는 사용하지 않는다. | CANalyzer 9.x 각 Lifecycle 상태의 측정 종료, Cancel I/O, Worker Join, DLL 재사용 및 다음 Measurement 재초기화 시험 |
 | TBD-005 ◆ | Disconnect와 자동 재연결은 Register 현재값, Active Configuration 및 Port 설정을 유지하고 Refresh 성공 또는 명시적 Reset만 `Init_Value`를 다시 적용한다. | Disconnect/Connect, Runtime 장애/자동 재연결 및 Refresh/Reset 조합의 Register 보존 시험 |
 | TBD-055 ◆ | Refresh는 Pending Path 세대·Configuration·Init Memory를 성공 시 원자 승격한다. 실패 시 Last-good 상태를 보존하지만 성공한 Refresh 전까지 Connect를 차단하고 1차 Override는 제공하지 않는다. | 최초 Load, Last-good 존재/부재, 실패 후 Path 수정·재시도, Connect 차단 및 원자 승격 시험 |

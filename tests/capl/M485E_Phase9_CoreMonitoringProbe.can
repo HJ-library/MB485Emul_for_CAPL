@@ -3,8 +3,8 @@ includes
 {
   #pragma library("..\\..\\dist\\M485E.dll")
   #include "..\\..\\generated\\capl\\M485E_Contracts.generated.cin"
-  #include "..\\..\\Config\\CAPL\\M485E\\M485_E_Core.cin"
-  #include "..\\..\\Config\\CAPL\\M485E\\M485_E_Monitoring.cin"
+  #include "..\\..\\Config\\CAPL\\M485E\\M485E_Core.cin"
+  #include "..\\..\\Config\\CAPL\\M485E\\M485E_Monitoring.cin"
 }
 
 variables
@@ -31,28 +31,28 @@ variables
 void M485E_Probe_InitializePortConfigs()
 {
   gM485EProbePortConfigs[0].portSlot = 0;
-  gM485EProbePortConfigs[0].comPortNumber = 11;
+  gM485EProbePortConfigs[0].comPortNumber = 8;
   gM485EProbePortConfigs[0].baudRate = 115200;
   gM485EProbePortConfigs[0].dataBits = 8;
   gM485EProbePortConfigs[0].parity = M485E_PARITY_NONE;
   gM485EProbePortConfigs[0].stopBits = 1;
 
   gM485EProbePortConfigs[1].portSlot = 1;
-  gM485EProbePortConfigs[1].comPortNumber = 12;
+  gM485EProbePortConfigs[1].comPortNumber = 9;
   gM485EProbePortConfigs[1].baudRate = 115200;
   gM485EProbePortConfigs[1].dataBits = 8;
   gM485EProbePortConfigs[1].parity = M485E_PARITY_NONE;
   gM485EProbePortConfigs[1].stopBits = 1;
 
   gM485EProbePortConfigs[2].portSlot = 2;
-  gM485EProbePortConfigs[2].comPortNumber = 13;
+  gM485EProbePortConfigs[2].comPortNumber = 0;
   gM485EProbePortConfigs[2].baudRate = 115200;
   gM485EProbePortConfigs[2].dataBits = 8;
   gM485EProbePortConfigs[2].parity = M485E_PARITY_NONE;
   gM485EProbePortConfigs[2].stopBits = 1;
 
   gM485EProbePortConfigs[3].portSlot = 3;
-  gM485EProbePortConfigs[3].comPortNumber = 14;
+  gM485EProbePortConfigs[3].comPortNumber = 0;
   gM485EProbePortConfigs[3].baudRate = 115200;
   gM485EProbePortConfigs[3].dataBits = 8;
   gM485EProbePortConfigs[3].parity = M485E_PARITY_NONE;

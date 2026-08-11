@@ -1,0 +1,180 @@
+/*@!Encoding:949*/
+
+// Connection 모듈은 Panel의 연결 의도와 DLL의 실제 비동기 수명주기를 분리해 관리한다.
+// Connect/Disconnect 명령은 이 파일의 단일 Timer에서만 호출하여 중복 요청을 방지한다.
+
+variables
+{
+     msTimer tM485E_ConnectionControl;
+     long gM485E_ConnectionStatus[9];
+     long gM485E_DesiredConnected;
+     long gM485E_ConnectionCommandSent;
+     long gM485E_ShuttingDown;
+}
+
+/*
+ * 함수명: M485E_Connection_StopControl
+ * 기능: 연결 제어를 중단하고 Panel의 연결 요청 Switch를 OFF로 동기화한다.
+ * 파라미터: result - 중단 원인이 된 결과 코드. 음수이면 Write 창에도 오류를 출력한다.
+ */
+void M485E_Connection_StopControl(long result)
+{
+     gM485E_DesiredConnected = 0;
+     gM485E_ConnectionCommandSent = 0;
+     @sysvar::M485E::Connection::ResultCode = result;
+     if (result < M485E_OK) M485E_Core_ReportSyncFailure("Connection", result);
+     if (@sysvar::M485E::Connection::ConnectSwitch != 0)
+          @sysvar::M485E::Connection::ConnectSwitch = 0;
+}
+
+/*
+ * 함수명: M485E_Connection_Initialize
+ * 기능: Measurement 시작 전에 Connection 제어 상태를 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_Connection_Initialize()
+{
+     gM485E_DesiredConnected = 0;
+     gM485E_ConnectionCommandSent = 0;
+     gM485E_ShuttingDown = 0;
+}
+
+/*
+ * 함수명: M485E_Connection_RequestStartup
+ * 기능: 시작 시 ConnectSwitch를 자동 ON하고 500ms 뒤 연결 절차를 시작한다.
+ * 파라미터: 없음
+ */
+void M485E_Connection_RequestStartup()
+{
+     gM485E_DesiredConnected = 1;
+     gM485E_ConnectionCommandSent = 0;
+     @sysvar::M485E::Connection::ConnectSwitch = 1;
+     setTimer(tM485E_ConnectionControl, 500);
+}
+
+/*
+ * 함수명: M485E_Connection_Shutdown
+ * 기능: 연결 Timer를 중지하고 종료 중 발생하는 Switch 이벤트를 차단한다.
+ * 파라미터: 없음
+ */
+void M485E_Connection_Shutdown()
+{
+     gM485E_ShuttingDown = 1;
+     cancelTimer(tM485E_ConnectionControl);
+     gM485E_DesiredConnected = 0;
+     gM485E_ConnectionCommandSent = 0;
+     @sysvar::M485E::Connection::ConnectSwitch = 0;
+}
+
+// 이벤트명: Connection::ConnectSwitch 변경
+// 기능: 사용자의 연결 의도만 저장하고 실제 DLL 명령은 Connection Control Timer에 맡긴다.
+on sysvar_update sysvar::M485E::Connection::ConnectSwitch
+{
+     if (gM485E_ShuttingDown != 0) return;
+     gM485E_DesiredConnected = @this != 0;
+     gM485E_ConnectionCommandSent = 0;
+     if (gM485E_ContextInitialized == 0) return;
+     if (gM485E_DesiredConnected != 0)
+          setTimer(tM485E_ConnectionControl, 500);
+     else
+          setTimer(tM485E_ConnectionControl, 1);
+}
+
+// 타이머명: tM485E_ConnectionControl
+// 기능: 비동기 Refresh와 Connect/Disconnect 완료 상태를 100ms 간격으로 확인한다.
+on timer tM485E_ConnectionControl
+{
+     long result;
+     long state;
+     long activeOperation;
+     long lastResult;
+
+     if (gM485E_ShuttingDown != 0) return;
+     result = M485E_Core_GetLifecycleStatus(gM485E_ConnectionStatus);
+     if (result != M485E_OK)
+     {
+          M485E_Connection_StopControl(result);
+          return;
+     }
+
+     state = gM485E_ConnectionStatus[M485E_LS_STATE];
+     activeOperation = gM485E_ConnectionStatus[M485E_LS_ACTIVE_OPERATION];
+     lastResult = gM485E_ConnectionStatus[M485E_LS_LAST_RESULT];
+
+     if (gM485E_DesiredConnected != 0)
+     {
+          if (state == M485E_STATE_CONNECTED)
+          {
+               @sysvar::M485E::Connection::ResultCode = M485E_OK;
+               return;
+          }
+          if (state == M485E_STATE_REFRESHING || state == M485E_STATE_CONNECTING ||
+               state == M485E_STATE_DISCONNECTING)
+          {
+               setTimer(tM485E_ConnectionControl, 100);
+               return;
+          }
+          if (state == M485E_STATE_DISCONNECTED)
+          {
+               if (gM485E_ConnectionStatus[M485E_LS_CONFIGURATION_VALID] == 0)
+               {
+                    if (lastResult >= M485E_OK)
+                         lastResult = M485E_ERR_CONFIGURATION_NOT_READY;
+                    M485E_Connection_StopControl(lastResult);
+                    return;
+               }
+               if (gM485E_ConnectionCommandSent == 0)
+               {
+                    result = M485E_Core_Connect();
+                    @sysvar::M485E::Connection::ResultCode = result;
+                    M485E_Core_ReportSyncFailure("Connect", result);
+                    if (result != M485E_OK)
+                    {
+                         M485E_Connection_StopControl(result);
+                         return;
+                    }
+                    gM485E_ConnectionCommandSent = 1;
+                    setTimer(tM485E_ConnectionControl, 100);
+                    return;
+               }
+
+               // 요청 접수 후 다시 Disconnected로 돌아오면 초기 Connect가 실패한 것이다.
+               if (lastResult >= M485E_OK) lastResult = M485E_ERR_CONNECT_FAILED;
+               M485E_Connection_StopControl(lastResult);
+               return;
+          }
+
+          if (lastResult >= M485E_OK) lastResult = M485E_ERR_INVALID_STATE;
+          M485E_Connection_StopControl(lastResult);
+          return;
+     }
+
+     if (state == M485E_STATE_DISCONNECTED || state == M485E_STATE_UNINITIALIZED ||
+          state == M485E_STATE_REFRESHING)
+          return;
+     if (state == M485E_STATE_CONNECTING &&
+          activeOperation != M485E_OPERATION_AUTO_RECONNECT)
+     {
+          // 초기 Connect는 취소할 수 없으므로 완료된 직후 Disconnect한다.
+          setTimer(tM485E_ConnectionControl, 100);
+          return;
+     }
+     if (state == M485E_STATE_DISCONNECTING)
+     {
+          setTimer(tM485E_ConnectionControl, 100);
+          return;
+     }
+     if (gM485E_ConnectionCommandSent == 0)
+     {
+          result = M485E_Core_Disconnect();
+          @sysvar::M485E::Connection::ResultCode = result;
+          M485E_Core_ReportSyncFailure("Disconnect", result);
+          if (result != M485E_OK)
+          {
+               M485E_Connection_StopControl(result);
+               return;
+          }
+          gM485E_ConnectionCommandSent = 1;
+     }
+     setTimer(tM485E_ConnectionControl, 100);
+}

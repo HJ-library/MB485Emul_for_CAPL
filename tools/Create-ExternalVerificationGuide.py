@@ -157,7 +157,7 @@ def main():
     add_heading(doc, "2. CANalyzer 구성 절차", 1)
     steps = [
         "tools/Prepare-M485EPackage.ps1 -Configuration Release를 실행해 DLL과 생성 계약을 Config/CAPL에 배치한다.",
-        "CAPL Program Node에 Config/CAPL/M485E/M485_E_Main.can을 연결한다. Main은 생성 계약, Core, Monitoring, UI를 포함한다.",
+        "CAPL Program Node에 Config/CAPL/M485E/M485E_Main.can을 연결한다. Main은 생성 계약, Core, Monitoring, UI를 포함한다.",
         "Config/System Variables/M485E.vsysvar를 Configuration에 추가한다.",
         "Main.can에서 DeviceMap과 FrameRule 상대경로를 지정한다. Core가 getAbsFilePath()로 절대경로를 DLL에 전달하고 Register Map은 DeviceMap의 CSV_DB_Name으로 선택한다.",
         "DeviceMap 고유 Port 수와 같은 1~4개 PortSlot의 COM 번호와 BaudRate/DataBits/Parity/StopBits를 설정하고 Refresh 완료를 Polling한 뒤 Connect한다.",
@@ -182,7 +182,7 @@ def main():
         ("EV-009", "6/9", "RTU/Direct/Reset 변경 Snapshot", "0x81 SourceType 01/02/03 및 변경 당시 값 보존", "CAN trace"),
         ("EV-010", "6/9", "여러 활성 Port 동시 Change Burst", "활성 Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할", "CAN trace"),
         ("EV-011", "9/10", "ReadSwitch OFF/ON 및 ReadOption 변경", "OFF 중 RTU 유지·CAN 억제, 다음 Cycle에 Candidate 원자 반영", "CAN/Write"),
-        ("EV-012", "10", "Panel Manual Read/Write 및 1초 AutoRead", "확정 요청 Snapshot 사용, word 범위 검증, ResultCode 표시", "Panel capture"),
+        ("EV-012", "10", "Panel Manual Write Data[122] 및 Signal Control", "Send 시 요청 Snapshot 사용, Quantity 1~122와 word 범위 검증, ResultCode 표시", "Panel capture"),
         ("EV-013", "10", "Panel Signal Float/Signed Read/Write", "12.5 등 물리값이 그대로 왕복하고 실패 시 기존 출력 유지", "Panel capture"),
         ("EV-014", "7/8", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected", "Timestamp log"),
         ("EV-015", "8", "Disconnect/Connect와 Finalize", "Disconnect는 값 보존, Finalize는 2초 목표 내 Join/Close 후 Context 폐기", "Status/Process"),

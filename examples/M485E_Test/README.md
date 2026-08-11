@@ -119,7 +119,7 @@ Panel은 다음 세 영역으로 나눈다.
 5. Gas Reset Address가 `40200`인지 `40201`인지 실제 Board 요청 Frame으로 확인한다.
 6. 실제 COM 번호에 맞게 DeviceMap과 CAPL Port 설정을 변경한다.
 7. DeviceMap, FrameRule 및 참조 Register Map을 Disconnect 상태에서 Refresh하고 CSV 오류가 없는지 확인한다.
-8. Manual Read/Write로 각 Device Index를 시험한다.
+8. Manual Write와 Signal Read로 각 Device Index를 시험한다.
 9. 장치 탭 Panel Adapter를 구현한 후 Signal Physical Value 및 Monitoring을 시험한다.
 
 ## 범위에서 제외된 내용

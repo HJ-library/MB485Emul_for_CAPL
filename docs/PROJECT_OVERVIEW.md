@@ -20,12 +20,14 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
 | CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
 | CAPL ReadOption | 프로젝트 FrameRule의 `slot ↔ Index + Rule_ID` 고정 목록을 한곳에서 관리 |
-| CAPL UI | Panel/System Variable 요청을 캡처해 Core 또는 Monitoring 진입점에 전달 |
-| CAPL Main | 시작 구성, 500ms 자동 연결, ConnectSwitch와 Measurement 종료를 관리 |
+| CAPL Connection | ConnectSwitch, 500ms 자동 연결 Timer와 Connect/Disconnect 요청을 관리 |
+| CAPL Control | Refresh와 100ms Lifecycle 상태를 LED·문자열 System Variable로 변환 |
+| CAPL UI | Manual Write, Signal과 Monitoring System Variable 요청을 캡처해 공개 진입점에 전달 |
+| CAPL Main | 프로젝트 경로·Port 초기 설정과 Measurement 시작·종료 순서를 관리 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
 
-Core만 `M485E_Dll_*`을 직접 호출한다. UI는 System Variable과 Panel 표현을, Monitoring은
-CAN Message 생성과 스케줄링을 소유하며 Core는 두 표현 계층에 의존하지 않는다.
+Core만 `M485E_Dll_*`을 직접 호출한다. Connection·Control·UI는 System Variable과 Panel
+표현을, Monitoring은 CAN Message 생성과 스케줄링을 소유하며 Core는 표현 계층에 의존하지 않는다.
 
 RS-485 Port Slot 0~3은 Main에 설정한 가상 CAN Channel과 1:1로 대응한다. 기본 1-Port
 예제는 Slot 0을 Channel 1에 출력한다. 가상 CAN은 외부
@@ -66,7 +68,7 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 
 ![전체 동작 흐름](assets/overall_operation_flow.png)
 
-1. CANalyzer가 `M485_E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
+1. CANalyzer가 `M485E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
 2. CAPL `preStart`에서 현재 Program Node를 등록하고 Vector Context Handle을 얻는다. Handle 값 0도 정상값이다.
 3. CAPL `start`에서 DLL Context를 초기화하고 DeviceMap/FrameRule 경로와 활성 Port 1~4개의 Serial 설정을 전달한다.
 4. DLL이 DeviceMap에서 참조하는 Register Map까지 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
@@ -112,18 +114,20 @@ Panel은 DLL을 직접 호출하지 않고 System Variable을 변경한다.
 ```text
 Panel/System Variable
         ↓
-M485_E_UI.cin
+M485E_UI.cin
         ↓
-M485_E_Core.cin
+M485E_Core.cin
         ↓
 M485E.dll Runtime Register Model
 ```
 
-- Manual Read: `Index + StartAddress + Quantity`를 요청하고 `Data[]`로 16bit Register 배열을 받는다.
-- Manual Write: `Index + StartAddress + Quantity + Data[]`를 전달해 16bit Register 배열을 쓴다.
+- Manual Write: `Index + StartAddress + Quantity + Data[122]`를 전달해 최대 122개의 16bit Register를 한 번에 쓴다. 값 편집만으로는 쓰지 않고 `Send`에서 요청 전체를 적용한다.
 - Signal Read: `Index + SignalName`을 요청하고 `PhysicalValue`로 물리값을 받는다.
 - Signal Write: `Index + SignalName + PhysicalValue`를 전달하며 Scale·Offset과 자료형 변환을 적용한다.
-- Auto Read: 마지막으로 확정된 Manual Read 요청을 1초마다 반복한다.
+
+수동 Register Read와 AutoRead Panel은 제공하지 않는다. CAN Monitoring과 CAPL/DLL의 공개
+Register Read API는 유지하며, Register별 읽기 표시 System Variable 연결은 인터페이스 확정
+전까지 보류한다.
 
 Signal Type은 `Signed`, `Unsigned`, `IEEE Float`, `IEEE Double`을 지원한다. 다중 Register
 값은 첫 Address에 High Word가 오는 `HighWordFirst`로 고정한다. `Byte_Order=LittleEndian`은
@@ -166,9 +170,10 @@ Monitoring을 켤 때 별도 `SourceType=0x04` Init Snapshot은 만들지 않는
 기존 `0x80` Periodic 경로에서 첫 Cycle부터 처리한다. 값 변경 Snapshot은 다음 Output
 Pump에서 우선 처리한다.
 
-프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Rule을 `M485_E_ReadOption.cin`의
-`M485E_ReadOption_ConfigureAll()`에서
-`M485E_Monitoring_ConfigureReadOption(slot, Index, Rule_ID)`에 정확히 한 번 등록해야 한다.
+프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Device Rule 구간을
+`M485E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에서
+`M485E_ReadOption_ConfigureDevice(Index, StartReadOption, EndReadOption)`로 등록한다.
+함수는 해당 Device의 Rule ID를 1부터 연속 생성한다.
 Slot은 0부터 빈칸 없이 증가해야 하고 같은 `Index + Rule_ID`의 중복 등록은 거부된다.
 
 Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별 Cursor를 별도로
@@ -213,10 +218,10 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 1. Solution을 `Release/Win32`로 빌드하여 `dist/M485E.dll`을 만든다.
 2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 DLL을 `Config/CAPL/Dll`에 배치한다.
 3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
-4. Program Node에 `M485_E_Main.can`을 연결한다.
+4. Program Node에 `M485E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.
 6. Measurement를 시작하면 ConnectSwitch가 자동으로 ON 된다. `ConfigurationValid=1`, `State=Connected`를 확인한다.
-7. 필요하면 ConnectSwitch를 OFF로 내려 Manual Register·Signal Read/Write를 확인한다.
+7. 필요하면 ConnectSwitch를 OFF로 내려 Manual Register Write와 Signal Read/Write를 확인한다.
 8. 자동 Connect가 실패했다면 USB-RS485와 Board 연결을 확인하고 `ConnectSwitch`를 다시 켠다.
 9. FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
 

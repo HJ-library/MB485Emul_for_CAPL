@@ -1,0 +1,187 @@
+/*@!Encoding:949*/
+includes
+{
+     // DLL은 Main.can 기준 상위 CAPL/Dll 폴더에서 로드한다.
+     // generated 파일은 DLL ABI 상수이고 나머지 cin 파일은 역할별 CAPL 모듈이다.
+     #pragma library("..\\Dll\\M485E.dll")
+     #include "M485E_Contracts.generated.cin"
+     #include "M485E_Core.cin"
+     #include "M485E_Monitoring.cin"
+     #include "M485E_ReadOption.cin"
+     #include "M485E_Connection.cin"
+     #include "M485E_UI.cin"
+}
+
+variables
+{
+     // 하나의 RS-485 포트를 설정하는 CAPL 내부 자료형이다.
+     // portSlot은 DLL 내부 슬롯(0~3), comPortNumber는 Windows COM 번호이다.
+     struct M485E_PortConfig
+     {
+          long portSlot;
+          long comPortNumber;
+          long baudRate;
+          long dataBits;
+          long parity;
+          long stopBits;
+     };
+
+     // 아래 상대 경로는 CANalyzer 구성 파일 기준으로 절대 경로로 변환되어 DLL에 전달된다.
+     char gM485E_DeviceMapPath[128] = ".\\Maps\\M485E\\M485E_Device.csv";
+     char gM485E_FrameRulePath[128] = ".\\Maps\\M485E\\M485E_FrameRule.csv";
+     struct M485E_PortConfig gM485E_PortConfigs[4];
+     // DeviceMap의 고유 Port 수와 같은 값으로 설정한다. 현재 예제는 한 Port를 사용한다.
+     long gM485E_ActivePortCount = 1;
+     // Port Slot 0~3이 출력할 CANalyzer 가상 CAN 채널 번호이다.
+     long gM485E_VirtualCanChannels[4];
+}
+
+/*
+ * 함수명: M485E_Main_InitializePortConfigs
+ * 기능: 최대 네 Port Slot의 기본 Serial 설정과 가상 CAN 채널 매핑을 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_Main_InitializePortConfigs()
+{
+     gM485E_PortConfigs[0].portSlot = 0;
+     gM485E_PortConfigs[0].comPortNumber = 8;
+     gM485E_PortConfigs[0].baudRate = 115200;
+     gM485E_PortConfigs[0].dataBits = 8;
+     gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[0].stopBits = 1;
+
+     gM485E_PortConfigs[1].portSlot = 1;
+     // 예비 Port 설정이다. gM485E_ActivePortCount가 2 이상일 때만 DLL에 등록된다.
+     gM485E_PortConfigs[1].comPortNumber = 9;
+     gM485E_PortConfigs[1].baudRate = 115200;
+     gM485E_PortConfigs[1].dataBits = 8;
+     gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[1].stopBits = 1;
+
+     gM485E_PortConfigs[2].portSlot = 2;
+     gM485E_PortConfigs[2].comPortNumber = 0;
+     gM485E_PortConfigs[2].baudRate = 115200;
+     gM485E_PortConfigs[2].dataBits = 8;
+     gM485E_PortConfigs[2].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[2].stopBits = 1;
+
+     gM485E_PortConfigs[3].portSlot = 3;
+     gM485E_PortConfigs[3].comPortNumber = 0;
+     gM485E_PortConfigs[3].baudRate = 115200;
+     gM485E_PortConfigs[3].dataBits = 8;
+     gM485E_PortConfigs[3].parity = M485E_PARITY_NONE;
+     gM485E_PortConfigs[3].stopBits = 1;
+
+     gM485E_VirtualCanChannels[0] = 1;
+     gM485E_VirtualCanChannels[1] = 2;
+     gM485E_VirtualCanChannels[2] = 3;
+     gM485E_VirtualCanChannels[3] = 4;
+}
+
+/*
+ * 함수명: M485E_Main_ApplyPortConfigs
+ * 기능: 활성 Port 설정을 배열의 앞에서부터 DLL에 등록한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 최초로 실패한 Port 설정 오류 코드
+ */
+long M485E_Main_ApplyPortConfigs()
+{
+     long configIndex;
+     long result;
+     if (gM485E_ActivePortCount < 1 ||
+          gM485E_ActivePortCount > elcount(gM485E_PortConfigs))
+          return M485E_ERR_PORT_CONFIG_INCOMPLETE;
+     for (configIndex = 0; configIndex < gM485E_ActivePortCount; configIndex++)
+     {
+          result = M485E_Core_SetPortConfig(
+               gM485E_PortConfigs[configIndex].portSlot,
+               gM485E_PortConfigs[configIndex].comPortNumber,
+               gM485E_PortConfigs[configIndex].baudRate,
+               gM485E_PortConfigs[configIndex].dataBits,
+               gM485E_PortConfigs[configIndex].parity,
+               gM485E_PortConfigs[configIndex].stopBits);
+          if (result != M485E_OK) return result;
+     }
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_Main_Startup
+ * 기능: ReadOption, DLL Context, CSV 경로와 Port 설정을 순서대로 준비한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 최초 시작 단계 오류 코드
+ */
+long M485E_Main_Startup()
+{
+     long result;
+
+     result = M485E_ReadOption_ConfigureAll();
+     if (result != M485E_OK)
+     {
+          write("M485E ReadOption configuration failed: result=%d", result);
+          return result;
+     }
+
+     result = M485E_Core_Initialize();
+     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
+          result);
+     if (result != M485E_OK) return result;
+
+     // Context가 준비된 뒤 UI Timer를 먼저 시작하면 이후 비동기 Refresh 상태도 Panel에 표시된다.
+     M485E_UI_Start();
+     result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
+     if (result == M485E_OK)
+          result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
+               gM485E_FrameRulePath);
+     if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
+     if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+     write("M485E startup configuration: result=%d", result);
+     return result;
+}
+
+// 이벤트명: preStart
+// 기능: Port 기본값과 Connection 상태를 초기화하고 현재 CAPL Program Node를 DLL에 등록한다.
+on preStart
+{
+     M485E_Main_InitializePortConfigs();
+     M485E_Connection_Initialize();
+     gM485E_ContextRegistered = 0;
+     gM485E_ContextInitialized = 0;
+     gM485E_ContextHandle = registerCAPLDLL();
+     gM485E_ContextRegistered = 1;
+     write("M485E DLL registration: stage=preStart handle=%d", gM485E_ContextHandle);
+}
+
+// 이벤트명: start
+// 기능: CAPL/DLL 설정을 적용하고 성공하면 500ms 지연 자동 연결을 요청한다.
+on start
+{
+     long result;
+
+     result = M485E_Main_Startup();
+     @sysvar::M485E::Connection::ResultCode = result;
+     if (result == M485E_OK)
+     {
+          M485E_Connection_RequestStartup();
+     }
+     else
+     {
+          @sysvar::M485E::Connection::ConnectSwitch = 0;
+          M485E_Core_ReportSyncFailure("Startup", result);
+     }
+}
+
+// 이벤트명: stopMeasurement
+// 기능: CAPL Timer를 먼저 중지하고 DLL Finalize로 작업 Thread와 COM Port를 닫는다.
+on stopMeasurement
+{
+     long result;
+
+     M485E_Connection_Shutdown();
+     M485E_UI_Stop();
+     if (gM485E_ContextInitialized != 0 && M485E_Monitoring_IsEnabled() != 0)
+          M485E_Monitoring_Stop();
+     write("M485E shutdown: finalize begin");
+     result = M485E_Core_Finalize();
+     write("M485E shutdown: finalize result=%d", result);
+}

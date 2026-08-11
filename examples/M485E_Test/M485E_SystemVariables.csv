@@ -12,17 +12,10 @@ Existing,M485E::Connection,StateText,M485E::Connection::StateText,string,,No,Uni
 Existing,M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,No,0,Toggle,,,Master monitoring switch
 Existing,M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,No,0,Rule checkboxes,,,Periodic Rule selection array
 Existing,M485E::Monitoring,ResultCode,M485E::Monitoring::ResultCode,int32,,No,0,Numeric display,,,Last monitoring result
-Existing,M485E::ManualRead,Index,M485E::ManualRead::Index,int32,,No,0,Numeric input,,,Device Index
-Existing,M485E::ManualRead,StartAddress,M485E::ManualRead::StartAddress,int32,,No,0,Numeric input,,,Literal start address
-Existing,M485E::ManualRead,Quantity,M485E::ManualRead::Quantity,int32,,No,1,Numeric input,,,Register count
-Existing,M485E::ManualRead,Data,M485E::ManualRead::Data,int32[],125,No,0,Array display,,,Read register values
-Existing,M485E::ManualRead,AutoReadManual,M485E::ManualRead::AutoReadManual,int32,,No,0,Checkbox,,,Repeat last accepted Read every second
-Existing,M485E::ManualRead,Send,M485E::ManualRead::Send,int32,,No,0,Button,,,Manual Read command
-Existing,M485E::ManualRead,ResultCode,M485E::ManualRead::ResultCode,int32,,No,0,Numeric display,,,Manual Read result
 Existing,M485E::ManualWrite,Index,M485E::ManualWrite::Index,int32,,No,0,Numeric input,,,Device Index
 Existing,M485E::ManualWrite,StartAddress,M485E::ManualWrite::StartAddress,int32,,No,0,Numeric input,,,Literal start address
 Existing,M485E::ManualWrite,Quantity,M485E::ManualWrite::Quantity,int32,,No,1,Numeric input,,,Register count
-Existing,M485E::ManualWrite,Data,M485E::ManualWrite::Data,int32[],125,No,0,Array input,,,16-bit values in 32-bit elements
+Existing,M485E::ManualWrite,Data,M485E::ManualWrite::Data,int32[],122,No,0,Array input,,,Panel capacity: 122 register values in 32-bit elements
 Existing,M485E::ManualWrite,Send,M485E::ManualWrite::Send,int32,,No,0,Button,,,Manual Write command
 Existing,M485E::ManualWrite,ResultCode,M485E::ManualWrite::ResultCode,int32,,No,0,Numeric display,,,Manual Write result
 Existing,M485E::SignalControl,Index,M485E::SignalControl::Index,int32,,No,0,Hidden adapter value,,,Selected device Index

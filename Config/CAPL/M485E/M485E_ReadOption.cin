@@ -1,0 +1,59 @@
+/*@!Encoding:949*/
+
+// 이 파일은 프로젝트의 FrameRule과 Panel Check_ReadOption 배열 사이의 고정 순서를 정의한다.
+// FrameRule을 추가하거나 순서를 바꾸면 이 목록과 Panel의 CheckBox 순서도 함께 갱신한다.
+
+/*
+ * 함수명: M485E_ReadOption_ConfigureDevice
+ * 기능: 한 장치의 Rule ID를 1부터 연속된 값으로 ReadOption 슬롯 구간에 등록한다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index(0~255)
+ *   startReadOption - 장치에 할당할 첫 ReadOption 슬롯(포함)
+ *   endReadOption - 장치에 할당할 마지막 ReadOption 슬롯(포함)
+ * 반환값: M485E_OK 또는 슬롯 구간/ReadOption 등록 오류 코드
+ */
+long M485E_ReadOption_ConfigureDevice(long index, long startReadOption,
+     long endReadOption)
+{
+     long slot;
+     long ruleId;
+     long result;
+
+     if (index < 0 || index > 255 || startReadOption < 0 ||
+          endReadOption < startReadOption || endReadOption >= 200)
+          return M485E_ERR_READOPTION_INVALID;
+
+     // 장치 구간 사이에 빈 슬롯이 생기면 Panel 배열과 FrameRule 순서가 어긋나므로 거부한다.
+     if (startReadOption != M485E_Monitoring_GetReadOptionCount())
+          return M485E_ERR_READOPTION_INVALID;
+
+     for (slot = startReadOption; slot <= endReadOption; slot++)
+     {
+          ruleId = slot - startReadOption + 1;
+          result = M485E_Monitoring_ConfigureReadOption(slot, index, ruleId);
+          if (result != M485E_OK) return result;
+     }
+
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_ReadOption_ConfigureAll
+ * 기능: 프로젝트 FrameRule의 장치별 연속 Rule 구간을 순서대로 등록한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 최초로 실패한 장치 구간 등록 오류 코드
+ */
+long M485E_ReadOption_ConfigureAll()
+{
+     long result;
+
+     // Device Index 0: ReadOption 0~1에 Rule ID 1~2를 연속 등록한다.
+     result = M485E_ReadOption_ConfigureDevice(0, 0, 1);
+     if (result != M485E_OK) return result;
+
+     // Device Index 1: ReadOption 2에 Rule ID 1을 등록한다.
+     result = M485E_ReadOption_ConfigureDevice(1, 2, 2);
+     if (result != M485E_OK) return result;
+
+     return M485E_OK;
+}
