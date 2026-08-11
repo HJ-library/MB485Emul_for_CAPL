@@ -37,7 +37,6 @@ class ConfigurationStore final
   ConfigurationRefreshResult Refresh(const CsvPaths& paths,
                                      const ConfigurationLoader& loader) noexcept;
   std::shared_ptr<const ActiveConfiguration> Snapshot() const noexcept;
-  std::uint32_t Generation() const noexcept;
   bool IsStale() const noexcept;
 
  private:

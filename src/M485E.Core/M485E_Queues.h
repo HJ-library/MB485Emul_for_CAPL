@@ -49,7 +49,6 @@ class SnapshotQueueService final
 
   void StartMonitoring() noexcept;
   void StopMonitoring() noexcept;
-  bool IsMonitoringEnabled() const noexcept;
   void ResetForRefresh() noexcept;
   /**
    * @brief Enqueues one snapshot for every Rule overlapping a completed write.
@@ -66,7 +65,7 @@ class SnapshotQueueService final
  private:
   struct PortQueue
   {
-    std::array<RuleSnapshot, 256> items{};
+    std::array<RuleSnapshot, M485E_CHANGE_QUEUE_CAPACITY> items{};
     std::size_t head = 0;
     std::size_t size = 0;
     std::uint32_t nextSequence = 1;
@@ -124,14 +123,13 @@ class ErrorQueue final
   void Push(ErrorEvent event, std::string_view text) noexcept;
   std::int32_t TryDequeue(std::uint32_t textCapacity, ErrorEvent& output) noexcept;
   ErrorQueueStats GetStats() const noexcept;
-  void Clear() noexcept;
 
  private:
   static bool SameContext(const ErrorEvent& left, const ErrorEvent& right) noexcept;
   static std::uint32_t SaturatingIncrement(std::uint32_t value) noexcept;
   static std::uint32_t NextSequence(std::uint32_t sequence) noexcept;
 
-  std::array<ErrorEvent, 256> items_{};
+  std::array<ErrorEvent, M485E_ERROR_QUEUE_CAPACITY> items_{};
   std::size_t head_ = 0;
   std::size_t size_ = 0;
   std::uint32_t nextSequence_ = 1;

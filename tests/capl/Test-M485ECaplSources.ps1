@@ -244,6 +244,25 @@ Require-Match $main 'M485E_Connection_Shutdown\s*\(\s*\)[\s\S]*M485E_Core_Finali
 Require-Match $ui 'setTimer\(tM485E_UISync,\s*100\)' 'ReadOption synchronization timer is not started.'
 Require-Match $core 'M485E_Core_ReportSyncFailure' 'Synchronous error reporting helper is missing.'
 Require-Match $core 'M485E_Core_PollOneErrorEvent' 'Asynchronous error polling helper is missing.'
+Require-Match $control 'M485E_Core_GetErrorQueueStats\s*\(' `
+    'Production Control must consume the Error Queue statistics wrapper.'
+Require-Match $control 'gM485E_ControlPreviousErrorDropCount' `
+    'Control must retain the previous Error Queue DropCount.'
+Require-Match $control 'gM485E_ControlPreviousErrorOverflowLatch' `
+    'Control must retain the previous Error Queue Overflow latch.'
+Require-Match $control 'droppedCount\s*!=\s*gM485E_ControlPreviousErrorDropCount' `
+    'Error Queue diagnostics must react to a DropCount change.'
+Require-Match $control 'gM485E_ControlPreviousErrorOverflowLatch\s*==\s*0\s*&&\s*overflowLatch\s*!=\s*0' `
+    'Error Queue diagnostics must react to the first Overflow latch transition.'
+Require-Match $control 'M485E error queue overflow:[\s\S]*M485E_ES_PENDING[\s\S]*M485E_ES_CAPACITY[\s\S]*M485E_ES_HIGH_WATER_MARK' `
+    'Error Queue overflow diagnostics must report Pending, Capacity, and High-water Mark.'
+Require-Match $control 'M485E_Control_Start\s*\([\s\S]*M485E_Control_ResetErrorQueueDiagnostics\s*\(\s*\)' `
+    'Control Start must reset Error Queue diagnostic tracking for a new Measurement.'
+Require-Match $control 'on\s+timer\s+tM485E_LifecycleStatus[\s\S]*M485E_Control_PollErrorQueueDiagnostics\s*\(\s*\)' `
+    'The 100ms lifecycle timer must poll Error Queue overflow diagnostics.'
+if ([regex]::Matches($control, '\bM485E_Core_PollOneErrorEvent\s*\(').Count -ne 1) {
+    throw 'Control must keep the one-Error-Event-per-100ms polling contract.'
+}
 Require-Match $main 'M485E_UI_Start\s*\(' 'Main does not start the UI timers.'
 Require-Match $main 'M485E_UI_Stop\s*\(' 'Main does not stop the UI timers.'
 Require-Match $main 'on\s+preStart[\s\S]*?gM485E_ContextHandle\s*=\s*registerCAPLDLL\s*\(' 'Main must register the CAPL DLL directly during preStart.'
@@ -356,6 +375,11 @@ $devices = @(Import-Csv -LiteralPath $deviceMapPath)
 $defaultPorts = @($devices | Select-Object -ExpandProperty Port -Unique)
 if ($defaultPorts.Count -ne 1 -or $defaultPorts[0] -ne 'COM8') {
     throw 'The default one-Port fixture must map every Device to active COM8.'
+}
+$activePortMatch = [regex]::Match($main, 'gM485E_ActivePortCount\s*=\s*(?<Count>\d+)')
+if (-not $activePortMatch.Success -or
+    [int]$activePortMatch.Groups['Count'].Value -ne $defaultPorts.Count) {
+    throw 'Main ActivePortCount must match the unique Port count in the default Device CSV.'
 }
 foreach ($device in $devices) {
     if ([string]::IsNullOrWhiteSpace($device.CSV_DB_Name)) {

@@ -8,6 +8,9 @@ variables
      msTimer tM485E_LifecycleStatus;
      long gM485E_ControlLifecycleStatus[9];
      long gM485E_ControlLastLifecycleState = -1;
+     long gM485E_ControlErrorQueueStats[11];
+     long gM485E_ControlPreviousErrorDropCount;
+     long gM485E_ControlPreviousErrorOverflowLatch;
 }
 
 /*
@@ -77,6 +80,47 @@ void M485E_Control_ResetDisplay()
 }
 
 /*
+ * 함수명: M485E_Control_ResetErrorQueueDiagnostics
+ * 기능: 새 Measurement가 이전 Context의 Error Queue 통계를 변화로 오인하지 않도록 추적값을 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_Control_ResetErrorQueueDiagnostics()
+{
+     gM485E_ControlPreviousErrorDropCount = 0;
+     gM485E_ControlPreviousErrorOverflowLatch = 0;
+}
+
+/*
+ * 함수명: M485E_Control_PollErrorQueueDiagnostics
+ * 기능: Error Queue의 Drop 또는 Overflow 상태가 변할 때만 누적 통계를 Write 창에 출력한다.
+ * 파라미터: 없음
+ */
+void M485E_Control_PollErrorQueueDiagnostics()
+{
+     long result;
+     long droppedCount;
+     long overflowLatch;
+
+     result = M485E_Core_GetErrorQueueStats(gM485E_ControlErrorQueueStats);
+     if (result != M485E_OK) return;
+
+     droppedCount = gM485E_ControlErrorQueueStats[M485E_ES_DROPPED_COUNT];
+     overflowLatch = gM485E_ControlErrorQueueStats[M485E_ES_OVERFLOW_LATCH];
+     if (droppedCount != gM485E_ControlPreviousErrorDropCount ||
+          (gM485E_ControlPreviousErrorOverflowLatch == 0 && overflowLatch != 0))
+     {
+          write("M485E error queue overflow: pending=%d capacity=%d highWaterMark=%d dropped=%d overflow=%d",
+               gM485E_ControlErrorQueueStats[M485E_ES_PENDING],
+               gM485E_ControlErrorQueueStats[M485E_ES_CAPACITY],
+               gM485E_ControlErrorQueueStats[M485E_ES_HIGH_WATER_MARK],
+               droppedCount, overflowLatch);
+     }
+
+     gM485E_ControlPreviousErrorDropCount = droppedCount;
+     gM485E_ControlPreviousErrorOverflowLatch = overflowLatch;
+}
+
+/*
  * 함수명: M485E_Control_Start
  * 기능: Connection 상태 표시 Timer를 시작하고 이전 상태 추적값을 초기화한다.
  * 파라미터: 없음
@@ -84,6 +128,7 @@ void M485E_Control_ResetDisplay()
 void M485E_Control_Start()
 {
      gM485E_ControlLastLifecycleState = -1;
+     M485E_Control_ResetErrorQueueDiagnostics();
      M485E_Control_ResetDisplay();
      setTimer(tM485E_LifecycleStatus, 100);
 }
@@ -96,6 +141,7 @@ void M485E_Control_Start()
 void M485E_Control_Stop()
 {
      cancelTimer(tM485E_LifecycleStatus);
+     M485E_Control_ResetErrorQueueDiagnostics();
      M485E_Control_ResetDisplay();
 }
 
@@ -178,5 +224,6 @@ on timer tM485E_LifecycleStatus
           gM485E_ControlLastLifecycleState = currentState;
      }
      M485E_Core_PollOneErrorEvent();
+     M485E_Control_PollErrorQueueDiagnostics();
      setTimer(tM485E_LifecycleStatus, 100);
 }

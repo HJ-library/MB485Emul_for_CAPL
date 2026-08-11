@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Modbus485Emulator LANGUAGES CXX)
+project(Modbus485Emulator VERSION 0.1.0 LANGUAGES CXX)
 
 if(NOT WIN32 OR CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(FATAL_ERROR "Modbus485Emulator v1 Phase 1 must be configured for Win32/x86.")
+  message(FATAL_ERROR "Modbus485Emulator must be configured for Win32/x86.")
 endif()
 
 set(VECTOR_CAPL_DLL_INCLUDE_DIR "" CACHE PATH
@@ -46,6 +46,7 @@ add_library(M485E SHARED
   src/M485E.Dll/M485E_ViaRegistration.cpp
   src/M485E.Dll/M485E_Win32Serial.cpp
   src/M485E.Dll/M485E_Connection.cpp
+  src/M485E.Dll/M485E_Version.rc
 )
 target_compile_features(M485E PRIVATE cxx_std_17)
 target_include_directories(M485E PRIVATE
@@ -124,3 +125,7 @@ add_test(NAME M485E.IntegrationTests
 add_test(NAME M485E.CaplSourceContracts
          COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
                  -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/capl/Test-M485ECaplSources.ps1")
+add_test(NAME M485E.ReleaseVersion
+         COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+                 -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/release/Test-M485EVersion.ps1"
+                 -DllPath $<TARGET_FILE:M485E>)

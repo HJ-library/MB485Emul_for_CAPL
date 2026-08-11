@@ -1,7 +1,5 @@
 #include "M485E_Configuration.h"
 
-#include <algorithm>
-
 namespace m485e::core
 {
 ActiveConfiguration::ActiveConfiguration()
