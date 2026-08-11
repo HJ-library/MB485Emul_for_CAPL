@@ -10,11 +10,15 @@
 먼저 따른다. DLL, CAPL, System Variable, CSV와 최소 Panel을 한 순서로 설명한다. 이후
 상세 검증은 [`COMPANY_TEST_CHECKLIST.md`](COMPANY_TEST_CHECKLIST.md)를 따른다.
 
+System Variable DB를 이미 적용한 뒤 CAPL 설정과 Panel 제작만 진행할 때는
+[`CAPL_PANEL_IMPLEMENTATION_GUIDE.md`](CAPL_PANEL_IMPLEMENTATION_GUIDE.md)를 따른다.
+
 ## 파일 구성
 
 | 파일 | 용도 |
 |---|---|
 | `START_HERE_COMPANY_TEST.md` | 회사 PC 적용과 첫 시험을 한 순서로 정리한 시작 문서 |
+| `CAPL_PANEL_IMPLEMENTATION_GUIDE.md` | Main CAPL 수정 지점과 Panel Control/System Variable 연결 가이드 |
 | `M485E_DeviceMap.csv` | Origin.can의 두 Port와 일곱 Slave를 Device Index로 매핑 |
 | `M485E_FrameRule.csv` | 확인 가능한 장치별 Register 범위를 Monitoring Rule로 구성 |
 | `M485E_Chiller_RegisterMap.csv` | Chiller Register/Signal 템플릿 |
@@ -115,7 +119,7 @@ Panel은 다음 세 영역으로 나눈다.
 5. Gas Reset Address가 `40200`인지 `40201`인지 실제 Board 요청 Frame으로 확인한다.
 6. 실제 COM 번호에 맞게 DeviceMap과 CAPL Port 설정을 변경한다.
 7. DeviceMap, FrameRule 및 참조 Register Map을 Disconnect 상태에서 Refresh하고 CSV 오류가 없는지 확인한다.
-8. Manual Read/Write로 각 Device Index를 시험한다.
+8. Manual Write와 Signal Read로 각 Device Index를 시험한다.
 9. 장치 탭 Panel Adapter를 구현한 후 Signal Physical Value 및 Monitoring을 시험한다.
 
 ## 범위에서 제외된 내용

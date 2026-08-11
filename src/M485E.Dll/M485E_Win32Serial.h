@@ -29,9 +29,9 @@ class Win32SerialTransport final : public core::ISerialTransport
   void Close() noexcept;
   bool IsOpen() const noexcept;
 
-  core::SerialReadResult ReadByte(std::uint32_t waitUs) noexcept override;
+  core::SerialReadResult Read(std::uint8_t* data, std::size_t capacity,
+                              std::uint32_t waitMs) noexcept override;
   core::SerialWriteResult Write(const std::uint8_t* data, std::size_t size) noexcept override;
-  std::uint64_t NowUs() const noexcept override;
   void Cancel() noexcept override;
 
  private:

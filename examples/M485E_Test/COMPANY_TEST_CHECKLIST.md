@@ -55,8 +55,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - [ ] Baud Rate / Data Bits / Parity / Stop Bits: ____________________
 - [ ] Board Master Response Timeout: ____________________ ms
 
-현재 CAPL 기본 활성 Port는 1개이며 Slot 0은 COM11, 115200/8/N/1이다. 실제 설정과 다르면
-`Config/CAPL/M485E/M485_E_Main.can`의 `gM485E_ActivePortCount`와
+현재 CAPL 기본 활성 Port는 1개이며 Slot 0은 COM8, 115200/8/N/1이다. Slot 1의 COM9는
+비활성 예비 설정이고 Slot 2~3의 COM 번호는 0이다. 실제 설정과 다르면
+`Config/CAPL/M485E/M485E_Main.can`의 `gM485E_ActivePortCount`와
 `gM485E_PortConfigs[0..3]`을 수정한다. 이 수는 `M485E_Device.csv`의 고유 `Port` 수와 같아야 하고
 각 Port 이름도 `COM%d` 결과와 일치해야 한다.
 
@@ -98,9 +99,9 @@ CANalyzer 버전과 Process bitness를 함께 기록한다.
 ## 6. 시험 3 - Main CAPL과 System Variable
 
 1. `Config/System Variables/M485E.vsysvar`를 Configuration에 등록한다.
-2. `Config/CAPL/M485E/M485_E_Main.can`을 Program Node에 연결한다.
+2. `Config/CAPL/M485E/M485E_Main.can`을 Program Node에 연결한다.
 3. 다른 Phase Probe는 제거하여 DLL Context가 중복되지 않게 한다.
-4. CAPL Compile 후 Measurement를 시작하되 ConnectSwitch는 올리지 않는다.
+4. USB-RS485와 Board를 준비한 뒤 CAPL Compile 및 Measurement를 시작한다. ConnectSwitch는 Main이 자동으로 올린다.
 
 - [ ] Main CAPL Compile 경고/오류 없음
 - [ ] `Config/CAPL/Dll/M485E.dll` Load 성공
@@ -112,18 +113,9 @@ CANalyzer 버전과 Process bitness를 함께 기록한다.
 CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다시 Disconnected가 된
 뒤의 최종 값을 확인한다.
 
-## 7. 시험 4 - 연결하지 않은 상태의 Register/Signal
+## 7. 시험 4 - 연결하지 않은 상태의 Register Write/Signal
 
 작은 기본 `Config/Maps/M485E`를 그대로 사용한다.
-
-### Manual Read
-
-1. `M485E::ManualRead::Index = 0`
-2. `StartAddress = 10000`, `Quantity = 2`
-3. `Send = 1`
-
-- [ ] `ResultCode = 0`
-- [ ] `Data[0] = 0x4148`, `Data[1] = 0x0000` (Power12V 초기값 12.5)
 
 ### Signal Write 후 Read
 
@@ -136,24 +128,24 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 - [ ] `ResultCode = 0`
 - [ ] `PhysicalValue = 24.5`
 
-### Manual Write 후 Read
+### Manual Write 후 Signal Read 확인
 
 1. `M485E::ManualWrite::Index = 0`
 2. `StartAddress = 10000`, `Quantity = 2`
-3. `Data[0] = 0x4148`, `Data[1] = 0x0000`
-4. `Send = 1` 후 같은 범위를 Manual Read
+3. `Data[0] = 0x41C4`, `Data[1] = 0x0000` (IEEE Float 24.5)
+4. `Send = 1` 후 `SignalControl`의 `Power12V`를 Read
 
-- [ ] Write/Read `ResultCode = 0`
-- [ ] Read 값이 쓴 값과 동일
-- [ ] Quantity 0/126 또는 0~65535 밖 값은 오류 반환
+- [ ] Manual Write와 Signal Read `ResultCode = 0`
+- [ ] `PhysicalValue = 24.5`
+- [ ] Quantity 0/123 또는 0~65535 밖 값은 Panel 검증 오류 반환
 
 ## 8. 시험 5 - 실제 활성 RS-485 Port 연결
 
 1. SystemBase Multi USB-485와 Board를 연결한다.
 2. 실제 COM 번호와 통신 설정을 Main CAPL과 DeviceMap에 반영한다.
 3. Measurement를 시작하고 CSV Valid를 확인한다.
-4. `M485E::Connection::ConnectSwitch = 1`로 변경한다.
-5. 비동기 연결 완료를 기다린다.
+4. Measurement 시작 500ms 뒤 자동 Connect가 접수되는지 확인한다.
+5. 비동기 연결 완료를 기다린다. 실패하여 Switch가 0이면 원인을 수정한 뒤 다시 1로 변경한다.
 
 - [ ] State가 4(Connected)
 - [ ] Device Map의 1~4개 활성 Port가 모두 열림
@@ -162,7 +154,7 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 
 ## 9. 시험 6 - Board Modbus RTU 요청
 
-먼저 기본 `Config/Maps/M485E`로 시험한다. Device Map의 Slave 1과 2는 같은 COM11을
+먼저 기본 `Config/Maps/M485E`로 시험한다. Device Map의 Slave 1과 2는 같은 COM8을
 공유하지만 서로 다른 Device Index다.
 
 | 순서 | Port/Slave | 요청 | 기대 결과 |
@@ -195,11 +187,9 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 - [ ] 선택 Rule의 0x80 Periodic Snapshot이 1초 Cycle로 출력
 - [ ] 둘 이상의 활성 Port 사용 시 Change Queue가 Round-robin으로 처리됨
 
-현재 `M485_E_Main.can`은 프로젝트별 Rule slot을 자동 생성하지 않는다. Main과 Panel의
-`Check_ReadOption[]`만으로 0x80 시험을 시작하기 전에 프로젝트 Rule 목록을
-`M485E_Monitoring_ConfigureReadOption(slot, Index, Rule_ID)`으로 등록하는 CAPL 설정 코드가
-필요하다. 기본 세 Rule은 Phase 9 Probe에 이미 등록되어 있으므로 먼저 이 Probe로
-Monitoring 경로를 확인한다. 회사 시험 결과를 보고 Main 초기화 반영을 검토한다.
+현재 `M485E_Main.can`은 `M485E_ReadOption.cin`의 프로젝트 Rule 목록을 시작 시 검증한다.
+기본 세 Rule은 Main과 Phase 9 Probe에서 시험할 수 있다. FrameRule을 변경한 경우에는 먼저
+ReadOption 목록과 Panel Checkbox 순서를 함께 변경한 뒤 Monitoring 경로를 확인한다.
 
 ## 11. 시험 8 - 연결 끊김과 자동 재연결
 
@@ -229,7 +219,7 @@ Register Map은 DeviceMap의 `CSV_DB_Name`으로 선택한다. 절대경로를 C
 - [ ] 예제 Panel 이미지와 System Variable 목록을 실제 Panel 작업에 참고
 
 `M485E_SystemVariables.csv`에서 `Proposed - adapter required`로 표시된 장치 탭 변수는
-현재 CAPL Adapter에 아직 구현되지 않았다. 먼저 공통 `ManualRead`, `ManualWrite`,
+현재 CAPL Adapter에 아직 구현되지 않았다. 먼저 공통 `ManualWrite`,
 `SignalControl`, `Monitoring` System Variable로 기능을 검증한다.
 
 Panel 이미지는 시안이며 실제 CANalyzer Panel 파일(`.xvp`)은 아직 없다. 초기 실환경

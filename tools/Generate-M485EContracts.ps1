@@ -158,7 +158,10 @@ function Write-OrCheckGeneratedFile {
 
     if ($Mode -eq 'Check') {
         Assert-Condition (Test-Path -LiteralPath $Path -PathType Leaf) "Generated file is missing: $Path"
-        $actual = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8)
+        # Git may materialize tracked text as CRLF on Windows even though the
+        # deterministic generator composes LF. Compare normalized content so a
+        # clean checkout is not reported as stale solely because of core.autocrlf.
+        $actual = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8).Replace("`r`n", "`n")
         Assert-Condition ($actual -ceq $Content) "Generated file is stale: $Path"
         return
     }

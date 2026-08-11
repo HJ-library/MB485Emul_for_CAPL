@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -18,6 +19,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace
 {
@@ -377,6 +379,14 @@ void TestRuntimeRegisterAndSignalOperations()
               built.configuration->rules[direct.changedRuleIndices[0]].ruleId == 1 &&
               built.configuration->rules[direct.changedRuleIndices[1]].ruleId == 2,
           "changed Rule de-duplication or ordering failed");
+  const auto directOnly = runtime.WriteRegisters(0, 200, {0x1234U},
+                                                 m485e::core::WriteSource::Direct);
+  Require(directOnly.status == M485E_OK && directOnly.changed,
+          "Direct debug Write incorrectly required FC03 Rule permission");
+  const auto rtuDenied = runtime.WriteRegisters(0, 200, {0x5678U},
+                                                m485e::core::WriteSource::Rtu);
+  Require(rtuDenied.status == M485E_ERR_REGISTER_ACCESS_DENIED,
+          "RTU FC10 Write bypassed FC03 Rule permission");
 
   double physical = -1.0;
   Require(runtime.WriteSignal(0, "Power12V", 25.5).status == M485E_OK &&
@@ -477,7 +487,8 @@ void TestModbusRtuEngine()
   result = engine.Process(0, Rtu({1, 0x10, 0x27, 0x10, 0, 2, 4,
                                   0x12, 0x34, 0x56, 0x78}));
   Require(result.response.size() == 8 && result.response[1] == 0x10 &&
-              !result.changedRuleIndices.empty(),
+              result.deviceWrites.size() == 1U &&
+              !result.deviceWrites[0].write.changedRuleIndices.empty(),
           "FC10 normal response failed");
   std::vector<std::uint16_t> registers;
   Require(runtime.ReadRegisters(0, 10000, 2, registers) == M485E_OK &&
@@ -507,9 +518,74 @@ void TestModbusRtuEngine()
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
               result.response.empty(),
           "unknown Slave was not ignored");
-  result = engine.Process(0, Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0, 1}));
-  Require(result.disposition == m485e::core::RtuDisposition::Ignore,
-          "Broadcast request was not ignored");
+  Fixture broadcastFixture;
+  const std::string broadcastDevices = std::string(kDeviceHeader) +
+                                       "0,COM11,1,First,signals.csv\n"
+                                       "1,COM11,2,Second,signals.csv\n"
+                                       "2,COM12,1,Other Port,signals.csv\n";
+  const std::string broadcastRules = std::string(kRuleHeader) +
+                                     "0,1,0x03,10000,2,First Broadcast Target\n"
+                                     "1,1,0x03,10000,2,Second Broadcast Target\n"
+                                     "2,1,0x03,10000,2,Other Port Target\n";
+  const auto broadcastBuilt = ConfigurationLoader{}.Build(broadcastFixture.Write(
+      broadcastDevices, broadcastRules, ValidSignals()));
+  Require(broadcastBuilt.Succeeded(), "Broadcast fixture build failed");
+  m485e::core::RuntimeModel broadcastRuntime(broadcastBuilt.configuration);
+  m485e::core::ModbusRtuEngine broadcastEngine(broadcastRuntime);
+  result = broadcastEngine.Process(
+      0, Rtu({0, 0x10, 0x27, 0x10, 0, 2, 4, 0x11, 0x11, 0x22, 0x22}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.response.empty() && result.deviceWrites.size() == 2U,
+          "FC10 Broadcast was not applied silently to every Port-local Slave");
+  for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
+  {
+    Require(broadcastRuntime.ReadRegisters(index, 10000, 2, registers) == M485E_OK &&
+                registers == std::vector<std::uint16_t>({0x1111U, 0x2222U}),
+            "FC10 Broadcast did not update every Port-local Register image");
+  }
+  Require(broadcastRuntime.ReadRegisters(2, 10000, 2, registers) == M485E_OK &&
+              registers == std::vector<std::uint16_t>({0x4148U, 0x0000U}),
+          "FC10 Broadcast leaked into a different physical Port");
+  result = broadcastEngine.Process(0, Rtu({0, 0x03, 0x27, 0x10, 0, 1}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.response.empty() && result.deviceWrites.empty(),
+          "Broadcast Read was not a silent no-op");
+
+  Fixture atomicBroadcastFixture;
+  const std::string asymmetricRules = std::string(kRuleHeader) +
+                                      "0,1,0x03,10000,2,Writable Range\n"
+                                      "1,1,0x03,10000,1,Shorter Writable Range\n";
+  const auto atomicBroadcastBuilt = ConfigurationLoader{}.Build(
+      atomicBroadcastFixture.Write(OnePortDevices(), asymmetricRules, ValidSignals()));
+  Require(atomicBroadcastBuilt.Succeeded(), "Atomic Broadcast fixture build failed");
+  m485e::core::RuntimeModel atomicBroadcastRuntime(atomicBroadcastBuilt.configuration);
+  m485e::core::ModbusRtuEngine atomicBroadcastEngine(atomicBroadcastRuntime);
+  result = atomicBroadcastEngine.Process(
+      0, Rtu({0, 0x10, 0x27, 0x11, 0, 1, 2, 0xAB, 0xCD}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.response.empty() && result.deviceWrites.empty(),
+          "invalid FC10 Broadcast was not silent");
+  for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
+  {
+    Require(atomicBroadcastRuntime.ReadRegisters(index, 10001, 1, registers) == M485E_OK &&
+                registers[0] == 0x0000U,
+            "failed FC10 Broadcast partially modified a target Device");
+  }
+
+  Fixture addressZeroFixture;
+  const auto addressZeroBuilt = ConfigurationLoader{}.Build(addressZeroFixture.Write(
+      std::string(kDeviceHeader) + "0,COM11,1,AddressZero,signals.csv\n",
+      std::string(kRuleHeader) + "0,1,0x03,0,1,Address Zero Read\n",
+      std::string(kSignalHeader) +
+          "0,AddressZeroValue,Unsigned,2,BigEndian,0,16,1,0,,4660,,,\n"));
+  Require(addressZeroBuilt.Succeeded(), "Register Address 0 fixture build failed");
+  m485e::core::RuntimeModel addressZeroRuntime(addressZeroBuilt.configuration);
+  m485e::core::ModbusRtuEngine addressZeroEngine(addressZeroRuntime);
+  result = addressZeroEngine.Process(0, Rtu({1, 0x03, 0, 0, 0, 1}));
+  Require(result.disposition == m485e::core::RtuDisposition::Response &&
+              result.response.size() == 7U && result.response[3] == 0x12U &&
+              result.response[4] == 0x34U,
+          "Register Address 0 was confused with broadcast Slave ID 0");
   auto badCrc = Rtu({1, 0x03, 0x27, 0x10, 0, 1});
   badCrc.back() ^= 0x01U;
   result = engine.Process(0, badCrc);
@@ -589,6 +665,16 @@ void TestSnapshotAndDiagnosticQueues()
   Require(errors.TryDequeue(512, output) == M485E_OK && output.repeatCount == 2 &&
               std::string(output.text.data()) == "bad CRC",
           "Error Event dequeue failed");
+  errors.Push(event, "first detail");
+  errors.Push(event, "second detail");
+  errorStats = errors.GetStats();
+  Require(errorStats.pending == 2 && errorStats.coalescedCount == 1,
+          "Error Events with different text were incorrectly coalesced");
+  Require(errors.TryDequeue(512, output) == M485E_OK &&
+              std::string(output.text.data()) == "first detail" &&
+              errors.TryDequeue(512, output) == M485E_OK &&
+              std::string(output.text.data()) == "second detail",
+          "Error Event text ordering was not preserved");
   for (int index = 0; index < 257; ++index)
   {
     event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED - index;
@@ -633,10 +719,10 @@ void TestMonitoringStopIsAnEnqueueBarrier()
   }
 }
 
-void TestRtuTimingAndFraming()
+void TestRtuTimingAndStreamFraming()
 {
   using m485e::core::CalculateRtuTiming;
-  using m485e::core::RtuFrameAssembler;
+  using m485e::core::RtuStreamParser;
   using m485e::core::SerialParity;
   using m485e::core::SerialSettings;
   Require(m485e::core::ValidateSerialSettings({9600, 8, SerialParity::Even, 1}) == M485E_OK,
@@ -651,64 +737,114 @@ void TestRtuTimingAndFraming()
   Require(high.t1_5Us == 750 && high.t3_5Us == 1750,
           "high-baud fixed RTU timing failed");
 
-  RtuFrameAssembler assembler(high);
-  Require(!assembler.PushByte(1, 0).has_value() &&
-              !assembler.PushByte(3, 100).has_value() &&
-              !assembler.PushByte(0, 200).has_value(),
-          "frame completed before t3.5");
-  auto frame = assembler.OnSilence(1950);
-  Require(frame.has_value() && *frame == std::vector<std::uint8_t>({1, 3, 0}),
-          "t3.5 did not complete a partial-read frame");
+  const auto readRequest = Rtu({1, 0x03, 0x27, 0x10, 0, 1});
+  for (std::size_t split = 0; split <= readRequest.size(); ++split)
+  {
+    RtuStreamParser parser;
+    auto first = parser.PushBytes(readRequest.data(), split);
+    auto second =
+        parser.PushBytes(readRequest.data() + split, readRequest.size() - split);
+    Require(first.frames.size() + second.frames.size() == 1U &&
+                (first.frames.empty() ? second.frames[0] : first.frames[0]) == readRequest,
+            "RTU request was not recovered across every USB chunk boundary");
+  }
 
-  assembler.PushByte(1, 3000);
-  assembler.PushByte(3, 3100);
-  assembler.PushByte(0, 3900);  // t1.5 < gap < t3.5: discard until next frame gap.
-  Require(!assembler.OnSilence(5650).has_value() && assembler.DiscardedFrameCount() == 1,
-          "t1.5 violation did not discard and resynchronize");
-  assembler.PushByte(1, 6000);
-  assembler.PushByte(4, 6100);
-  frame = assembler.OnSilence(7850);
-  Require(frame.has_value() && frame->size() == 2,
-          "assembler did not recover after a valid t3.5 gap");
+  const auto writeRequest = Rtu({1, 0x10, 0x27, 0x10, 0, 1, 2, 0x12, 0x34});
+  std::vector<std::uint8_t> combined = readRequest;
+  combined.insert(combined.end(), writeRequest.begin(), writeRequest.end());
+  RtuStreamParser parser;
+  auto batch = parser.PushBytes(combined.data(), combined.size());
+  Require(batch.frames.size() == 2U && batch.frames[0] == readRequest &&
+              batch.frames[1] == writeRequest,
+          "two RTU frames delivered in one USB chunk were not separated");
 
-  assembler.Reset();
-  for (std::uint16_t index = 0; index < 257U; ++index)
-    assembler.PushByte(static_cast<std::uint8_t>(index), 10000U + index);
-  Require(!assembler.OnSilence(12007).has_value() && assembler.DiscardedFrameCount() == 2,
-          "overlength RTU ADU was not discarded");
+  std::vector<std::uint8_t> prefixed{0x55U, 0xAAU};
+  prefixed.insert(prefixed.end(), readRequest.begin(), readRequest.end());
+  parser.Reset();
+  batch = parser.PushBytes(prefixed.data(), prefixed.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == readRequest &&
+              batch.discardedSegments == 1U,
+          "RTU parser did not CRC-resynchronize after a garbage prefix");
+
+  auto badCrc = readRequest;
+  badCrc.back() ^= 0x01U;
+  parser.Reset();
+  batch = parser.PushBytes(badCrc.data(), badCrc.size());
+  Require(batch.frames.empty(), "bad CRC frame was accepted");
+  batch = parser.PushBytes(readRequest.data(), readRequest.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == readRequest &&
+              batch.discardedSegments == 1U,
+          "bad CRC segment was not discarded when the next valid frame arrived");
+
+  const auto unsupported = Rtu({1, 0x06, 0x27, 0x10, 0x12, 0x34});
+  parser.Reset();
+  batch = parser.PushBytes(unsupported.data(), unsupported.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == unsupported,
+          "CRC sliding fallback did not recover an unknown Function request");
+
+  std::vector<std::uint8_t> maximumWrite{1, 0x10, 0, 0, 0, 123, 246};
+  maximumWrite.resize(7U + 246U, 0x5AU);
+  m485e::core::ModbusCrc16::Append(maximumWrite);
+  Require(maximumWrite.size() == 255U, "maximum FC10 fixture length is invalid");
+  parser.Reset();
+  batch = parser.PushBytes(maximumWrite.data(), maximumWrite.size());
+  Require(batch.frames.size() == 1U && batch.frames[0] == maximumWrite,
+          "maximum FC10 request was not recovered");
+
+  std::vector<std::uint8_t> oversizedStream(65536U, 0x55U);
+  oversizedStream.insert(oversizedStream.end(), readRequest.begin(), readRequest.end());
+  parser.Reset();
+  batch = parser.PushBytes(oversizedStream.data(), oversizedStream.size());
+  Require(!batch.frames.empty() && batch.frames.back() == readRequest &&
+              batch.discardedSegments != 0U,
+          "oversized RTU input was not bounded and resynchronized");
 }
 
 class FakeSerialTransport final : public m485e::core::ISerialTransport
 {
  public:
-  explicit FakeSerialTransport(std::vector<std::uint8_t> input)
+  explicit FakeSerialTransport(std::vector<std::uint8_t> input,
+                               const std::size_t chunkSize = 0U,
+                               const bool timeoutBetweenChunks = false)
+      : input_(std::move(input)),
+        chunkSize_(chunkSize == 0U ? input_.size() : chunkSize),
+        timeoutBetweenChunks_(timeoutBetweenChunks)
   {
-    std::uint64_t time = 1000;
-    for (const auto value : input)
-    {
-      reads_.push_back({m485e::core::SerialIoStatus::Data, value, time, 0});
-      time += 100;
-    }
-    now_.store(time + 2000);
   }
-  m485e::core::SerialReadResult ReadByte(std::uint32_t) noexcept override
+  m485e::core::SerialReadResult Read(std::uint8_t* const data,
+                                     const std::size_t capacity,
+                                     std::uint32_t) noexcept override
   {
-    const std::size_t index = readIndex_.fetch_add(1);
-    if (index < reads_.size()) return reads_[index];
+    if (cancelled_.load())
+      return {m485e::core::SerialIoStatus::Cancelled, 0, 0};
+    if (timeoutPending_)
+    {
+      timeoutPending_ = false;
+      std::this_thread::yield();
+      return {m485e::core::SerialIoStatus::Timeout, 0, 0};
+    }
+    if (readOffset_ < input_.size())
+    {
+      const std::size_t size = std::min(
+          capacity, std::min(chunkSize_, input_.size() - readOffset_));
+      std::memcpy(data, input_.data() + readOffset_, size);
+      readOffset_ += size;
+      timeoutPending_ = timeoutBetweenChunks_ && readOffset_ < input_.size();
+      return {m485e::core::SerialIoStatus::Data, size, 0};
+    }
     std::this_thread::yield();
-    return {cancelled_.load() ? m485e::core::SerialIoStatus::Cancelled
-                              : m485e::core::SerialIoStatus::Timeout,
-            0, now_.load(), 0};
+    return {m485e::core::SerialIoStatus::Timeout, 0, 0};
   }
   m485e::core::SerialWriteResult Write(const std::uint8_t* data,
                                        const std::size_t size) noexcept override
   {
+    // Intentionally complete only two bytes per call. This verifies that PortWorker
+    // continues a legal partial Win32 Write instead of truncating the RTU response.
     const std::size_t chunk = std::min<std::size_t>(2, size);
     std::lock_guard<std::mutex> lock(mutex_);
     output_.insert(output_.end(), data, data + chunk);
     return {m485e::core::SerialIoStatus::Data, chunk, 0};
   }
-  std::uint64_t NowUs() const noexcept override { return now_.load(); }
   void Cancel() noexcept override { cancelled_.store(true); }
   std::vector<std::uint8_t> Output() const
   {
@@ -717,9 +853,11 @@ class FakeSerialTransport final : public m485e::core::ISerialTransport
   }
 
  private:
-  std::vector<m485e::core::SerialReadResult> reads_;
-  std::atomic<std::size_t> readIndex_{0};
-  std::atomic<std::uint64_t> now_{0};
+  std::vector<std::uint8_t> input_;
+  std::size_t chunkSize_ = 0;
+  std::size_t readOffset_ = 0;
+  bool timeoutBetweenChunks_ = false;
+  bool timeoutPending_ = false;
   std::atomic<bool> cancelled_{false};
   mutable std::mutex mutex_;
   std::vector<std::uint8_t> output_;
@@ -734,7 +872,9 @@ void TestPortWorkerWithPartialIoAndCancellation()
   m485e::core::RuntimeModel runtime(built.configuration);
   m485e::core::SnapshotQueueService snapshots(built.configuration);
   m485e::core::ErrorQueue errors;
-  FakeSerialTransport transport(Rtu({1, 0x03, 0x27, 0x10, 0, 1}));
+  // A timeout between every byte emulates user-mode scheduling/USB delivery gaps.
+  // The RTU parser must retain the partial frame instead of treating them as t3.5.
+  FakeSerialTransport transport(Rtu({1, 0x03, 0x27, 0x10, 0, 1}), 1U, true);
   std::atomic<int> fatalCount{0};
   m485e::core::PortWorker worker(
       0, m485e::core::CalculateRtuTiming(
@@ -753,8 +893,53 @@ void TestPortWorkerWithPartialIoAndCancellation()
   worker.Stop();
   Require(response.size() == 7 && response[0] == 1 && response[1] == 3 &&
               response[2] == 2 && response[3] == 0x41 && response[4] == 0x48 &&
+              m485e::core::ModbusCrc16::IsValid(response) &&
               fatalCount.load() == 0 && !worker.IsRunning(),
           "Port Worker partial Write, cancellation, or RTU response failed");
+}
+
+void TestPortWorkerBroadcastWrite()
+{
+  Fixture fixture;
+  const std::string rules = std::string(kRuleHeader) +
+                            "0,1,0x03,10000,1,First Broadcast Target\n"
+                            "1,1,0x03,10000,1,Second Broadcast Target\n";
+  const auto built = ConfigurationLoader{}.Build(
+      fixture.Write(OnePortDevices(), rules, ValidSignals()));
+  Require(built.Succeeded(), "Worker Broadcast fixture build failed");
+  m485e::core::RuntimeModel runtime(built.configuration);
+  m485e::core::SnapshotQueueService snapshots(built.configuration);
+  snapshots.StartMonitoring();
+  m485e::core::ErrorQueue errors;
+  FakeSerialTransport transport(
+      Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0xA5, 0x5A}), 1U, true);
+  std::atomic<int> fatalCount{0};
+  m485e::core::PortWorker worker(
+      0, m485e::core::CalculateRtuTiming(
+             {115200, 8, m485e::core::SerialParity::None, 1}),
+      transport, runtime, snapshots, errors,
+      [&fatalCount](std::uint8_t, std::int32_t, std::uint32_t) { ++fatalCount; });
+  Require(worker.Start() == M485E_OK, "Broadcast Port Worker did not start");
+  bool updated = false;
+  std::vector<std::uint16_t> first;
+  std::vector<std::uint16_t> second;
+  for (int attempt = 0; attempt < 1000; ++attempt)
+  {
+    const bool firstUpdated = runtime.ReadRegisters(0, 10000, 1, first) == M485E_OK &&
+                              first[0] == 0xA55AU;
+    const bool secondUpdated = runtime.ReadRegisters(1, 10000, 1, second) == M485E_OK &&
+                               second[0] == 0xA55AU;
+    if (firstUpdated && secondUpdated)
+    {
+      updated = true;
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  worker.Stop();
+  Require(updated && transport.Output().empty() &&
+              snapshots.GetStats(0).pending == 2U && fatalCount.load() == 0,
+          "Port Worker did not apply Broadcast silently or queue both changes");
 }
 }  // namespace
 
@@ -773,8 +958,9 @@ int main()
     TestModbusRtuEngine();
     TestSnapshotAndDiagnosticQueues();
     TestMonitoringStopIsAnEnqueueBarrier();
-    TestRtuTimingAndFraming();
+    TestRtuTimingAndStreamFraming();
     TestPortWorkerWithPartialIoAndCancellation();
+    TestPortWorkerBroadcastWrite();
     std::cout << "M485E Phase 3-7 home-testable core tests PASS.\n";
     return 0;
   }

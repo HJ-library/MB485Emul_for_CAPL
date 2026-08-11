@@ -1,5 +1,8 @@
 /*@!Encoding:949*/
 
+// Core는 CAPL과 DLL 사이의 단일 경계이다.
+// Context, ABI 변환, 공통 오류 처리만 담당하며 System Variable, CAN 출력, Timer에 의존하지 않는다.
+
 variables
 {
      // CAPL 노드별 DLL Context와 오류 조회용 공용 버퍼이다.
@@ -11,10 +14,13 @@ variables
      char gM485E_CoreErrorText[1024];
 }
 
-// 동기 API가 실패했을 때 DLL의 마지막 상세 오류를 조회하여 Write 창에 출력한다.
-// 성공 코드에는 아무 작업도 하지 않으므로 각 호출부에서 공통으로 사용할 수 있다.
-// operation: Write 창에서 호출 위치를 구분할 표시 문자열.
-// result: 직전에 DLL API가 반환한 M485E 결과 코드.
+/*
+ * 함수명: M485E_Core_ReportSyncFailure
+ * 기능: 동기 DLL API 실패 시 마지막 상세 오류를 조회하여 Write 창에 출력한다.
+ * 파라미터:
+ *   operation - Write 창에서 호출 위치를 구분할 문자열
+ *   result - 직전에 DLL API가 반환한 결과 코드
+ */
 void M485E_Core_ReportSyncFailure(char operation[], long result)
 {
      long errorResult;
@@ -34,8 +40,12 @@ void M485E_Core_ReportSyncFailure(char operation[], long result)
           write("M485E %s failed: code=%d", operation, result);
 }
 
-// DLL 비동기 오류 Queue에서 이벤트를 최대 한 건 꺼내 Write 창에 출력한다.
-// Queue가 비어 있으면 DLL 반환값을 그대로 돌려주고 출력하지 않는다.
+/*
+ * 함수명: M485E_Core_PollOneErrorEvent
+ * 기능: DLL 비동기 오류 Queue에서 이벤트를 최대 한 건 꺼내 Write 창에 출력한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK, M485E_STATUS_NO_DATA 또는 DLL 오류 코드
+ */
 long M485E_Core_PollOneErrorEvent()
 {
      long result;
@@ -53,9 +63,12 @@ long M485E_Core_PollOneErrorEvent()
      return result;
 }
 
-// preStart에서 등록한 현재 CAPL 노드의 Context Handle로 DLL Context를 초기화한다.
-// Handle의 숫자값 0은 Vector에서 정상일 수 있으므로 상태 판정에 사용하지 않는다.
-// 반환: M485E_OK 또는 Context 등록/초기화 오류 코드.
+/*
+ * 함수명: M485E_Core_Initialize
+ * 기능: preStart에서 등록한 CAPL Context Handle로 DLL Context를 초기화한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 Context 등록/초기화 오류 코드
+ */
 long M485E_Core_Initialize()
 {
      long result;
@@ -65,8 +78,12 @@ long M485E_Core_Initialize()
      return result;
 }
 
-// DLL Context가 가진 포트, Queue 등의 자원을 정리한다.
-// Handle 값 대신 초기화 Flag를 확인하여 정상 Handle 0도 안전하게 Finalize한다.
+/*
+ * 함수명: M485E_Core_Finalize
+ * 기능: DLL Context가 보유한 Port, Queue 및 작업 자원을 정리한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 DLL Finalize 오류 코드
+ */
 long M485E_Core_Finalize()
 {
      long result;
@@ -76,10 +93,14 @@ long M485E_Core_Finalize()
      return result;
 }
 
-// 구성 기준 상대 경로를 절대 경로로 변환한 뒤 파일 종류와 함께 DLL에 등록한다.
-// 경로 변환에 실패하면 DLL을 호출하지 않고 CSV 경로 오류를 반환한다.
-// fileType: M485E_FILE_DEVICE_MAP 또는 M485E_FILE_MODBUS_RULE.
-// relativePath: CANalyzer Configuration을 기준으로 해석할 경로.
+/*
+ * 함수명: M485E_Core_SetCsvPath
+ * 기능: Configuration 기준 상대 경로를 절대 경로로 변환하여 DLL에 등록한다.
+ * 파라미터:
+ *   fileType - M485E_FILE_DEVICE_MAP 또는 M485E_FILE_MODBUS_RULE
+ *   relativePath - CANalyzer Configuration을 기준으로 해석할 CSV 경로
+ * 반환값: M485E_OK 또는 경로 변환/DLL 검증 오류 코드
+ */
 long M485E_Core_SetCsvPath(long fileType, char relativePath[])
 {
      char absolutePath[1024];
@@ -95,10 +116,18 @@ long M485E_Core_SetCsvPath(long fileType, char relativePath[])
           absolutePath);
 }
 
-// CAPL에서 받은 숫자 COM 번호를 "COMn" 문자열로 변환하여 DLL에 전달한다.
-// portSlot은 물리 COM 번호가 아니라 DLL 내부의 0~3번 포트 슬롯이다.
-// parity는 M485E_PARITY_* 상수, stopBits는 1 또는 2를 사용한다.
-// 반환: M485E_OK 또는 문자열/Serial 설정 검증 오류 코드.
+/*
+ * 함수명: M485E_Core_SetPortConfig
+ * 기능: 숫자 COM 번호를 "COMn" 문자열로 변환하여 DLL Port Slot에 설정한다.
+ * 파라미터:
+ *   portSlot - DLL 내부 Port Slot(0~3)
+ *   comPortNumber - Windows COM 번호(1~999)
+ *   baudRate - 양수 Baud Rate
+ *   dataBits - Serial Data Bit 수
+ *   parity - M485E_PARITY_* 상수
+ *   stopBits - Stop Bit 수(1 또는 2)
+ * 반환값: M485E_OK 또는 Serial 설정 검증 오류 코드
+ */
 long M485E_Core_SetPortConfig(long portSlot, long comPortNumber, long baudRate,
      long dataBits, long parity, long stopBits)
 {
@@ -110,48 +139,82 @@ long M485E_Core_SetPortConfig(long portSlot, long comPortNumber, long baudRate,
           port, baudRate, dataBits, parity, stopBits);
 }
 
-// 등록된 DeviceMap/FrameRule과 DeviceMap이 참조하는 Register Map을 다시 검사하고
-// Register 메모리를 Init_Value 기준으로 재구성한다.
-// DLL 정책상 Disconnect 상태에서만 성공하며 검증 실패 시 오류 코드를 반환한다.
+/*
+ * 함수명: M485E_Core_RefreshCsv
+ * 기능: 등록된 CSV를 재검증하고 Register 메모리를 Init_Value 기준으로 재구성한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 상태/CSV 검증 오류 코드
+ */
 long M485E_Core_RefreshCsv()
 {
      return M485E_Dll_RefreshCsv(gM485E_ContextHandle);
 }
 
-// 검증된 설정을 사용해 DeviceMap의 활성 Serial 포트를 열고 Modbus RTU Slave 처리를 시작한다.
+/*
+ * 함수명: M485E_Core_Connect
+ * 기능: 검증된 설정의 Serial Port를 열고 Modbus RTU Slave 처리를 시작한다.
+ * 파라미터: 없음
+ * 반환값: 비동기 Connect 접수 결과 코드
+ */
 long M485E_Core_Connect()
 {
      return M485E_Dll_Connect(gM485E_ContextHandle);
 }
 
-// Serial 포트와 통신 작업을 안전하게 중지하되 DLL Context와 설정은 유지한다.
+/*
+ * 함수명: M485E_Core_Disconnect
+ * 기능: Serial Port와 통신 작업을 중지하되 DLL Context와 설정은 유지한다.
+ * 파라미터: 없음
+ * 반환값: 비동기 Disconnect 접수 결과 코드
+ */
 long M485E_Core_Disconnect()
 {
      return M485E_Dll_Disconnect(gM485E_ContextHandle);
 }
 
-// DLL 수명주기 상태 배열을 호출자가 제공한 버퍼에 채운다.
-// 배열 위치의 의미는 generated 계약의 M485E_LS_* 상수를 사용한다.
+/*
+ * 함수명: M485E_Core_GetLifecycleStatus
+ * 기능: DLL Lifecycle 상태를 M485E_LS_* Layout의 호출자 버퍼에 채운다.
+ * 파라미터: outStatus - 최소 M485E_LIFECYCLE_STATUS_COUNT개의 long 배열
+ * 반환값: M485E_OK 또는 출력 버퍼 오류 코드
+ */
 long M485E_Core_GetLifecycleStatus(long outStatus[])
 {
      return M485E_Dll_GetLifecycleStatus(gM485E_ContextHandle, elcount(outStatus), outStatus);
 }
 
-// DLL의 Snapshot 생성 기능을 활성화한다. CAN Frame 출력 타이머는 Monitoring 모듈이 담당한다.
+/*
+ * 함수명: M485E_Core_StartMonitoring
+ * 기능: DLL Snapshot 생성 기능을 활성화한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 Lifecycle 상태 오류 코드
+ */
 long M485E_Core_StartMonitoring()
 {
      return M485E_Dll_StartMonitoring(gM485E_ContextHandle);
 }
 
-// DLL의 Snapshot 생성 기능을 비활성화한다.
+/*
+ * 함수명: M485E_Core_StopMonitoring
+ * 기능: DLL Snapshot 생성 기능을 비활성화한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 Lifecycle 상태 오류 코드
+ */
 long M485E_Core_StopMonitoring()
 {
      return M485E_Dll_StopMonitoring(gM485E_ContextHandle);
 }
 
-// 특정 Device Index와 Rule ID의 현재 Register 묶음을 동기식으로 읽는다.
-// outMeta와 outRegisters는 호출자가 소유하며 DLL은 성공한 경우에만 결과를 채운다.
-// outMeta는 M485E_SM_* 위치를 사용하고 outRegisters는 Quantity개의 word를 받는다.
+/*
+ * 함수명: M485E_Core_ReadRuleSnapshot
+ * 기능: Device Index와 Rule ID의 현재 Register 묶음을 동기식으로 읽는다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index
+ *   ruleId - FrameRule의 Rule_ID
+ *   outMeta - M485E_SM_* Layout의 호출자 소유 배열
+ *   outRegisters - Rule Quantity를 받을 호출자 소유 word 배열
+ * 반환값: M485E_OK 또는 Rule/출력 버퍼 오류 코드
+ */
 long M485E_Core_ReadRuleSnapshot(long index, long ruleId, long outMeta[],
      word outRegisters[])
 {
@@ -160,8 +223,15 @@ long M485E_Core_ReadRuleSnapshot(long index, long ruleId, long outMeta[],
           elcount(outRegisters), outRegisters);
 }
 
-// 지정 Port의 값 변경 Snapshot Queue에서 한 건을 꺼낸다.
-// 반환된 메타 정보와 Register 값은 Monitoring 모듈에서 0x81 CAN Frame으로 변환한다.
+/*
+ * 함수명: M485E_Core_TryDequeueChangeSnapshot
+ * 기능: 지정 Port의 값 변경 Snapshot Queue에서 한 건을 꺼낸다.
+ * 파라미터:
+ *   portSlot - 조회할 DLL Port Slot
+ *   outMeta - M485E_SM_* Layout의 호출자 소유 배열
+ *   outRegisters - Snapshot Register를 받을 호출자 소유 word 배열
+ * 반환값: M485E_OK, M485E_STATUS_NO_DATA 또는 DLL 오류 코드
+ */
 long M485E_Core_TryDequeueChangeSnapshot(long portSlot, long outMeta[],
      word outRegisters[])
 {
@@ -170,16 +240,30 @@ long M485E_Core_TryDequeueChangeSnapshot(long portSlot, long outMeta[],
           elcount(outRegisters), outRegisters);
 }
 
-// 지정 Port의 Change Queue 사용량과 누락 통계를 조회한다.
+/*
+ * 함수명: M485E_Core_GetChangeQueueStats
+ * 기능: 지정 Port의 Change Queue 사용량과 누락 통계를 조회한다.
+ * 파라미터:
+ *   portSlot - 조회할 DLL Port Slot
+ *   outStats - M485E Change Queue 통계 Layout을 받을 배열
+ * 반환값: M485E_OK 또는 Port/출력 버퍼 오류 코드
+ */
 long M485E_Core_GetChangeQueueStats(long portSlot, long outStats[])
 {
      return M485E_Dll_GetChangeQueueStats(gM485E_ContextHandle, portSlot,
           elcount(outStats), outStats);
 }
 
-// Debug/Panel용 Register 읽기이다. Function Code 구분 없이 메모리 값을 직접 읽는다.
-// Quantity는 16-bit Register 개수이며 결과는 outRegisters에 기록된다.
-// 실패 시 caller-owned outRegisters의 기존 내용은 유지된다.
+/*
+ * 함수명: M485E_Core_ReadRegisters
+ * 기능: Function Code 구분 없이 DLL Register 메모리의 연속 범위를 읽는다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index
+ *   startAddress - 첫 Register Address
+ *   quantity - 읽을 16-bit Register 개수
+ *   outRegisters - 결과를 받을 호출자 소유 word 배열
+ * 반환값: M485E_OK 또는 주소/출력 버퍼 오류 코드
+ */
 long M485E_Core_ReadRegisters(long index, long startAddress, long quantity,
      word outRegisters[])
 {
@@ -187,9 +271,16 @@ long M485E_Core_ReadRegisters(long index, long startAddress, long quantity,
           elcount(outRegisters), outRegisters);
 }
 
-// Debug/Panel용 Register 쓰기이다. 입력 word 배열의 Quantity개 값을 DLL 메모리에 적용한다.
-// 변경 범위와 겹치는 Rule에는 Direct Write 원인의 Snapshot이 생성될 수 있다.
-// inRegisters의 실제 배열 길이가 Quantity보다 작으면 DLL이 Buffer 오류를 반환한다.
+/*
+ * 함수명: M485E_Core_WriteRegisters
+ * 기능: 입력 word 배열의 연속 Register 값을 DLL 메모리에 적용한다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index
+ *   startAddress - 첫 Register Address
+ *   quantity - 쓸 16-bit Register 개수
+ *   inRegisters - 쓸 값을 보관한 word 배열
+ * 반환값: M485E_OK 또는 주소/입력 버퍼 오류 코드
+ */
 long M485E_Core_WriteRegisters(long index, long startAddress, long quantity,
      word inRegisters[])
 {
@@ -197,15 +288,26 @@ long M485E_Core_WriteRegisters(long index, long startAddress, long quantity,
           elcount(inRegisters), inRegisters);
 }
 
-// 지정 Device Index의 Register 메모리를 CSV Init_Value 상태로 되돌린다.
+/*
+ * 함수명: M485E_Core_ResetDevice
+ * 기능: 지정 장치의 Register 메모리를 CSV Init_Value 상태로 되돌린다.
+ * 파라미터: index - DeviceMap의 장치 Index
+ * 반환값: M485E_OK 또는 장치 Index 오류 코드
+ */
 long M485E_Core_ResetDevice(long index)
 {
      return M485E_Dll_ResetDevice(gM485E_ContextHandle, index);
 }
 
-// SignalName으로 물리값을 읽는다. DLL ABI의 float 배열 출력을 CAPL 참조 변수로 변환한다.
-// 실패 시에는 호출자가 넘긴 outPhysicalValue를 덮어쓰지 않는다.
-// SignalName 비교는 대소문자를 구분한다.
+/*
+ * 함수명: M485E_Core_ReadSignal
+ * 기능: 대소문자를 구분하는 SignalName으로 물리값을 읽는다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index
+ *   signalName - Register Map의 SignalName
+ *   outPhysicalValue - 성공한 물리값을 받을 참조 변수
+ * 반환값: M485E_OK 또는 Signal/변환 오류 코드
+ */
 long M485E_Core_ReadSignal(long index, char signalName[], float& outPhysicalValue)
 {
      float abiOutValue[1];
@@ -217,29 +319,55 @@ long M485E_Core_ReadSignal(long index, char signalName[], float& outPhysicalValu
      return result;
 }
 
-// SignalName과 물리값을 DLL에 전달하여 해당 Register Bit/Byte 영역을 갱신한다.
-// 물리값은 CSV Type/Scale/Offset/Min/Max 규칙을 통과해야 한다.
+/*
+ * 함수명: M485E_Core_WriteSignal
+ * 기능: SignalName의 Type/Scale/Offset 규칙에 따라 물리값을 Register에 쓴다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index
+ *   signalName - Register Map의 SignalName
+ *   inPhysicalValue - 적용할 물리값
+ * 반환값: M485E_OK 또는 Signal/범위/변환 오류 코드
+ */
 long M485E_Core_WriteSignal(long index, char signalName[], float inPhysicalValue)
 {
      return M485E_Dll_WriteSignal(gM485E_ContextHandle, index, strlen(signalName), signalName,
           inPhysicalValue);
 }
 
-// 가장 최근 동기 API 실패의 상세 메타데이터와 문자열을 조회하는 공개 CAPL 래퍼이다.
+/*
+ * 함수명: M485E_Core_GetLastSyncError
+ * 기능: 가장 최근 동기 API 실패의 상세 메타데이터와 문자열을 조회한다.
+ * 파라미터:
+ *   outMeta - 오류 메타데이터를 받을 long 배열
+ *   outText - 오류 설명을 받을 char 배열
+ * 반환값: M485E_OK 또는 출력 버퍼 오류 코드
+ */
 long M485E_Core_GetLastSyncError(long outMeta[], char outText[])
 {
      return M485E_Dll_GetLastSyncError(gM485E_ContextHandle, elcount(outMeta), outMeta,
           elcount(outText), outText);
 }
 
-// 비동기 오류 Queue에서 이벤트 한 건을 조회하는 공개 CAPL 래퍼이다.
+/*
+ * 함수명: M485E_Core_TryDequeueErrorEvent
+ * 기능: 비동기 오류 Queue에서 이벤트 한 건을 꺼낸다.
+ * 파라미터:
+ *   outMeta - 오류 메타데이터를 받을 long 배열
+ *   outText - 오류 설명을 받을 char 배열
+ * 반환값: M485E_OK, M485E_STATUS_NO_DATA 또는 출력 버퍼 오류 코드
+ */
 long M485E_Core_TryDequeueErrorEvent(long outMeta[], char outText[])
 {
      return M485E_Dll_TryDequeueErrorEvent(gM485E_ContextHandle, elcount(outMeta), outMeta,
           elcount(outText), outText);
 }
 
-// 비동기 오류 Queue의 현재 사용량과 누락 통계를 조회한다.
+/*
+ * 함수명: M485E_Core_GetErrorQueueStats
+ * 기능: 비동기 오류 Queue의 현재 사용량과 누락 통계를 조회한다.
+ * 파라미터: outStats - 오류 Queue 통계 Layout을 받을 long 배열
+ * 반환값: M485E_OK 또는 출력 버퍼 오류 코드
+ */
 long M485E_Core_GetErrorQueueStats(long outStats[])
 {
      return M485E_Dll_GetErrorQueueStats(gM485E_ContextHandle, elcount(outStats), outStats);

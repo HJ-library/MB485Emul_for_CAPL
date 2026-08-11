@@ -17,10 +17,17 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | Board | Modbus RTU Master로 FC03·FC04 Read와 FC10 Write 요청 전송 |
 | SystemBase Multi USB-485 | 자동 방향 제어 방식으로 PC와 Board의 RS-485 연결 |
 | `M485E.dll` | CSV 검증, 장치/Register 상태, RTU Slave, Queue와 연결 수명주기 처리 |
-| CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 오류를 Write Window에 출력 |
-| CAPL Monitoring | 선택 Rule을 읽어 가상 CAN Header/Data Message로 변환 |
-| CAPL UI | System Variable의 Connect, Refresh, Read/Write, Signal 조작을 Core에 전달 |
+| CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
+| CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
+| CAPL ReadOption | 프로젝트 FrameRule의 `slot ↔ Index + Rule_ID` 고정 목록을 한곳에서 관리 |
+| CAPL Connection | ConnectSwitch, 500ms 자동 연결 Timer와 Connect/Disconnect 요청을 관리 |
+| CAPL Control | Refresh와 100ms Lifecycle 상태를 LED·문자열 System Variable로 변환 |
+| CAPL UI | Manual Write, Signal과 Monitoring System Variable 요청을 캡처해 공개 진입점에 전달 |
+| CAPL Main | 프로젝트 경로·Port 초기 설정과 Measurement 시작·종료 순서를 관리 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
+
+Core만 `M485E_Dll_*`을 직접 호출한다. Connection·Control·UI는 System Variable과 Panel
+표현을, Monitoring은 CAN Message 생성과 스케줄링을 소유하며 Core는 표현 계층에 의존하지 않는다.
 
 RS-485 Port Slot 0~3은 Main에 설정한 가상 CAN Channel과 1:1로 대응한다. 기본 1-Port
 예제는 Slot 0을 Channel 1에 출력한다. 가상 CAN은 외부
@@ -61,11 +68,11 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 
 ![전체 동작 흐름](assets/overall_operation_flow.png)
 
-1. CANalyzer가 `M485_E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
+1. CANalyzer가 `M485E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
 2. CAPL `preStart`에서 현재 Program Node를 등록하고 Vector Context Handle을 얻는다. Handle 값 0도 정상값이다.
 3. CAPL `start`에서 DLL Context를 초기화하고 DeviceMap/FrameRule 경로와 활성 Port 1~4개의 Serial 설정을 전달한다.
 4. DLL이 DeviceMap에서 참조하는 Register Map까지 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
-5. `ConnectSwitch`가 켜지면 DeviceMap의 모든 활성 COM Port를 연다. 하나라도 실패하면 전체 Connect를 실패시킨다.
+5. 시작 구성이 접수되면 Main이 `ConnectSwitch`를 자동으로 켠다. 500ms 뒤 연결 Timer가 Refresh 완료를 확인하고 DeviceMap의 모든 활성 COM Port를 한 번에 연다. 하나라도 실패하면 전체 Connect를 실패시키고 Switch를 다시 내린다.
 6. Connected 상태에서 Board RTU 요청, CAPL 수동 조작과 CAN Monitoring을 병행한다.
 7. Measurement 종료 시 Monitoring과 Timer를 중지하고 Worker를 취소·Join한 뒤 COM과 Context를 정리한다.
 
@@ -85,14 +92,16 @@ Core가 Write Window 메시지로 정리한다.
 
 각 Port Worker는 독립적으로 다음 순서를 처리한다.
 
-1. COM에서 Byte를 읽고 RTU t1.5/t3.5 간격으로 Frame 경계를 판정한다.
-2. CRC와 Frame 형식을 검사한다.
+1. COM에서 최대 256Byte Chunk로 읽고 Read Timeout과 관계없이 미완성 후보를 이어 붙인다.
+2. FC03·FC04·FC10 예상 길이와 CRC-16으로 Frame을 복구하고, 미지원 Function은 bounded CRC sliding으로 분리한다.
 3. 수신 Port와 Slave ID로 Device Index를 찾는다.
 4. Function Code와 Address 범위를 `M485E_FrameRule.csv` 권한과 대조한다.
-5. FC03·FC04는 Register를 읽어 응답하고, FC10은 Register를 쓴 뒤 정상 응답한다.
+5. CRC 유효 요청 뒤 계산된 t3.5 Guard를 보장하고 FC03·FC04는 Register를 읽어 응답하며, FC10은 Register를 쓴 뒤 정상 응답한다.
 6. FC10에서 값이 실제로 바뀌면 변경 범위와 겹치는 모든 Rule의 Change Snapshot을 Port Queue에 넣는다.
 
-미등록 Slave와 Broadcast 주소는 응답하지 않는다. 등록 Slave의 미지원 Function이나
+미등록 Slave에는 응답하지 않는다. Slave ID 0의 FC10 Broadcast는 수신 Port에 구성된 모든
+Device를 전체 검증 후 원자 적용하고 응답은 보내지 않으며, Broadcast FC03/FC04는 무응답·무적용이다.
+Register Address 0은 Slave ID 0과 별개의 정상 주소다. 등록 Slave의 미지원 Function이나
 잘못된 Address·Quantity는 Modbus Exception으로 응답한다. 한 Port의 처리 지연이 다른
 Port를 막지 않도록 Port별 Worker와 Framing 상태를 분리한다.
 
@@ -105,18 +114,20 @@ Panel은 DLL을 직접 호출하지 않고 System Variable을 변경한다.
 ```text
 Panel/System Variable
         ↓
-M485_E_UI.cin
+M485E_UI.cin
         ↓
-M485_E_Core.cin
+M485E_Core.cin
         ↓
 M485E.dll Runtime Register Model
 ```
 
-- Manual Read: `Index + StartAddress + Quantity`를 요청하고 `Data[]`로 16bit Register 배열을 받는다.
-- Manual Write: `Index + StartAddress + Quantity + Data[]`를 전달해 16bit Register 배열을 쓴다.
+- Manual Write: `Index + StartAddress + Quantity + Data[122]`를 전달해 최대 122개의 16bit Register를 한 번에 쓴다. 값 편집만으로는 쓰지 않고 `Send`에서 요청 전체를 적용한다.
 - Signal Read: `Index + SignalName`을 요청하고 `PhysicalValue`로 물리값을 받는다.
 - Signal Write: `Index + SignalName + PhysicalValue`를 전달하며 Scale·Offset과 자료형 변환을 적용한다.
-- Auto Read: 마지막으로 확정된 Manual Read 요청을 1초마다 반복한다.
+
+수동 Register Read와 AutoRead Panel은 제공하지 않는다. CAN Monitoring과 CAPL/DLL의 공개
+Register Read API는 유지하며, Register별 읽기 표시 System Variable 연결은 인터페이스 확정
+전까지 보류한다.
 
 Signal Type은 `Signed`, `Unsigned`, `IEEE Float`, `IEEE Double`을 지원한다. 다중 Register
 값은 첫 Address에 High Word가 오는 `HighWordFirst`로 고정한다. `Byte_Order=LittleEndian`은
@@ -134,7 +145,7 @@ DLL에서 Rule Snapshot을 읽어 CAN Message를 생성한다.
 - Output Pump: 10ms Timer
 - Rule 선택: `M485E::Monitoring::Check_ReadOption[]`
 - Change Queue: 매 Pump마다 시작 Port를 순환하는 활성 Port Round-robin
-- Periodic Rule: Cycle이 끝나도 이어지는 단일 ReadOption Cursor
+- Periodic Rule: Port별로 Cycle이 끝나도 이어지는 ReadOption Cursor와 시작 Port Round-robin
 - Periodic Snapshot: `0x80IIRRMM`
 - Change Snapshot: `0x81IIRRMM`
 
@@ -159,13 +170,14 @@ Monitoring을 켤 때 별도 `SourceType=0x04` Init Snapshot은 만들지 않는
 기존 `0x80` Periodic 경로에서 첫 Cycle부터 처리한다. 값 변경 Snapshot은 다음 Output
 Pump에서 우선 처리한다.
 
-프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Rule을 CAPL의
-`M485E_Monitoring_ConfigureReadOption(slot, Index, Rule_ID)`에 정확히 한 번 등록해야 한다.
-현재 기본 Phase 9 Probe에는 세 Rule 예제가 등록되어 있지만 실제 프로젝트 Main의 Rule
-Table은 회사 Map 확정 후 구성해야 한다.
+프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Device Rule 구간을
+`M485E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에서
+`M485E_ReadOption_ConfigureDevice(Index, StartReadOption, EndReadOption)`로 등록한다.
+함수는 해당 Device의 Rule ID를 1부터 연속 생성한다.
+Slot은 0부터 빈칸 없이 증가해야 하고 같은 `Index + Rule_ID`의 중복 등록은 거부된다.
 
-정식 요구사항 `FR-CAN-047`의 "Port별 지속 Rule Cursor"와 현재 단일 Cursor 구현 사이의
-차이는 후속 코드 보완 대상으로 남아 있다. Change Queue의 Port Round-robin은 구현되어 있다.
+Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별 Cursor를 별도로
+유지하므로 한 Port에 Rule이 집중되어도 다른 Port의 Rule이 영구적으로 밀리지 않는다.
 
 ## 7. 연결 끊김과 오류 복구
 
@@ -176,6 +188,7 @@ Table은 회사 Map 확정 후 구성해야 한다.
 - 자동 재연결은 3초 간격, 최대 10회다.
 - 중간에 성공하면 Connected로 돌아가고 요청된 Monitoring을 복구한다.
 - 모두 실패하면 Disconnected 상태와 Error Event를 남긴다.
+- 자동 재연결을 모두 소진하면 ConnectSwitch도 OFF로 동기화하여 수동 재연결을 기다린다.
 - Measurement Stop은 재연결 대기 중에도 취소하고 모든 Worker와 COM Handle을 정리한다.
 
 동기 API 오류는 Context별 Last Sync Error에, Worker·연결 같은 비동기 오류는 bounded
@@ -205,11 +218,11 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 1. Solution을 `Release/Win32`로 빌드하여 `dist/M485E.dll`을 만든다.
 2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 DLL을 `Config/CAPL/Dll`에 배치한다.
 3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
-4. Program Node에 `M485_E_Main.can`을 연결한다.
+4. Program Node에 `M485E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.
-6. Measurement를 시작하고 `ConfigurationValid=1`, `State=Disconnected`를 확인한다.
-7. 연결 전 Manual Register·Signal Read/Write를 먼저 확인한다.
-8. USB-RS485와 Board를 연결하고 `ConnectSwitch`를 켠다.
+6. Measurement를 시작하면 ConnectSwitch가 자동으로 ON 된다. `ConfigurationValid=1`, `State=Connected`를 확인한다.
+7. 필요하면 ConnectSwitch를 OFF로 내려 Manual Register Write와 Signal Read/Write를 확인한다.
+8. 자동 Connect가 실패했다면 USB-RS485와 Board 연결을 확인하고 `ConnectSwitch`를 다시 켠다.
 9. FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
 
 회사에서 수행할 상세 순서는
@@ -227,7 +240,7 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 - 두 가상 CAN Channel의 Extended Header/Data Message
 - 실제 B-HVAC·Chiller Address와 Gas Reset Address
 - 최대 200 Rule, Change Burst와 장시간 안정성
-- `FR-CAN-047`에 따른 Periodic Port별 지속 Rule Cursor 보완과 회귀 검증
+- SystemBase Multi USB 485와 실제 Board에서 RTU Chunk 분할·병합, 응답 Timing 및 Noise 재동기화 검증
 - 장치별 탭을 포함한 실제 CANalyzer Panel `.xvp`
 
 x64 DLL과 최신 CANalyzer 지원은 현재 Release 범위가 아니라 후속 체크리스트 대상이다.

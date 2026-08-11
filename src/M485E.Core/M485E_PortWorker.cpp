@@ -3,7 +3,10 @@
 #include "M485E_Contracts.generated.h"
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <exception>
+#include <utility>
 
 namespace m485e::core
 {
@@ -101,18 +104,32 @@ bool PortWorker::ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept
   if (result.diagnosticStatus != M485E_OK)
     Report(result.diagnosticStatus, M485E_STAGE_PARSE, 0,
            "Modbus RTU frame was discarded or failed internally.");
-  if (!result.changedRuleIndices.empty())
+  for (auto& deviceWrite : result.deviceWrites)
   {
-    // The protocol engine already committed the FC10 write. Repackage its captured
+    // The protocol engine already committed the FC10 write. Forward its captured
     // Rule values so monitoring observes exactly that committed state.
-    RegisterWriteResult write;
-    write.status = M485E_OK;
-    write.changed = true;
-    write.changedRuleIndices = std::move(result.changedRuleIndices);
-    write.changedRuleValues = std::move(result.changedRuleValues);
-    snapshots_.RecordChange(result.deviceIndex, WriteSource::Rtu, write);
+    snapshots_.RecordChange(deviceWrite.deviceIndex, WriteSource::Rtu,
+                            deviceWrite.write);
   }
-  return result.disposition != RtuDisposition::Response || WriteResponse(result.response);
+  if (result.disposition != RtuDisposition::Response) return true;
+  // Read completion is later than the physical final byte, so waiting one t3.5
+  // from this conservative point guarantees the response does not collapse the
+  // required inter-frame silence. This delay never decides receive boundaries.
+  std::this_thread::sleep_for(std::chrono::microseconds(timing_.t3_5Us));
+  if (stopRequested_.load()) return true;
+  return WriteResponse(result.response);
+}
+
+bool PortWorker::IsAddressedFrame(const std::vector<std::uint8_t>& frame) const noexcept
+{
+  if (frame.empty()) return false;
+  const std::uint8_t slaveId = frame[0];
+  // Slave ID 0 is a Port-local Broadcast target. It is deliberately independent
+  // from Register Address 0, which remains a normal FC03/FC04/FC10 address.
+  if (slaveId > 247U) return false;
+  const auto configuration = runtime_.Configuration();
+  if (portSlot_ >= configuration->activePortCount) return false;
+  return slaveId == 0U || configuration->deviceBySlave[portSlot_][slaveId] >= 0;
 }
 
 void PortWorker::Run() noexcept
@@ -120,24 +137,38 @@ void PortWorker::Run() noexcept
   running_.store(true);
   try
   {
-    RtuFrameAssembler assembler(timing_);
-    // Poll often enough to detect t3.5 silence, while enforcing a 250 us lower bound
-    // to avoid a high-CPU busy loop at fast baud rates.
-    const std::uint32_t pollUs = std::max<std::uint32_t>(250U,
-        std::min<std::uint32_t>(timing_.t3_5Us, 1000U));
+    RtuStreamParser parser;
+    std::array<std::uint8_t, 256> readBuffer{};
+    // This timeout only keeps cancellation responsive. It is not an RTU frame
+    // boundary: partial bytes remain in RtuStreamParser across timeouts.
+    const std::uint32_t readWaitMs =
+        std::max<std::uint32_t>(20U, (timing_.t3_5Us + 999U) / 1000U);
+    const auto processBatch = [this](RtuParseBatch batch) {
+      for (std::uint32_t discarded = 0; discarded < batch.discardedSegments; ++discarded)
+        Report(M485E_ERR_RTU_FRAME_DISCARDED, M485E_STAGE_PARSE, 0,
+               "Malformed RTU stream segment was discarded during CRC resynchronization.");
+      for (const auto& frame : batch.frames)
+        if (IsAddressedFrame(frame) && !ProcessFrame(frame)) return false;
+      return true;
+    };
     while (!stopRequested_.load())
     {
-      const SerialReadResult read = transport_.ReadByte(pollUs);
+      const SerialReadResult read =
+          transport_.Read(readBuffer.data(), readBuffer.size(), readWaitMs);
       if (read.status == SerialIoStatus::Data)
       {
-        auto completed = assembler.PushByte(read.value, read.timestampUs);
-        if (completed && !ProcessFrame(*completed)) break;
+        if (read.transferred == 0U || read.transferred > readBuffer.size())
+        {
+          Report(M485E_ERR_SERIAL_READ_FAILED, M485E_STAGE_READ, read.osError,
+                 "Serial transport returned an invalid chunk length.");
+          if (fatalCallback_)
+            fatalCallback_(portSlot_, M485E_ERR_SERIAL_READ_FAILED, read.osError);
+          break;
+        }
+        if (!processBatch(parser.PushBytes(readBuffer.data(), read.transferred))) break;
       }
       else if (read.status == SerialIoStatus::Timeout)
-      {
-        auto completed = assembler.OnSilence(transport_.NowUs());
-        if (completed && !ProcessFrame(*completed)) break;
-      }
+        continue;
       else if (read.status == SerialIoStatus::RecoverableError)
       {
         Report(M485E_ERR_SERIAL_READ_FAILED, M485E_STAGE_READ, read.osError,

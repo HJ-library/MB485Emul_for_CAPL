@@ -43,10 +43,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - Phase 4: Device별 16bit Register Memory, FC03/FC04 권한, Direct Read/Write, Signal 물리값 Codec, Init/Reset
 - Phase 5: CRC-16/Modbus, FC03/FC04/FC10, 표준 Exception 및 무응답 정책
 - Phase 6: Port별 Change Snapshot FIFO와 Error FIFO, 고정 용량 256, oldest-drop·병합·통계
-- Phase 7: Win32 Overlapped COM I/O, t1.5/t3.5 RTU Framing, Port Worker, 취소 가능한 I/O
+- Phase 7: Win32 Overlapped Chunk I/O, 예상 길이+CRC RTU Stream Parser, 응답 t3.5 Guard, Port Worker, 취소 가능한 I/O
 - Phase 8: 비동기 Refresh/Connect/Disconnect, 활성 Port 전체 성공/전체 실패, 3초 간격 최대 10회 자동 재연결, 21개 Export의 실제 Core 연결
 - Phase 9: CAPL Core Wrapper, 1,000ms Monitoring Cycle, 10ms Output Pump, 1~4 Port Round-robin, Vector Extended CAN ID와 Header/Data Frame 생성
-- Phase 10: Manual Read/Write, 1초 AutoRead, Signal 물리값 제어, ReadSwitch/ReadOption System Variable Adapter와 외부 시험 패키지
+- Phase 10: Manual Write, Signal 물리값 제어, ReadSwitch/ReadOption System Variable Adapter와 외부 시험 패키지. 수동 Register Read/AutoRead Panel은 제거했으며 공개 Register Read API는 유지
 
 자동 시험은 실제 COM 장치 대신 Fake Transport 또는 존재하지 않는 COM Port를 사용합니다. 실제 SystemBase Adapter의 제거·복구, Board RTU, CANalyzer CAPL Compile/Measurement와 Panel 동작은 [외부 검증 가이드](docs/05_Test/External_Verification_Guide.docx)에 따라 회사 환경에서 수행하고, 결과는 [외부 시험 결과서](docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx)에 기록합니다. 모든 외부 결과의 초기값은 `Not Tested`입니다.
 
@@ -115,7 +115,7 @@ Probe는 다음을 검사합니다.
 
 Signal Read의 저수준 출력은 CAPL DLL Table에 1요소 `F[]`로 노출됩니다. C++ 구현은 `double*`를 사용하며 CAPL Core Wrapper는 CAPL에서 8바이트 실수로 취급되는 `float&` 단일 출력으로 감춥니다. 이 방식은 상태 반환값과 물리값 출력을 분리하면서 DLL이 성공할 때만 출력값을 갱신하기 위한 ABI Adapter입니다.
 
-[`tests/capl/M485E_Phase2_ContractsProbe.can`](tests/capl/M485E_Phase2_ContractsProbe.can)은 generated CAPL include의 주요 상태값, Layout Count/Index, 공개 한도와 오류 코드가 CAPL에서 동일하게 해석되는지 검사합니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 컴파일러에서 경고 없이 컴파일되었습니다. 최종 CANalyzer 9.x SP8 환경에서는 다시 Compile한 뒤 Measurement에서 Write Window의 PASS 메시지를 확인합니다. `M485_E_Main.can`의 독립 컴파일은 System Variable 데이터베이스가 없는 문맥에서는 완료되지 않으므로 `M485E.vsysvar`를 Configuration에 등록한 실환경에서 검증합니다.
+[`tests/capl/M485E_Phase2_ContractsProbe.can`](tests/capl/M485E_Phase2_ContractsProbe.can)은 generated CAPL include의 주요 상태값, Layout Count/Index, 공개 한도와 오류 코드가 CAPL에서 동일하게 해석되는지 검사합니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 컴파일러에서 경고 없이 컴파일되었습니다. 최종 CANalyzer 9.x SP8 환경에서는 다시 Compile한 뒤 Measurement에서 Write Window의 PASS 메시지를 확인합니다. `M485E_Main.can`의 독립 컴파일은 System Variable 데이터베이스가 없는 문맥에서는 완료되지 않으므로 `M485E.vsysvar`를 Configuration에 등록한 실환경에서 검증합니다.
 
 ## CMake
 
@@ -144,11 +144,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\tools\Prepare-M485EPackage.ps1 -Configuration Release
 ```
 
-CANalyzer Program Node에는 `Config/CAPL/M485E/M485_E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하며, Panel은 `M485E::Connection::ConnectSwitch`와 나머지 System Variable에 연결합니다.
+CANalyzer Program Node에는 `Config/CAPL/M485E/M485E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하고, FrameRule별 Monitoring 목록은 `M485E_ReadOption.cin`에서 관리합니다. Measurement 시작 시 Main이 500ms 연결 제어 Timer로 `ConnectSwitch`를 자동 ON 하며, Panel에서는 같은 Switch로 수동 Disconnect/재연결할 수 있습니다.
 
 기본 Main의 CSV 경로는 `".\\Maps\\M485E\\M485E_Device.csv"`와 `".\\Maps\\M485E\\M485E_FrameRule.csv"`입니다. `getAbsFilePath()`는 CANalyzer Configuration 파일 위치를 기준으로 해석하므로 `.cfg`는 `Config`(회사 배치에서는 `ProjectConfig`) 바로 아래에 저장합니다. `Config/Maps/M485E`에는 Device와 FrameRule뿐 아니라 Device의 `CSV_DB_Name`이 참조하는 모든 Register Map도 함께 있어야 합니다.
 
-CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[4]` 배열로 관리합니다. `gM485E_ActivePortCount`는 DeviceMap의 고유 Port 수와 같은 `1~4`로 설정하고 앞쪽 Slot만 적용합니다. 각 원소의 `portSlot`, `comPortNumber`, `baudRate`, `dataBits`, `parity`, `stopBits`를 설정하며, 예를 들어 `comPortNumber = 11`은 Core에서 `COM11`로 변환된 뒤 기존 문자열 DLL ABI에 전달됩니다. COM 번호 허용 범위는 `1~999`이고 DeviceMap의 Port 값은 Windows 이름 형식인 `COM11`을 유지합니다.
+CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[4]` 배열로 관리합니다. `gM485E_ActivePortCount`는 DeviceMap의 고유 Port 수와 같은 `1~4`로 설정하고 앞쪽 Slot만 적용합니다. 기본 예제는 활성 Slot 0의 `comPortNumber = 8`을 `COM8`로 전달하며, Slot 1의 COM9는 비활성 예비 설정이고 Slot 2~3은 0입니다. COM 번호 허용 범위는 활성 Slot에서 `1~999`이고 DeviceMap의 Port 값은 Windows 이름 형식인 `COM8`을 사용합니다.
 
 ## 소스 구분
 

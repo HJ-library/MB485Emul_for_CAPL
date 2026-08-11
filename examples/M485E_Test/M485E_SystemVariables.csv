@@ -5,20 +5,17 @@ Existing,M485E::Connection,State,M485E::Connection::State,int32,,No,0,Indicator,
 Existing,M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,No,0,Numeric display,,,Last completed lifecycle result; CAPL output displayed read-only on Panel
 Existing,M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,No,0,LED,,,CSV validation state; CAPL output displayed read-only on Panel
 Existing,M485E::Connection,ResultCode,M485E::Connection::ResultCode,int32,,No,0,Numeric display,,,Last lifecycle command result
+Existing,M485E::Connection,ConnectedLed,M485E::Connection::ConnectedLed,int32,,No,0,Green LED,,,Actual connected state; 1 only when State is Connected
+Existing,M485E::Connection,BusyLed,M485E::Connection::BusyLed,int32,,No,0,Yellow LED,,,Lifecycle busy state; 1 while Refreshing Connecting or Disconnecting
+Existing,M485E::Connection,ErrorLed,M485E::Connection::ErrorLed,int32,,No,0,Red LED,,,Lifecycle error state; 1 only when State is Error
+Existing,M485E::Connection,StateText,M485E::Connection::StateText,string,,No,Uninitialized,Text display,,,Readable lifecycle state; CAPL output displayed read-only on Panel
 Existing,M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,No,0,Toggle,,,Master monitoring switch
 Existing,M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,No,0,Rule checkboxes,,,Periodic Rule selection array
 Existing,M485E::Monitoring,ResultCode,M485E::Monitoring::ResultCode,int32,,No,0,Numeric display,,,Last monitoring result
-Existing,M485E::ManualRead,Index,M485E::ManualRead::Index,int32,,No,0,Numeric input,,,Device Index
-Existing,M485E::ManualRead,StartAddress,M485E::ManualRead::StartAddress,int32,,No,0,Numeric input,,,Literal start address
-Existing,M485E::ManualRead,Quantity,M485E::ManualRead::Quantity,int32,,No,1,Numeric input,,,Register count
-Existing,M485E::ManualRead,Data,M485E::ManualRead::Data,int32[],125,No,0,Array display,,,Read register values
-Existing,M485E::ManualRead,AutoReadManual,M485E::ManualRead::AutoReadManual,int32,,No,0,Checkbox,,,Repeat last accepted Read every second
-Existing,M485E::ManualRead,Send,M485E::ManualRead::Send,int32,,No,0,Button,,,Manual Read command
-Existing,M485E::ManualRead,ResultCode,M485E::ManualRead::ResultCode,int32,,No,0,Numeric display,,,Manual Read result
 Existing,M485E::ManualWrite,Index,M485E::ManualWrite::Index,int32,,No,0,Numeric input,,,Device Index
 Existing,M485E::ManualWrite,StartAddress,M485E::ManualWrite::StartAddress,int32,,No,0,Numeric input,,,Literal start address
 Existing,M485E::ManualWrite,Quantity,M485E::ManualWrite::Quantity,int32,,No,1,Numeric input,,,Register count
-Existing,M485E::ManualWrite,Data,M485E::ManualWrite::Data,int32[],125,No,0,Array input,,,16-bit values in 32-bit elements
+Existing,M485E::ManualWrite,Data,M485E::ManualWrite::Data,int32[],122,No,0,Array input,,,Panel capacity: 122 register values in 32-bit elements
 Existing,M485E::ManualWrite,Send,M485E::ManualWrite::Send,int32,,No,0,Button,,,Manual Write command
 Existing,M485E::ManualWrite,ResultCode,M485E::ManualWrite::ResultCode,int32,,No,0,Numeric display,,,Manual Write result
 Existing,M485E::SignalControl,Index,M485E::SignalControl::Index,int32,,No,0,Hidden adapter value,,,Selected device Index

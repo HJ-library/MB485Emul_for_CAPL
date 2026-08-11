@@ -144,6 +144,31 @@ std::vector<std::vector<std::uint16_t>> RuntimeModel::CaptureRuleValues(
   return snapshots;
 }
 
+std::vector<std::vector<std::uint16_t>> RuntimeModel::CaptureRuleValuesAfterWrite(
+    const ActiveConfiguration& configuration, const RegisterImage& image,
+    const std::vector<std::size_t>& ruleIndices, const std::uint16_t writeAddress,
+    const std::vector<std::uint16_t>& writeValues)
+{
+  std::vector<std::vector<std::uint16_t>> snapshots;
+  snapshots.reserve(ruleIndices.size());
+  const std::uint32_t writeEnd =
+      static_cast<std::uint32_t>(writeAddress) + writeValues.size();
+  for (const std::size_t ruleIndex : ruleIndices)
+  {
+    const RuleDefinition& rule = configuration.rules[ruleIndex];
+    std::vector<std::uint16_t> values(rule.quantity);
+    for (std::size_t offset = 0; offset < rule.quantity; ++offset)
+    {
+      const std::uint32_t current = static_cast<std::uint32_t>(rule.address) + offset;
+      values[offset] = current >= writeAddress && current < writeEnd
+                           ? writeValues[current - writeAddress]
+                           : image.values[current];
+    }
+    snapshots.push_back(std::move(values));
+  }
+  return snapshots;
+}
+
 RegisterWriteResult RuntimeModel::WriteRegisters(const std::uint8_t index,
                                                  const std::uint16_t address,
                                                  const std::vector<std::uint16_t>& values,
@@ -180,6 +205,86 @@ RegisterWriteResult RuntimeModel::WriteRegisters(const std::uint8_t index,
   auto changedRules = FindChangedRules(*configuration_, *device, changedAddresses);
   auto changedValues = CaptureRuleValues(*configuration_, devices_[index]->current, changedRules);
   return {M485E_OK, true, std::move(changedRules), std::move(changedValues)};
+}
+
+BroadcastRegisterWriteResult RuntimeModel::WriteBroadcastRegisters(
+    const std::uint8_t portSlot, const std::uint16_t address,
+    const std::vector<std::uint16_t>& values)
+{
+  if (portSlot >= configuration_->activePortCount)
+    return {M485E_ERR_INVALID_ARGUMENT, {}};
+  if (values.empty() || values.size() > 123U)
+    return {M485E_ERR_REGISTER_QUANTITY, {}};
+
+  std::vector<std::uint8_t> targetIndices;
+  for (std::size_t slaveId = 1; slaveId < configuration_->deviceBySlave[portSlot].size();
+       ++slaveId)
+  {
+    const std::int16_t position = configuration_->deviceBySlave[portSlot][slaveId];
+    if (position >= 0)
+      targetIndices.push_back(
+          configuration_->devices[static_cast<std::size_t>(position)].definition.index);
+  }
+  std::sort(targetIndices.begin(), targetIndices.end());
+  if (targetIndices.empty()) return {M485E_ERR_DEVICE_NOT_FOUND, {}};
+
+  const auto quantity = static_cast<std::uint16_t>(values.size());
+  for (const std::uint8_t index : targetIndices)
+  {
+    const RegisterImage* image = nullptr;
+    const DeviceConfiguration* device = nullptr;
+    const std::int32_t status = ValidateRange(index, address, quantity, image, device);
+    if (status != M485E_OK) return {status, {}};
+    (void)device;
+    for (std::uint32_t current = address;
+         current < static_cast<std::uint32_t>(address) + quantity; ++current)
+    {
+      if (!image->fc03Readable.test(current))
+        return {M485E_ERR_REGISTER_ACCESS_DENIED, {}};
+    }
+  }
+
+  // All device locks are acquired in ascending Index order. Single-device writes take
+  // only one of these locks, so this order prevents cross-device deadlocks.
+  std::vector<std::unique_lock<std::mutex>> locks;
+  locks.reserve(targetIndices.size());
+  for (const std::uint8_t index : targetIndices)
+    locks.emplace_back(devices_[index]->mutex);
+
+  BroadcastRegisterWriteResult result;
+  result.status = M485E_OK;
+  result.deviceWrites.reserve(targetIndices.size());
+  for (const std::uint8_t index : targetIndices)
+  {
+    const auto position = static_cast<std::size_t>(configuration_->deviceByIndex[index]);
+    const DeviceConfiguration& device = configuration_->devices[position];
+    std::bitset<65536> changedAddresses;
+    for (std::size_t offset = 0; offset < values.size(); ++offset)
+    {
+      if (devices_[index]->current.values[address + offset] != values[offset])
+        changedAddresses.set(address + offset);
+    }
+    RegisterWriteResult write{M485E_OK, !changedAddresses.none(), {}, {}};
+    if (write.changed)
+    {
+      write.changedRuleIndices =
+          FindChangedRules(*configuration_, device, changedAddresses);
+      write.changedRuleValues = CaptureRuleValuesAfterWrite(
+          *configuration_, devices_[index]->current, write.changedRuleIndices, address,
+          values);
+    }
+    result.deviceWrites.push_back({index, std::move(write)});
+  }
+
+  // No allocation or validation occurs after this point, so every target is committed
+  // together while all locks are held.
+  for (const auto& deviceWrite : result.deviceWrites)
+  {
+    if (!deviceWrite.write.changed) continue;
+    std::copy(values.begin(), values.end(),
+              devices_[deviceWrite.deviceIndex]->current.values.begin() + address);
+  }
+  return result;
 }
 
 RegisterWriteResult RuntimeModel::ResetDevice(const std::uint8_t index)

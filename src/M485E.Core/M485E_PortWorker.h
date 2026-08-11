@@ -24,8 +24,7 @@ enum class SerialIoStatus
 struct SerialReadResult
 {
   SerialIoStatus status = SerialIoStatus::Timeout;
-  std::uint8_t value = 0;
-  std::uint64_t timestampUs = 0;
+  std::size_t transferred = 0;
   std::uint32_t osError = 0;
 };
 
@@ -40,9 +39,9 @@ class ISerialTransport
 {
  public:
   virtual ~ISerialTransport() = default;
-  virtual SerialReadResult ReadByte(std::uint32_t waitUs) noexcept = 0;
+  virtual SerialReadResult Read(std::uint8_t* data, std::size_t capacity,
+                                std::uint32_t waitMs) noexcept = 0;
   virtual SerialWriteResult Write(const std::uint8_t* data, std::size_t size) noexcept = 0;
-  virtual std::uint64_t NowUs() const noexcept = 0;
   virtual void Cancel() noexcept = 0;
 };
 
@@ -71,6 +70,7 @@ class PortWorker final
  private:
   void Run() noexcept;
   bool ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept;
+  bool IsAddressedFrame(const std::vector<std::uint8_t>& frame) const noexcept;
   bool WriteResponse(const std::vector<std::uint8_t>& response) noexcept;
   void Report(std::int32_t code, std::int32_t stage, std::uint32_t osError,
               const char* text) noexcept;

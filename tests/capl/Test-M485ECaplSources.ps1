@@ -9,16 +9,60 @@ function Require-Match {
 }
 
 $apiHeader = Get-Content -LiteralPath (Join-Path $root 'src\M485E.Dll\M485E_DllApi.h') -Raw
-$corePath = Join-Path $root 'Config\CAPL\M485E\M485_E_Core.cin'
-$monitoringPath = Join-Path $root 'Config\CAPL\M485E\M485_E_Monitoring.cin'
-$uiPath = Join-Path $root 'Config\CAPL\M485E\M485_E_UI.cin'
-$mainPath = Join-Path $root 'Config\CAPL\M485E\M485_E_Main.can'
+$corePath = Join-Path $root 'Config\CAPL\M485E\M485E_Core.cin'
+$monitoringPath = Join-Path $root 'Config\CAPL\M485E\M485E_Monitoring.cin'
+$readOptionPath = Join-Path $root 'Config\CAPL\M485E\M485E_ReadOption.cin'
+$connectionPath = Join-Path $root 'Config\CAPL\M485E\M485E_Connection.cin'
+$controlPath = Join-Path $root 'Config\CAPL\M485E\M485E_Control.cin'
+$uiPath = Join-Path $root 'Config\CAPL\M485E\M485E_UI.cin'
+$mainPath = Join-Path $root 'Config\CAPL\M485E\M485E_Main.can'
+$phase9Path = Join-Path $root 'tests\capl\M485E_Phase9_CoreMonitoringProbe.can'
 $systemVariablesPath = Join-Path $root 'Config\System Variables\M485E.vsysvar'
 
 $core = Get-Content -LiteralPath $corePath -Raw
 $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
+$readOption = Get-Content -LiteralPath $readOptionPath -Raw
+$connection = Get-Content -LiteralPath $connectionPath -Raw
+$control = Get-Content -LiteralPath $controlPath -Raw
 $ui = Get-Content -LiteralPath $uiPath -Raw
 $main = Get-Content -LiteralPath $mainPath -Raw
+$phase9 = Get-Content -LiteralPath $phase9Path -Raw
+
+# CAPL 모듈은 Core를 단일 DLL 경계로 사용한다. 이 검사는 기능 이름의 존재 여부뿐 아니라
+# 의존 방향까지 고정하여 UI/Monitoring의 편의 코드가 Core 책임을 침범하는 회귀를 막는다.
+if ($ui -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL UI must not call M485E_Dll_* directly; use a Core wrapper.'
+}
+if ($monitoring -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Monitoring must not call M485E_Dll_* directly; use a Core wrapper.'
+}
+if ($connection -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(' -or
+    $control -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Connection and Control must call lifecycle APIs through Core wrappers.'
+}
+if ($ui -match '\b(?:gM485E_Context(?:Handle|Registered|Initialized)|registerCAPLDLL)\b' -or
+    $monitoring -match '\b(?:gM485E_Context(?:Handle|Registered|Initialized)|registerCAPLDLL)\b') {
+    throw 'CAPL UI and Monitoring must not access the DLL Context or registration API.'
+}
+if ($core -match '\bM485E_(?:UI|Monitoring)_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Core must not depend on UI or Monitoring functions.'
+}
+if ($monitoring -match '\bM485E_UI_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL Monitoring must not depend on UI functions.'
+}
+if ($core -match '(?:@?sysvar::|\bsys(?:Get|Set)Variable[A-Za-z0-9_]*\s*\()') {
+    throw 'CAPL Core must not depend on System Variables; keep adapters in UI.'
+}
+if ($monitoring -match '(?:@?sysvar::|\bsys(?:Get|Set)Variable[A-Za-z0-9_]*\s*\()') {
+    throw 'CAPL Monitoring must not depend on System Variables; synchronize them through UI.'
+}
+if ($core -match '\b(?:msTimer|timer)\s+[A-Za-z_]' -or
+    $core -match '\b(?:setTimer|cancelTimer|output)\s*\(') {
+    throw 'CAPL Core must not own timers or CAN output.'
+}
+if ($ui -match '\boutput\s*\(') {
+    throw 'CAPL UI must not output CAN messages; keep CAN serialization in Monitoring.'
+}
 
 $apiNames = [regex]::Matches($apiHeader, 'M485E_API\s+(M485E_Dll_[A-Za-z0-9_]+)\s*\(') |
     ForEach-Object { $_.Groups[1].Value }
@@ -45,12 +89,22 @@ Require-Match $main 'struct\s+M485E_PortConfig\s+gM485E_PortConfigs\s*\[\s*4\s*\
     'Main must keep four maximum Port configurations in a structure array.'
 Require-Match $main 'gM485E_ActivePortCount\s*=\s*1' `
     'Main must expose the active Port count and default the example to one Port.'
-Require-Match $main 'gM485E_PortConfigs\[0\]\.comPortNumber\s*=\s*11' `
-    'Main Port 0 must use numeric COM port 11.'
-Require-Match $main 'gM485E_PortConfigs\[1\]\.comPortNumber\s*=\s*12' `
-    'Main Port 1 must use numeric COM port 12.'
-Require-Match $main 'gM485E_PortConfigs\[3\]\.comPortNumber\s*=\s*14' `
-    'Main Port 3 must use numeric COM port 14.'
+Require-Match $main 'gM485E_PortConfigs\[0\]\.comPortNumber\s*=\s*8' `
+    'Main active Port 0 must use numeric COM port 8.'
+Require-Match $main 'gM485E_PortConfigs\[1\]\.comPortNumber\s*=\s*9' `
+    'Main reserve Port 1 must use numeric COM port 9.'
+Require-Match $main 'gM485E_PortConfigs\[2\]\.comPortNumber\s*=\s*0' `
+    'Main inactive Port 2 must use zero as the unused marker.'
+Require-Match $main 'gM485E_PortConfigs\[3\]\.comPortNumber\s*=\s*0' `
+    'Main inactive Port 3 must use zero as the unused marker.'
+Require-Match $phase9 'gM485EProbePortConfigs\[0\]\.comPortNumber\s*=\s*8' `
+    'Phase 9 Probe active Port must match the default COM8 Device fixture.'
+Require-Match $phase9 'gM485EProbePortConfigs\[1\]\.comPortNumber\s*=\s*9' `
+    'Phase 9 Probe reserve Port must match the Main COM9 setting.'
+Require-Match $phase9 'gM485EProbePortConfigs\[2\]\.comPortNumber\s*=\s*0' `
+    'Phase 9 Probe inactive Port 2 must use zero.'
+Require-Match $phase9 'gM485EProbePortConfigs\[3\]\.comPortNumber\s*=\s*0' `
+    'Phase 9 Probe inactive Port 3 must use zero.'
 Require-Match $main 'long\s+gM485E_VirtualCanChannels\s*\[\s*4\s*\]' `
     'Main must own the four-slot virtual CAN channel mapping.'
 Require-Match $main 'gM485E_VirtualCanChannels\[0\]\s*=\s*1' `
@@ -73,15 +127,47 @@ Require-Match $monitoring 'gM485E_MonitoringMessage\.DLC\s*=\s*count\s*\*\s*2' '
 Require-Match $monitoring 'struct\s+M485E_MonitoringState' `
     'Monitoring scheduler state struct is missing.'
 Require-Match $monitoring 'gM485E_MonitoringState\.changeStartPort' `
-    'Two-Port round-robin state is missing.'
+    'Change Snapshot Port round-robin state is missing.'
+Require-Match $monitoring 'periodicCursor\s*\[\s*M485E_PORT_SLOT_COUNT\s*\]' `
+    'Periodic Monitoring must keep one persistent cursor per Port.'
+Require-Match $monitoring 'gM485E_MonitoringState\.periodicStartPort' `
+    'Periodic Monitoring Port round-robin start state is missing.'
+Require-Match $monitoring 'M485E_Monitoring_TryOnePeriodic\s*\(long\s+portSlot,\s*long\s+remainingFrames\)' `
+    'Periodic Monitoring must schedule each Port through the per-Port helper.'
+Require-Match $monitoring 'gM485E_ReadOptions\[slot\]\.portSlot\s*==\s*portSlot' `
+    'Periodic Monitoring must filter each ReadOption by its resolved PortSlot.'
 Require-Match $monitoring 'M485E_Monitoring_GetReadOptionCount' `
     'Monitoring ReadOption count accessor is missing.'
+Require-Match $monitoring 'slot\s*!=\s*gM485E_MonitoringState\.readOptionCount' `
+    'ReadOption slots must be registered once in contiguous order.'
+Require-Match $monitoring 'gM485E_ReadOptions\[existingSlot\]\.index\s*==\s*index[\s\S]*gM485E_ReadOptions\[existingSlot\]\.ruleId\s*==\s*ruleId' `
+    'Monitoring must reject duplicate Index and Rule_ID mappings.'
+Require-Match $monitoring 'long\s+M485E_Monitoring_IsEnabled\s*\(' `
+    'Monitoring enabled-state accessor is missing.'
+Require-Match $monitoring 'result\s*=\s*M485E_Monitoring_ApplyCandidates\s*\(\s*\)' `
+    'Monitoring Start must validate the current ReadOption candidate set.'
+Require-Match $monitoring 'M485E_Core_StopMonitoring\s*\(\s*\)' `
+    'Monitoring Start must roll back the DLL state when candidate validation fails.'
+Require-Match $monitoring 'M485E_Monitoring_RejectCandidates\s*\(\s*result\s*\)' `
+    'A rejected ReadOption set must roll Candidate values back to Applied values.'
+Require-Match $monitoring 'candidateRollbackPending\s*=\s*1' `
+    'A rejected ReadOption set must request a Panel checkbox rollback.'
+Require-Match $monitoring 'long\s+M485E_Monitoring_TakeCandidateRollback\s*\(' `
+    'Monitoring must expose the pending Applied-state rollback to the UI adapter.'
 
-Require-Match $ui 'AutoReadManual' 'Manual AutoRead adapter is missing.'
+if ($ui -match '(?:M485E_ManualRead|M485E_UI_ExecuteRead|AutoReadManual|tM485E_ManualAutoRead|M485E::ManualRead)') {
+    throw 'CAPL UI must not restore the removed Manual Read or AutoRead adapter.'
+}
 Require-Match $ui 'M485E_Core_ReadSignal' 'Signal Read adapter is missing.'
 Require-Match $ui 'M485E_Core_WriteSignal' 'Signal Write adapter is missing.'
 Require-Match $ui 'struct\s+M485E_SignalRequest' 'Signal request struct is missing.'
 Require-Match $ui 'M485E_UI_LoadSignalRequest' 'Signal request loader is missing.'
+Require-Match $ui 'long\s+M485E_UI_SyncReadOptions\s*\(' `
+    'UI bulk ReadOption synchronization helper is missing.'
+Require-Match $ui 'M485E_Monitoring_HasCandidateRollback\s*\(\s*\)[\s\S]*M485E_Monitoring_TakeCandidateRollback\s*\(' `
+    'UI must consume a rejected candidate rollback before reading new checkbox values.'
+Require-Match $ui 'sysSetVariableLongArray\s*\(\s*sysvar::M485E::Monitoring::Check_ReadOption' `
+    'UI must restore rejected checkbox values to the last Applied state.'
 Require-Match $ui 'readOptionCount\s*=\s*M485E_Monitoring_GetReadOptionCount\s*\(' `
     'UI must read the Monitoring ReadOption count through its accessor.'
 Require-Match $ui 'M485E_Core_ReadSignal\s*\(\s*gM485E_SignalRequest\.index,\s*gM485E_SignalRequest\.signalName,\s*gM485E_SignalRequest\.physicalValue\s*\)' `
@@ -91,17 +177,70 @@ Require-Match $ui 'M485E_Core_WriteSignal\s*\(\s*gM485E_SignalRequest\.index,\s*
 Require-Match $core 'M485E_Core_ReadSignal\s*\([^\)]*float&\s+outPhysicalValue\)' `
     'CAPL Signal Read wrapper must expose one caller-owned physical value by reference.'
 Require-Match $ui 'Check_ReadOption' 'ReadOption system variable adapter is missing.'
-Require-Match $ui 'sysSetVariableLongArray\s*\(\s*sysvar::M485E::ManualRead::Data' `
-    'Manual Read must write the int array through sysSetVariableLongArray.'
+Require-Match $control 'currentState\s*==\s*M485E_STATE_CONNECTED[\s\S]*previousState\s*!=\s*M485E_STATE_CONNECTED[\s\S]*Monitoring::ReadSwitch\s*!=\s*0' `
+    'Control must restart requested Monitoring exactly once when Connection enters Connected.'
+Require-Match $control 'Monitoring::ReadSwitch\s*!=\s*0[\s\S]*M485E_Monitoring_Start\s*\(\s*\)' `
+    'Control must start Monitoring through its public entry point after Connection succeeds.'
+if ($control -match 'M485E_UI_') {
+    throw 'Control must not call back into the UI module that includes it.'
+}
+Require-Match $control 'currentState\s*!=\s*M485E_STATE_CONNECTED[\s\S]*M485E_Monitoring_IsEnabled\s*\(\s*\)' `
+    'Control must stop CAPL Monitoring timers after Connection leaves Connected.'
 Require-Match $ui 'sysGetVariableLongArray\s*\(\s*sysvar::M485E::ManualWrite::Data' `
     'Manual Write must read the int array through sysGetVariableLongArray.'
+Require-Match $ui 'SysGetVariableArrayLength\s*\(\s*sysvar::M485E::ManualWrite::Data\s*\)' `
+    'Manual Write must validate the actual Panel Data array length.'
+Require-Match $ui 'request\.quantity\s*>\s*dataLength' `
+    'Manual Write must reject Quantity values beyond the Panel Data capacity.'
 Require-Match $ui 'sysGetVariableLongArray\s*\(\s*sysvar::M485E::Monitoring::Check_ReadOption' `
     'Monitoring must read the int array through sysGetVariableLongArray.'
-if ($ui -match '@sysvar::M485E::(?:ManualRead::Data|ManualWrite::Data|Monitoring::Check_ReadOption)\s*\[') {
+if ($ui -match '@sysvar::M485E::(?:ManualWrite::Data|Monitoring::Check_ReadOption)\s*\[') {
     throw 'CANalyzer 9.x must not directly access int array system variable elements.'
 }
-Require-Match $ui 'Connection::ConnectSwitch' 'Connect/Disconnect switch adapter is missing.'
-Require-Match $ui 'setTimer\(tM485E_ManualAutoRead,\s*1000\)' 'AutoRead timer is not started.'
+if ($ui -match 'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch' -or
+    $main -match 'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch') {
+    throw 'ConnectSwitch ownership must remain in the Connection module.'
+}
+Require-Match $connection 'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch' `
+    'Connection module Connect/Disconnect switch adapter is missing.'
+$connectSwitchHandler = [regex]::Match($connection,
+    'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch\s*\{(?<Body>[\s\S]*?)\n\}')
+if (-not $connectSwitchHandler.Success -or
+    $connectSwitchHandler.Groups['Body'].Value -match 'M485E_Core_(?:Connect|Disconnect)\s*\(') {
+    throw 'ConnectSwitch handler must schedule Main control instead of calling the DLL lifecycle directly.'
+}
+if ([regex]::Matches($connection, 'M485E_Core_Connect\s*\(').Count -ne 1 -or
+    [regex]::Matches($connection, 'M485E_Core_Disconnect\s*\(').Count -ne 1) {
+    throw 'Connection control must have one Connect and one Disconnect command site.'
+}
+Require-Match $main '#include\s+"M485E_ReadOption\.cin"' `
+    'Main must include the project ReadOption mapping.'
+Require-Match $main '#include\s+"M485E_Connection\.cin"' `
+    'Main must include the Connection lifecycle module.'
+Require-Match $ui 'includes\s*\{\s*#include\s+"M485E_Control\.cin"\s*\}' `
+    'UI must include the Connection Panel Control adapter through an includes block.'
+Require-Match $readOption 'long\s+M485E_ReadOption_ConfigureAll\s*\(' `
+    'Project ReadOption configuration function is missing.'
+Require-Match $readOption 'long\s+M485E_ReadOption_ConfigureDevice\s*\(\s*long\s+index\s*,\s*long\s+startReadOption\s*,\s*long\s+endReadOption\s*\)' `
+    'Project ReadOption mapping must expose the device contiguous-range helper.'
+Require-Match $readOption 'startReadOption\s*!=\s*M485E_Monitoring_GetReadOptionCount\s*\(\s*\)' `
+    'Device ReadOption ranges must reject skipped slots.'
+Require-Match $readOption 'ruleId\s*=\s*slot\s*-\s*startReadOption\s*\+\s*1' `
+    'Device Rule IDs must be generated as a contiguous sequence starting at one.'
+Require-Match $readOption 'M485E_ReadOption_ConfigureDevice\s*\(\s*0\s*,\s*0\s*,\s*1\s*\)' `
+    'Device Index 0 must own ReadOption slots 0 through 1.'
+Require-Match $readOption 'M485E_ReadOption_ConfigureDevice\s*\(\s*1\s*,\s*2\s*,\s*2\s*\)' `
+    'Device Index 1 must own ReadOption slot 2.'
+Require-Match $main 'M485E_ReadOption_ConfigureAll\s*\([\s\S]*M485E_Core_Initialize\s*\(' `
+    'Main startup must validate ReadOptions before initializing runtime configuration.'
+Require-Match $connection '@sysvar::M485E::Connection::ConnectSwitch\s*=\s*1[\s\S]*setTimer\(tM485E_ConnectionControl,\s*500\)' `
+    'Connection module must automatically request connection with the 500ms startup timer.'
+Require-Match $connection 'on\s+timer\s+tM485E_ConnectionControl[\s\S]*M485E_Core_GetLifecycleStatus\s*\(' `
+    'Connection control must wait on the asynchronous lifecycle status.'
+Require-Match $connection 'void\s+M485E_Connection_Shutdown\s*\([\s\S]*cancelTimer\(tM485E_ConnectionControl\)' `
+    'Connection shutdown must cancel its control timer.'
+Require-Match $main 'M485E_Connection_Shutdown\s*\(\s*\)[\s\S]*M485E_Core_Finalize\s*\(' `
+    'Measurement shutdown must stop Connection control before finalizing the DLL.'
 Require-Match $ui 'setTimer\(tM485E_UISync,\s*100\)' 'ReadOption synchronization timer is not started.'
 Require-Match $core 'M485E_Core_ReportSyncFailure' 'Synchronous error reporting helper is missing.'
 Require-Match $core 'M485E_Core_PollOneErrorEvent' 'Asynchronous error polling helper is missing.'
@@ -113,7 +252,8 @@ Require-Match $core 'long\s+gM485E_ContextInitialized' 'Core must track initiali
 if ($main -match 'gM485E_ContextHandle\s*==\s*0' -or $core -match 'gM485E_ContextHandle\s*==\s*0') {
     throw 'CAPL must not treat Vector Context Handle 0 as a registration failure sentinel.'
 }
-Require-Match $main 'if\s*\(result\s*!=\s*M485E_OK\)[\s\S]*?M485E_Core_ReportSyncFailure\("Initialize"' 'Main must stop startup configuration after DLL initialization failure.'
+Require-Match $main 'result\s*=\s*M485E_Core_Initialize\s*\(\s*\)[\s\S]*if\s*\(result\s*!=\s*M485E_OK\)\s*return\s+result' `
+    'Main must stop startup configuration after DLL initialization failure.'
 
 [xml]$systemVariables = Get-Content -LiteralPath $systemVariablesPath -Raw
 if ($null -eq $systemVariables) { throw 'System variable XML could not be parsed.' }
@@ -125,9 +265,61 @@ foreach ($statusName in @('State', 'LastResult', 'ConfigurationValid')) {
         throw "Connection::$statusName must be writable by the CAPL lifecycle adapter."
     }
 }
+$connectionIndicatorNames = @('ConnectedLed', 'BusyLed', 'ErrorLed')
+foreach ($indicatorName in $connectionIndicatorNames) {
+    $indicatorVariable = $connectionNamespace.SelectSingleNode("variable[@name='$indicatorName']")
+    if ($null -eq $indicatorVariable -or
+        $indicatorVariable.type -ne 'int' -or
+        $indicatorVariable.readOnly -ne 'false') {
+        throw "Connection::$indicatorName must be a CAPL-writable int system variable."
+    }
+}
+$stateTextVariable = $connectionNamespace.SelectSingleNode("variable[@name='StateText']")
+if ($null -eq $stateTextVariable -or
+    $stateTextVariable.type -ne 'string' -or
+    $stateTextVariable.readOnly -ne 'false') {
+    throw 'Connection::StateText must be a CAPL-writable string system variable.'
+}
+$manualReadNamespace = $systemVariables.SelectSingleNode(
+    '//namespace[@name="M485E"]/namespace[@name="ManualRead"]')
+if ($null -ne $manualReadNamespace) {
+    throw 'The removed ManualRead system variable namespace must not be restored.'
+}
+Require-Match $control 'void\s+M485E_Control_UpdateConnectionIndicators\s*\(\s*long\s+currentState\s*\)' `
+    'Connection indicator derivation helper is missing.'
+Require-Match $control 'Connection::ConnectedLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_CONNECTED' `
+    'Connected LED must reflect only the Connected lifecycle state.'
+Require-Match $control 'Connection::BusyLed\s*=\s*[\s\S]*?M485E_STATE_REFRESHING[\s\S]*?M485E_STATE_CONNECTING[\s\S]*?M485E_STATE_DISCONNECTING' `
+    'Busy LED must cover Refreshing, Connecting, and Disconnecting states.'
+Require-Match $control 'Connection::ErrorLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_ERROR' `
+    'Error LED must reflect only the Error lifecycle state.'
+Require-Match $control 'M485E_Control_UpdateConnectionIndicators\s*\(\s*currentState\s*\)' `
+    'The 100 ms lifecycle poll must update the Panel connection indicators.'
+Require-Match $control 'void\s+M485E_Control_ResetDisplay\s*\(' `
+    'Control must reset stale Panel state before the first Poll and after shutdown.'
+Require-Match $control 'M485E_Control_Start\s*\([\s\S]*M485E_Control_ResetDisplay\s*\(\s*\)' `
+    'Control Start must reset stale Panel state.'
+Require-Match $control 'M485E_Control_Stop\s*\([\s\S]*M485E_Control_ResetDisplay\s*\(\s*\)' `
+    'Control Stop must reset stale Panel state.'
+$stateTextMappings = @(
+    @('M485E_STATE_UNINITIALIZED', 'Uninitialized'),
+    @('M485E_STATE_DISCONNECTED', 'Disconnected'),
+    @('M485E_STATE_REFRESHING', 'Refreshing'),
+    @('M485E_STATE_CONNECTING', 'Connecting'),
+    @('M485E_STATE_CONNECTED', 'Connected'),
+    @('M485E_STATE_DISCONNECTING', 'Disconnecting'),
+    @('M485E_STATE_ERROR', 'Error')
+)
+foreach ($stateTextMapping in $stateTextMappings) {
+    $stateConstant = [regex]::Escape($stateTextMapping[0])
+    $stateText = [regex]::Escape($stateTextMapping[1])
+    Require-Match $control ("case\s+$stateConstant\s*:\s*" +
+        'sysSetVariableString\s*\(\s*sysvar::M485E::Connection::StateText\s*,\s*' +
+        "`"$stateText`"\s*\)\s*;\s*break\s*;") `
+        "Connection StateText mapping is missing for $($stateTextMapping[0])."
+}
 $arrayVariables = @(
     $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="Monitoring"]/variable[@name="Check_ReadOption"]'),
-    $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="ManualRead"]/variable[@name="Data"]'),
     $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="ManualWrite"]/variable[@name="Data"]')
 )
 foreach ($arrayVariable in $arrayVariables) {
@@ -135,12 +327,20 @@ foreach ($arrayVariable in $arrayVariables) {
         throw 'CAPL LongArray adapters require intarray system variables.'
     }
 }
+$manualWriteData = $systemVariables.SelectSingleNode(
+    '//namespace[@name="M485E"]/namespace[@name="ManualWrite"]/variable[@name="Data"]')
+if ($null -eq $manualWriteData -or $manualWriteData.arrayLength -ne '122') {
+    throw 'ManualWrite::Data must provide exactly 122 Panel elements.'
+}
 
 $requiredFiles = @(
     'tests\capl\M485E_Phase1_AbiProbe.can',
     'tests\capl\M485E_Phase2_ContractsProbe.can',
     'tests\capl\M485E_Phase9_CoreMonitoringProbe.can',
-    'Config\CAPL\M485E\M485_E_Main.can',
+    'Config\CAPL\M485E\M485E_Main.can',
+    'Config\CAPL\M485E\M485E_ReadOption.cin',
+    'Config\CAPL\M485E\M485E_Connection.cin',
+    'Config\CAPL\M485E\M485E_Control.cin',
     'Config\Maps\M485E\M485E_Device.csv',
     'Config\Maps\M485E\M485E_FrameRule.csv'
 )
@@ -152,7 +352,12 @@ foreach ($relativePath in $requiredFiles) {
 
 $deviceMapPath = Join-Path $root 'Config\Maps\M485E\M485E_Device.csv'
 $deviceMapDirectory = Split-Path -Parent $deviceMapPath
-foreach ($device in Import-Csv -LiteralPath $deviceMapPath) {
+$devices = @(Import-Csv -LiteralPath $deviceMapPath)
+$defaultPorts = @($devices | Select-Object -ExpandProperty Port -Unique)
+if ($defaultPorts.Count -ne 1 -or $defaultPorts[0] -ne 'COM8') {
+    throw 'The default one-Port fixture must map every Device to active COM8.'
+}
+foreach ($device in $devices) {
     if ([string]::IsNullOrWhiteSpace($device.CSV_DB_Name)) {
         throw "Device Index $($device.Index) has no CSV_DB_Name."
     }
@@ -162,4 +367,4 @@ foreach ($device in Import-Csv -LiteralPath $deviceMapPath) {
     }
 }
 
-Write-Output 'M485E CAPL source contract checks PASS: 21 wrappers, monitoring policy, UI adapter, XML, and probe inputs.'
+Write-Output 'M485E CAPL source contract checks PASS: 21 wrappers, module boundaries, monitoring policy, UI adapter, XML, and probe inputs.'

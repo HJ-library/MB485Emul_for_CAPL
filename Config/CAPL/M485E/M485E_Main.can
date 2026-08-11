@@ -5,9 +5,11 @@ includes
      // generated 파일은 DLL ABI 상수이고 나머지 cin 파일은 역할별 CAPL 모듈이다.
      #pragma library("..\\Dll\\M485E.dll")
      #include "M485E_Contracts.generated.cin"
-     #include "M485_E_Core.cin"
-     #include "M485_E_Monitoring.cin"
-     #include "M485_E_UI.cin"
+     #include "M485E_Core.cin"
+     #include "M485E_Monitoring.cin"
+     #include "M485E_ReadOption.cin"
+     #include "M485E_Connection.cin"
+     #include "M485E_UI.cin"
 }
 
 variables
@@ -34,33 +36,37 @@ variables
      long gM485E_VirtualCanChannels[4];
 }
 
-// 최대 네 포트의 기본 통신 조건과 가상 CAN 채널을 채운다.
-// 회사 환경의 COM 번호나 통신 속도가 다르면 이 함수의 값만 변경한다.
+/*
+ * 함수명: M485E_Main_InitializePortConfigs
+ * 기능: 최대 네 Port Slot의 기본 Serial 설정과 가상 CAN 채널 매핑을 초기화한다.
+ * 파라미터: 없음
+ */
 void M485E_Main_InitializePortConfigs()
 {
      gM485E_PortConfigs[0].portSlot = 0;
-     gM485E_PortConfigs[0].comPortNumber = 11;
+     gM485E_PortConfigs[0].comPortNumber = 8;
      gM485E_PortConfigs[0].baudRate = 115200;
      gM485E_PortConfigs[0].dataBits = 8;
      gM485E_PortConfigs[0].parity = M485E_PARITY_NONE;
      gM485E_PortConfigs[0].stopBits = 1;
 
      gM485E_PortConfigs[1].portSlot = 1;
-     gM485E_PortConfigs[1].comPortNumber = 12;
+     // 예비 Port 설정이다. gM485E_ActivePortCount가 2 이상일 때만 DLL에 등록된다.
+     gM485E_PortConfigs[1].comPortNumber = 9;
      gM485E_PortConfigs[1].baudRate = 115200;
      gM485E_PortConfigs[1].dataBits = 8;
      gM485E_PortConfigs[1].parity = M485E_PARITY_NONE;
      gM485E_PortConfigs[1].stopBits = 1;
 
      gM485E_PortConfigs[2].portSlot = 2;
-     gM485E_PortConfigs[2].comPortNumber = 13;
+     gM485E_PortConfigs[2].comPortNumber = 0;
      gM485E_PortConfigs[2].baudRate = 115200;
      gM485E_PortConfigs[2].dataBits = 8;
      gM485E_PortConfigs[2].parity = M485E_PARITY_NONE;
      gM485E_PortConfigs[2].stopBits = 1;
 
      gM485E_PortConfigs[3].portSlot = 3;
-     gM485E_PortConfigs[3].comPortNumber = 14;
+     gM485E_PortConfigs[3].comPortNumber = 0;
      gM485E_PortConfigs[3].baudRate = 115200;
      gM485E_PortConfigs[3].dataBits = 8;
      gM485E_PortConfigs[3].parity = M485E_PARITY_NONE;
@@ -72,9 +78,12 @@ void M485E_Main_InitializePortConfigs()
      gM485E_VirtualCanChannels[3] = 4;
 }
 
-// 준비된 포트 설정 배열을 앞에서부터 DLL에 등록한다.
-// 하나라도 실패하면 즉시 해당 오류 코드를 반환하며 뒤 포트는 적용하지 않는다.
-// 반환: M485E_OK 또는 최초로 실패한 Port 설정의 오류 코드.
+/*
+ * 함수명: M485E_Main_ApplyPortConfigs
+ * 기능: 활성 Port 설정을 배열의 앞에서부터 DLL에 등록한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 최초로 실패한 Port 설정 오류 코드
+ */
 long M485E_Main_ApplyPortConfigs()
 {
      long configIndex;
@@ -96,12 +105,46 @@ long M485E_Main_ApplyPortConfigs()
      return M485E_OK;
 }
 
-// 측정 시작 준비 단계: 포트 기본값을 만들고 현재 CAPL Program Node를 DLL에 등록한다.
-// Vector 공식 Sample과 같이 registerCAPLDLL은 이벤트 핸들러에서 직접 호출한다.
-// CSV 로딩, DLL Context 초기화와 실제 Serial 연결은 아직 수행하지 않는다.
+/*
+ * 함수명: M485E_Main_Startup
+ * 기능: ReadOption, DLL Context, CSV 경로와 Port 설정을 순서대로 준비한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 최초 시작 단계 오류 코드
+ */
+long M485E_Main_Startup()
+{
+     long result;
+
+     result = M485E_ReadOption_ConfigureAll();
+     if (result != M485E_OK)
+     {
+          write("M485E ReadOption configuration failed: result=%d", result);
+          return result;
+     }
+
+     result = M485E_Core_Initialize();
+     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
+          result);
+     if (result != M485E_OK) return result;
+
+     // Context가 준비된 뒤 UI Timer를 먼저 시작하면 이후 비동기 Refresh 상태도 Panel에 표시된다.
+     M485E_UI_Start();
+     result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
+     if (result == M485E_OK)
+          result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
+               gM485E_FrameRulePath);
+     if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
+     if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+     write("M485E startup configuration: result=%d", result);
+     return result;
+}
+
+// 이벤트명: preStart
+// 기능: Port 기본값과 Connection 상태를 초기화하고 현재 CAPL Program Node를 DLL에 등록한다.
 on preStart
 {
      M485E_Main_InitializePortConfigs();
+     M485E_Connection_Initialize();
      gM485E_ContextRegistered = 0;
      gM485E_ContextInitialized = 0;
      gM485E_ContextHandle = registerCAPLDLL();
@@ -109,46 +152,36 @@ on preStart
      write("M485E DLL registration: stage=preStart handle=%d", gM485E_ContextHandle);
 }
 
-// 측정 시작 단계: DLL Context 초기화, CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
-// Vector Handle 0도 정상값이므로 preStart에서 등록한 값을 그대로 초기화에 사용한다.
-// Context 초기화 실패 시 후속 API를 호출하지 않아 연쇄 오류를 막는다.
-// 이 단계에서는 Serial 포트를 열지 않으며 ConnectSwitch가 올라올 때 연결한다.
-// 마지막으로 UI 동기화용 타이머를 시작한다.
-// Refresh는 비동기 요청이므로 최종 완료 여부는 LifecycleStatus 타이머가 갱신한다.
+// 이벤트명: start
+// 기능: CAPL/DLL 설정을 적용하고 성공하면 500ms 지연 자동 연결을 요청한다.
 on start
 {
      long result;
 
-     result = M485E_Core_Initialize();
-     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
-          result);
-
-     if (result != M485E_OK)
+     result = M485E_Main_Startup();
+     @sysvar::M485E::Connection::ResultCode = result;
+     if (result == M485E_OK)
      {
-          @sysvar::M485E::Connection::ResultCode = result;
-          M485E_Core_ReportSyncFailure("Initialize", result);
+          M485E_Connection_RequestStartup();
      }
      else
      {
-          result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
-          if (result == M485E_OK)
-               result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
-                    gM485E_FrameRulePath);
-          if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
-          if (result == M485E_OK) result = M485E_Core_RefreshCsv();
-          write("M485E startup configuration: result=%d", result);
-          @sysvar::M485E::Connection::ResultCode = result;
-          M485E_Core_ReportSyncFailure("StartupConfiguration", result);
-          M485E_UI_Start();
+          @sysvar::M485E::Connection::ConnectSwitch = 0;
+          M485E_Core_ReportSyncFailure("Startup", result);
      }
 }
 
-// 측정 종료 단계: 타이머와 모니터링을 먼저 멈춘 뒤 포트를 닫고 Context를 해제한다.
-// 역순 종료를 지켜 DLL 작업이 남은 상태에서 Context가 파기되지 않게 한다.
+// 이벤트명: stopMeasurement
+// 기능: CAPL Timer를 먼저 중지하고 DLL Finalize로 작업 Thread와 COM Port를 닫는다.
 on stopMeasurement
 {
+     long result;
+
+     M485E_Connection_Shutdown();
      M485E_UI_Stop();
-     M485E_Monitoring_Stop();
-     M485E_Core_Disconnect();
-     M485E_Core_Finalize();
+     if (gM485E_ContextInitialized != 0 && M485E_Monitoring_IsEnabled() != 0)
+          M485E_Monitoring_Stop();
+     write("M485E shutdown: finalize begin");
+     result = M485E_Core_Finalize();
+     write("M485E shutdown: finalize result=%d", result);
 }
