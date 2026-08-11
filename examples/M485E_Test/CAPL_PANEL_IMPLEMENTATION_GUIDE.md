@@ -11,10 +11,12 @@
 |---|---|
 | `M485_E_Core.cin` | DLL Context, 21개 DLL API Wrapper, CSV 경로 변환, 공통 오류 처리 |
 | `M485_E_Monitoring.cin` | ReadOption, 1초 Cycle, 10ms Pump, 가상 CAN Message 생성 |
+| `M485_E_ReadOption.cin` | FrameRule별 ReadOption Slot, Index, Rule_ID 고정 목록 |
 | `M485_E_UI.cin` | System Variable 이벤트, 수동 Read/Write, Signal Read/Write, Auto Read |
 | `M485E_Contracts.generated.cin` | 오류 코드, 상태, 배열 Layout, 공개 상수 |
 
-사용자가 직접 해야 하는 CAPL 작업은 `M485_E_Main.can`의 프로젝트별 설정뿐이다.
+사용자가 직접 해야 하는 CAPL 작업은 `M485_E_Main.can`의 프로젝트별 통신 설정과
+`M485_E_ReadOption.cin`의 Rule 목록이다.
 
 1. CSV 경로 설정
 2. 활성 COM Port 수와 통신 조건 설정
@@ -35,6 +37,7 @@ ProjectConfig\
 │     ├─ M485_E_Main.can
 │     ├─ M485_E_Core.cin
 │     ├─ M485_E_Monitoring.cin
+│     ├─ M485_E_ReadOption.cin
 │     ├─ M485_E_UI.cin
 │     └─ M485E_Contracts.generated.cin
 ├─ Maps\
@@ -99,87 +102,40 @@ gM485E_VirtualCanChannels[1] = 2;
 
 ### 3.3 Monitoring ReadOption 등록 함수
 
-`Check_ReadOption[]`의 배열 위치만으로는 DLL이 어떤 Rule인지 알 수 없다. Main에 다음 함수를
-추가해 각 배열 slot을 `Index + Rule_ID`에 연결한다.
+`Check_ReadOption[]`의 배열 위치만으로는 DLL이 어떤 Rule인지 알 수 없다.
+`M485_E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에서 각 배열 slot을
+`Index + Rule_ID`에 연결한다. Main이나 Monitoring 함수 내부에 프로젝트 Rule 목록을
+흩어 놓지 않는다.
 
 ```c
-void M485E_Main_ConfigureReadOptions()
-{
-     // Chiller: slot 0
-     M485E_Monitoring_ConfigureReadOption(0, 0, 1);
-
-     // E-HVAC: slot 1~6
-     M485E_Monitoring_ConfigureReadOption(1, 1, 1);
-     M485E_Monitoring_ConfigureReadOption(2, 1, 2);
-     M485E_Monitoring_ConfigureReadOption(3, 1, 3);
-     M485E_Monitoring_ConfigureReadOption(4, 1, 4);
-     M485E_Monitoring_ConfigureReadOption(5, 1, 5);
-     M485E_Monitoring_ConfigureReadOption(6, 1, 6);
-
-     // B-HVAC-1: slot 7~11
-     M485E_Monitoring_ConfigureReadOption(7, 2, 1);
-     M485E_Monitoring_ConfigureReadOption(8, 2, 2);
-     M485E_Monitoring_ConfigureReadOption(9, 2, 3);
-     M485E_Monitoring_ConfigureReadOption(10, 2, 4);
-     M485E_Monitoring_ConfigureReadOption(11, 2, 5);
-
-     // B-HVAC-2: slot 12~16
-     M485E_Monitoring_ConfigureReadOption(12, 3, 1);
-     M485E_Monitoring_ConfigureReadOption(13, 3, 2);
-     M485E_Monitoring_ConfigureReadOption(14, 3, 3);
-     M485E_Monitoring_ConfigureReadOption(15, 3, 4);
-     M485E_Monitoring_ConfigureReadOption(16, 3, 5);
-
-     // B-HVAC-3: slot 17~21
-     M485E_Monitoring_ConfigureReadOption(17, 4, 1);
-     M485E_Monitoring_ConfigureReadOption(18, 4, 2);
-     M485E_Monitoring_ConfigureReadOption(19, 4, 3);
-     M485E_Monitoring_ConfigureReadOption(20, 4, 4);
-     M485E_Monitoring_ConfigureReadOption(21, 4, 5);
-
-     // Gas Detector-1: slot 22~27
-     M485E_Monitoring_ConfigureReadOption(22, 5, 1);
-     M485E_Monitoring_ConfigureReadOption(23, 5, 2);
-     M485E_Monitoring_ConfigureReadOption(24, 5, 3);
-     M485E_Monitoring_ConfigureReadOption(25, 5, 4);
-     M485E_Monitoring_ConfigureReadOption(26, 5, 5);
-     M485E_Monitoring_ConfigureReadOption(27, 5, 6);
-
-     // Gas Detector-2: slot 28~33
-     M485E_Monitoring_ConfigureReadOption(28, 6, 1);
-     M485E_Monitoring_ConfigureReadOption(29, 6, 2);
-     M485E_Monitoring_ConfigureReadOption(30, 6, 3);
-     M485E_Monitoring_ConfigureReadOption(31, 6, 4);
-     M485E_Monitoring_ConfigureReadOption(32, 6, 5);
-     M485E_Monitoring_ConfigureReadOption(33, 6, 6);
-}
-```
-
-`on start`에서 한 번만 호출한다.
-
-```c
-on start
+long M485E_ReadOption_ConfigureAll()
 {
      long result;
 
-     M485E_Main_ConfigureReadOptions();
-     result = M485E_Core_Initialize();
-     // 이후 코드는 기존 Main 구현을 유지한다.
+     result = M485E_Monitoring_ConfigureReadOption(0, 0, 1);
+     if (result != M485E_OK) return result;
+     result = M485E_Monitoring_ConfigureReadOption(1, 0, 2);
+     if (result != M485E_OK) return result;
+     result = M485E_Monitoring_ConfigureReadOption(2, 1, 1);
+     if (result != M485E_OK) return result;
+     return M485E_OK;
 }
 ```
 
-이 예시는 `examples/M485E_Test/M485E_FrameRule.csv`의 현재 34개 Rule 기준이다. 회사에서
-FrameRule의 행을 추가·삭제하거나 `Index`, `Rule_ID`를 바꾸면 이 등록 함수와 Panel의
-Checkbox label도 함께 변경해야 한다. slot은 0부터 연속으로 사용하는 것을 권장한다.
+현재 저장소 기본 Map의 세 Rule은 이미 위와 같이 구현되어 있다. 회사에서 FrameRule의 행을
+추가·삭제하거나 `Index`, `Rule_ID`를 바꾸면 이 함수와 Panel Checkbox label도 함께 변경한다.
+Slot은 0부터 빈칸 없이 등록해야 하며 같은 `Index + Rule_ID`를 두 번 등록하면 `-5002`로
+거부된다. Main의 `M485E_Main_Startup()`이 이 함수를 한 번 호출하므로 별도 `on start` 코드를
+추가하지 않는다.
 
 ### 3.4 CAPL에서 수정하지 않을 부분
 
 - `registerCAPLDLL()` Handle 값을 고정값으로 바꾸지 않는다. Handle 0도 정상값일 수 있다.
 - UI나 Monitoring에서 `M485E_Dll_*`을 직접 호출하지 않는다.
-- `M485_E_Core.cin`, `M485_E_UI.cin`, `M485_E_Monitoring.cin`의 Timer 주기를 회사별로
+- `M485_E_Core.cin`, `M485_E_UI.cin`, `M485_E_Monitoring.cin`과 Main 연결 Timer 주기를 회사별로
   임의 변경하지 않는다.
-- Panel 버튼용 별도 CAPL Event를 중복 작성하지 않는다. 기본 Namespace 이벤트는
-  `M485_E_UI.cin`에 이미 구현되어 있다.
+- Panel 버튼용 별도 CAPL Event를 중복 작성하지 않는다. ConnectSwitch 이벤트는 Main에,
+  나머지 기본 Namespace 이벤트는 `M485_E_UI.cin`에 이미 구현되어 있다.
 
 ## 4. 최소 공통 Panel에 만들 Control
 
@@ -199,7 +155,7 @@ Panel Control 속성에서 사용자 편집을 막고 표시 전용으로 사용
 
 | Panel 표시 | System Variable | Control | 비고 |
 |---|---|---|---|
-| Connect | `M485E::Connection::ConnectSwitch` | Toggle | 1=Connect, 0=Disconnect |
+| Connect | `M485E::Connection::ConnectSwitch` | Toggle | 시작 시 자동 1, 0=Disconnect, 실패 후 1=재연결 |
 | Refresh CSV | `M485E::Connection::Refresh` | Momentary Button | Disconnect 상태에서만 사용 |
 | State | `M485E::Connection::State` | Numeric/Text Display | 상태값 표는 아래 참고 |
 | CSV Valid | `M485E::Connection::ConfigurationValid` | LED | 1=검증 성공 |

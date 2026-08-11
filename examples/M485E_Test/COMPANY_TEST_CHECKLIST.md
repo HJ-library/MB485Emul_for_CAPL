@@ -100,7 +100,7 @@ CANalyzer 버전과 Process bitness를 함께 기록한다.
 1. `Config/System Variables/M485E.vsysvar`를 Configuration에 등록한다.
 2. `Config/CAPL/M485E/M485_E_Main.can`을 Program Node에 연결한다.
 3. 다른 Phase Probe는 제거하여 DLL Context가 중복되지 않게 한다.
-4. CAPL Compile 후 Measurement를 시작하되 ConnectSwitch는 올리지 않는다.
+4. USB-RS485와 Board를 준비한 뒤 CAPL Compile 및 Measurement를 시작한다. ConnectSwitch는 Main이 자동으로 올린다.
 
 - [ ] Main CAPL Compile 경고/오류 없음
 - [ ] `Config/CAPL/Dll/M485E.dll` Load 성공
@@ -152,8 +152,8 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 1. SystemBase Multi USB-485와 Board를 연결한다.
 2. 실제 COM 번호와 통신 설정을 Main CAPL과 DeviceMap에 반영한다.
 3. Measurement를 시작하고 CSV Valid를 확인한다.
-4. `M485E::Connection::ConnectSwitch = 1`로 변경한다.
-5. 비동기 연결 완료를 기다린다.
+4. Measurement 시작 500ms 뒤 자동 Connect가 접수되는지 확인한다.
+5. 비동기 연결 완료를 기다린다. 실패하여 Switch가 0이면 원인을 수정한 뒤 다시 1로 변경한다.
 
 - [ ] State가 4(Connected)
 - [ ] Device Map의 1~4개 활성 Port가 모두 열림
@@ -195,11 +195,9 @@ CSV Refresh는 비동기다. Measurement 시작 직후가 아니라 State가 다
 - [ ] 선택 Rule의 0x80 Periodic Snapshot이 1초 Cycle로 출력
 - [ ] 둘 이상의 활성 Port 사용 시 Change Queue가 Round-robin으로 처리됨
 
-현재 `M485_E_Main.can`은 프로젝트별 Rule slot을 자동 생성하지 않는다. Main과 Panel의
-`Check_ReadOption[]`만으로 0x80 시험을 시작하기 전에 프로젝트 Rule 목록을
-`M485E_Monitoring_ConfigureReadOption(slot, Index, Rule_ID)`으로 등록하는 CAPL 설정 코드가
-필요하다. 기본 세 Rule은 Phase 9 Probe에 이미 등록되어 있으므로 먼저 이 Probe로
-Monitoring 경로를 확인한다. 회사 시험 결과를 보고 Main 초기화 반영을 검토한다.
+현재 `M485_E_Main.can`은 `M485_E_ReadOption.cin`의 프로젝트 Rule 목록을 시작 시 검증한다.
+기본 세 Rule은 Main과 Phase 9 Probe에서 시험할 수 있다. FrameRule을 변경한 경우에는 먼저
+ReadOption 목록과 Panel Checkbox 순서를 함께 변경한 뒤 Monitoring 경로를 확인한다.
 
 ## 11. 시험 8 - 연결 끊김과 자동 재연결
 

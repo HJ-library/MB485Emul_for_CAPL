@@ -53,15 +53,29 @@ variables
 // 반환: M485E_OK 또는 슬롯/Index/Rule ID 범위 오류.
 long M485E_Monitoring_ConfigureReadOption(long slot, long index, long ruleId)
 {
+     long existingSlot;
      if (slot < 0 || slot >= M485E_MAX_READ_OPTIONS || index < 0 || index > 255 ||
           ruleId < 0 || ruleId > 255)
           return M485E_ERR_READOPTION_INVALID;
+
+     // 슬롯을 앞에서부터 한 번만 등록해야 Panel 배열과 Rule 목록의 위치가 항상 일치한다.
+     // 따라서 이미 사용한 슬롯을 덮어쓰거나 중간 슬롯을 건너뛰는 등록은 허용하지 않는다.
+     if (slot != gM485E_MonitoringState.readOptionCount)
+          return M485E_ERR_READOPTION_INVALID;
+     for (existingSlot = 0; existingSlot < gM485E_MonitoringState.readOptionCount;
+          existingSlot++)
+     {
+          if (gM485E_ReadOptions[existingSlot].configured != 0 &&
+               gM485E_ReadOptions[existingSlot].index == index &&
+               gM485E_ReadOptions[existingSlot].ruleId == ruleId)
+               return M485E_ERR_READOPTION_INVALID;
+     }
+
      gM485E_ReadOptions[slot].configured = 1;
      gM485E_ReadOptions[slot].index = index;
      gM485E_ReadOptions[slot].ruleId = ruleId;
      gM485E_ReadOptions[slot].portSlot = -1;
-     if (slot >= gM485E_MonitoringState.readOptionCount)
-          gM485E_MonitoringState.readOptionCount = slot + 1;
+     gM485E_MonitoringState.readOptionCount = slot + 1;
      return M485E_OK;
 }
 
@@ -367,13 +381,17 @@ long M485E_Monitoring_Stop()
 // 1초 주기 이벤트: 활성 Rule을 다음 송출 대상으로 다시 등록한다.
 on timer tM485E_MonitoringCycle
 {
+     if (gM485E_MonitoringState.enabled == 0) return;
      M485E_Monitoring_NewCycle();
-     setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
+     if (gM485E_MonitoringState.enabled != 0)
+          setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
 }
 
 // 10ms 주기 이벤트: Change/Periodic Snapshot을 Frame 예산 안에서 CAN으로 출력한다.
 on timer tM485E_OutputPump
 {
+     if (gM485E_MonitoringState.enabled == 0) return;
      M485E_Monitoring_PumpOnce();
-     setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);
+     if (gM485E_MonitoringState.enabled != 0)
+          setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);
 }

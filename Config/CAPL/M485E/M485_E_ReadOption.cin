@@ -1,0 +1,23 @@
+/*@!Encoding:949*/
+
+// 이 파일은 프로젝트의 FrameRule과 Panel Check_ReadOption 배열 사이의 고정 순서를 정의한다.
+// FrameRule을 추가하거나 순서를 바꾸면 이 목록과 Panel의 CheckBox 순서도 함께 갱신한다.
+
+// 현재 예제 FrameRule의 모든 Rule을 Monitoring 슬롯에 앞에서부터 등록한다.
+// 같은 슬롯 또는 같은 Index/Rule_ID를 중복 등록하면 Monitoring 모듈이 오류로 거부한다.
+// 반환: M485E_OK 또는 최초로 실패한 ReadOption 등록 오류 코드.
+long M485E_ReadOption_ConfigureAll()
+{
+     long result;
+
+     result = M485E_Monitoring_ConfigureReadOption(0, 0, 1);
+     if (result != M485E_OK) return result;
+
+     result = M485E_Monitoring_ConfigureReadOption(1, 0, 2);
+     if (result != M485E_OK) return result;
+
+     result = M485E_Monitoring_ConfigureReadOption(2, 1, 1);
+     if (result != M485E_OK) return result;
+
+     return M485E_OK;
+}

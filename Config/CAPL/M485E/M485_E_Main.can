@@ -7,6 +7,7 @@ includes
      #include "M485E_Contracts.generated.cin"
      #include "M485_E_Core.cin"
      #include "M485_E_Monitoring.cin"
+     #include "M485_E_ReadOption.cin"
      #include "M485_E_UI.cin"
 }
 
@@ -32,6 +33,13 @@ variables
      long gM485E_ActivePortCount = 1;
      // Port Slot 0~3이 출력할 CANalyzer 가상 CAN 채널 번호이다.
      long gM485E_VirtualCanChannels[4];
+     // Connection System Variable의 목표 상태와 비동기 명령 진행 여부를 관리한다.
+     // DLL Context Handle은 0도 유효하므로 연결 진행 상태와 혼용하지 않는다.
+     msTimer tM485E_ConnectionControl;
+     long gM485E_ConnectionStatus[9];
+     long gM485E_DesiredConnected;
+     long gM485E_ConnectionCommandSent;
+     long gM485E_ShuttingDown;
 }
 
 // 최대 네 포트의 기본 통신 조건과 가상 CAN 채널을 채운다.
@@ -96,12 +104,171 @@ long M485E_Main_ApplyPortConfigs()
      return M485E_OK;
 }
 
+// CAPL 내부 ReadOption, DLL Context, CSV 경로와 Port 설정을 시작 순서대로 준비한다.
+// Refresh는 비동기 요청만 접수하므로 실제 완료는 Connection Control Timer가 확인한다.
+// 반환: M485E_OK 또는 최초 준비 단계의 오류 코드.
+long M485E_Main_Startup()
+{
+     long result;
+
+     result = M485E_ReadOption_ConfigureAll();
+     if (result != M485E_OK)
+     {
+          write("M485E ReadOption configuration failed: result=%d", result);
+          return result;
+     }
+
+     result = M485E_Core_Initialize();
+     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
+          result);
+     if (result != M485E_OK) return result;
+
+     // Context가 준비된 뒤 UI Timer를 먼저 시작하면 이후 비동기 Refresh 상태도 Panel에 표시된다.
+     M485E_UI_Start();
+     result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
+     if (result == M485E_OK)
+          result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
+               gM485E_FrameRulePath);
+     if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
+     if (result == M485E_OK) result = M485E_Core_RefreshCsv();
+     write("M485E startup configuration: result=%d", result);
+     return result;
+}
+
+// 연결 제어를 종료하고 Panel Switch를 OFF로 동기화한다.
+// result가 실패이면 마지막 동기 오류를 함께 출력한다.
+void M485E_Main_StopConnectionControl(long result)
+{
+     gM485E_DesiredConnected = 0;
+     gM485E_ConnectionCommandSent = 0;
+     @sysvar::M485E::Connection::ResultCode = result;
+     if (result < M485E_OK) M485E_Core_ReportSyncFailure("Connection", result);
+     if (@sysvar::M485E::Connection::ConnectSwitch != 0)
+          @sysvar::M485E::Connection::ConnectSwitch = 0;
+}
+
+// ConnectSwitch 변경은 목표 상태만 기록한다.
+// 실제 DLL API 호출은 Connection Control Timer 한 곳에서 수행하여 중복 요청을 방지한다.
+on sysvar_update sysvar::M485E::Connection::ConnectSwitch
+{
+     if (gM485E_ShuttingDown != 0) return;
+     gM485E_DesiredConnected = @this != 0;
+     gM485E_ConnectionCommandSent = 0;
+     if (gM485E_ContextInitialized == 0) return;
+     if (gM485E_DesiredConnected != 0)
+          setTimer(tM485E_ConnectionControl, 500);
+     else
+          setTimer(tM485E_ConnectionControl, 1);
+}
+
+// 비동기 Refresh와 Connect/Disconnect 완료 상태를 확인하는 단일 연결 제어 Timer이다.
+// Connect는 구성 준비 후 한 번만 요청하며 진행 중에는 100ms 간격으로 상태만 확인한다.
+on timer tM485E_ConnectionControl
+{
+     long result;
+     long state;
+     long activeOperation;
+     long lastResult;
+
+     if (gM485E_ShuttingDown != 0) return;
+     result = M485E_Core_GetLifecycleStatus(gM485E_ConnectionStatus);
+     if (result != M485E_OK)
+     {
+          M485E_Main_StopConnectionControl(result);
+          return;
+     }
+
+     state = gM485E_ConnectionStatus[M485E_LS_STATE];
+     activeOperation = gM485E_ConnectionStatus[M485E_LS_ACTIVE_OPERATION];
+     lastResult = gM485E_ConnectionStatus[M485E_LS_LAST_RESULT];
+
+     if (gM485E_DesiredConnected != 0)
+     {
+          if (state == M485E_STATE_CONNECTED)
+          {
+               @sysvar::M485E::Connection::ResultCode = M485E_OK;
+               return;
+          }
+          if (state == M485E_STATE_REFRESHING || state == M485E_STATE_CONNECTING ||
+               state == M485E_STATE_DISCONNECTING)
+          {
+               setTimer(tM485E_ConnectionControl, 100);
+               return;
+          }
+          if (state == M485E_STATE_DISCONNECTED)
+          {
+               if (gM485E_ConnectionStatus[M485E_LS_CONFIGURATION_VALID] == 0)
+               {
+                    if (lastResult >= M485E_OK)
+                         lastResult = M485E_ERR_CONFIGURATION_NOT_READY;
+                    M485E_Main_StopConnectionControl(lastResult);
+                    return;
+               }
+               if (gM485E_ConnectionCommandSent == 0)
+               {
+                    result = M485E_Core_Connect();
+                    @sysvar::M485E::Connection::ResultCode = result;
+                    M485E_Core_ReportSyncFailure("Connect", result);
+                    if (result != M485E_OK)
+                    {
+                         M485E_Main_StopConnectionControl(result);
+                         return;
+                    }
+                    gM485E_ConnectionCommandSent = 1;
+                    setTimer(tM485E_ConnectionControl, 100);
+                    return;
+               }
+
+               // 요청을 접수한 뒤 다시 Disconnected로 돌아오면 초기 Connect가 실패한 것이다.
+               if (lastResult >= M485E_OK) lastResult = M485E_ERR_CONNECT_FAILED;
+               M485E_Main_StopConnectionControl(lastResult);
+               return;
+          }
+
+          if (lastResult >= M485E_OK) lastResult = M485E_ERR_INVALID_STATE;
+          M485E_Main_StopConnectionControl(lastResult);
+          return;
+     }
+
+     if (state == M485E_STATE_DISCONNECTED || state == M485E_STATE_UNINITIALIZED ||
+          state == M485E_STATE_REFRESHING)
+          return;
+     if (state == M485E_STATE_CONNECTING &&
+          activeOperation != M485E_OPERATION_AUTO_RECONNECT)
+     {
+          // 초기 Connect는 현재 DLL에서 취소할 수 없으므로 완료 직후 Disconnect한다.
+          setTimer(tM485E_ConnectionControl, 100);
+          return;
+     }
+     if (state == M485E_STATE_DISCONNECTING)
+     {
+          setTimer(tM485E_ConnectionControl, 100);
+          return;
+     }
+     if (gM485E_ConnectionCommandSent == 0)
+     {
+          result = M485E_Core_Disconnect();
+          @sysvar::M485E::Connection::ResultCode = result;
+          M485E_Core_ReportSyncFailure("Disconnect", result);
+          if (result != M485E_OK)
+          {
+               M485E_Main_StopConnectionControl(result);
+               return;
+          }
+          gM485E_ConnectionCommandSent = 1;
+     }
+     setTimer(tM485E_ConnectionControl, 100);
+}
+
 // 측정 시작 준비 단계: 포트 기본값을 만들고 현재 CAPL Program Node를 DLL에 등록한다.
 // Vector 공식 Sample과 같이 registerCAPLDLL은 이벤트 핸들러에서 직접 호출한다.
 // CSV 로딩, DLL Context 초기화와 실제 Serial 연결은 아직 수행하지 않는다.
 on preStart
 {
      M485E_Main_InitializePortConfigs();
+     gM485E_DesiredConnected = 0;
+     gM485E_ConnectionCommandSent = 0;
+     gM485E_ShuttingDown = 0;
      gM485E_ContextRegistered = 0;
      gM485E_ContextInitialized = 0;
      gM485E_ContextHandle = registerCAPLDLL();
@@ -109,46 +276,43 @@ on preStart
      write("M485E DLL registration: stage=preStart handle=%d", gM485E_ContextHandle);
 }
 
-// 측정 시작 단계: DLL Context 초기화, CSV 경로, 포트 설정, CSV Refresh를 순서대로 적용한다.
-// Vector Handle 0도 정상값이므로 preStart에서 등록한 값을 그대로 초기화에 사용한다.
-// Context 초기화 실패 시 후속 API를 호출하지 않아 연쇄 오류를 막는다.
-// 이 단계에서는 Serial 포트를 열지 않으며 ConnectSwitch가 올라올 때 연결한다.
-// 마지막으로 UI 동기화용 타이머를 시작한다.
-// Refresh는 비동기 요청이므로 최종 완료 여부는 LifecycleStatus 타이머가 갱신한다.
+// 측정 시작 단계: CAPL/DLL 구성을 적용하고 ConnectSwitch를 자동으로 ON 한다.
+// 500ms 뒤 Connection Control Timer가 Refresh 완료 여부를 확인한 후 Serial 연결을 요청한다.
 on start
 {
      long result;
 
-     result = M485E_Core_Initialize();
-     write("M485E DLL initialization: handle=%d result=%d", gM485E_ContextHandle,
-          result);
-
-     if (result != M485E_OK)
+     result = M485E_Main_Startup();
+     @sysvar::M485E::Connection::ResultCode = result;
+     if (result == M485E_OK)
      {
-          @sysvar::M485E::Connection::ResultCode = result;
-          M485E_Core_ReportSyncFailure("Initialize", result);
+          gM485E_DesiredConnected = 1;
+          gM485E_ConnectionCommandSent = 0;
+          @sysvar::M485E::Connection::ConnectSwitch = 1;
+          setTimer(tM485E_ConnectionControl, 500);
      }
      else
      {
-          result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
-          if (result == M485E_OK)
-               result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
-                    gM485E_FrameRulePath);
-          if (result == M485E_OK) result = M485E_Main_ApplyPortConfigs();
-          if (result == M485E_OK) result = M485E_Core_RefreshCsv();
-          write("M485E startup configuration: result=%d", result);
-          @sysvar::M485E::Connection::ResultCode = result;
-          M485E_Core_ReportSyncFailure("StartupConfiguration", result);
-          M485E_UI_Start();
+          gM485E_DesiredConnected = 0;
+          @sysvar::M485E::Connection::ConnectSwitch = 0;
+          M485E_Core_ReportSyncFailure("Startup", result);
      }
 }
 
-// 측정 종료 단계: 타이머와 모니터링을 먼저 멈춘 뒤 포트를 닫고 Context를 해제한다.
-// 역순 종료를 지켜 DLL 작업이 남은 상태에서 Context가 파기되지 않게 한다.
+// 측정 종료 단계: CAPL Timer를 먼저 멈추고 DLL Context Finalize로 작업 Thread와 COM을 닫는다.
+// 비동기 Disconnect를 별도로 시작하지 않아 종료 시점에 포트가 남는 경합을 피한다.
 on stopMeasurement
 {
+     long result;
+
+     gM485E_ShuttingDown = 1;
+     cancelTimer(tM485E_ConnectionControl);
+     gM485E_DesiredConnected = 0;
+     @sysvar::M485E::Connection::ConnectSwitch = 0;
      M485E_UI_Stop();
-     M485E_Monitoring_Stop();
-     M485E_Core_Disconnect();
-     M485E_Core_Finalize();
+     if (gM485E_ContextInitialized != 0 && M485E_Monitoring_IsEnabled() != 0)
+          M485E_Monitoring_Stop();
+     write("M485E shutdown: finalize begin");
+     result = M485E_Core_Finalize();
+     write("M485E shutdown: finalize result=%d", result);
 }

@@ -20,7 +20,7 @@
 
 다음 파일은 직접 Program Node나 System Variable DB로 등록하지 않는다.
 
-- `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_UI.cin`: Main이 `#include`한다.
+- `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_ReadOption.cin`, `M485_E_UI.cin`: Main이 `#include`한다.
 - `M485E_Contracts.generated.cin`: Main이 `#include`한다.
 - `examples/M485E_Test/M485E_SystemVariables.csv`: Panel 설계 참고표다.
 - `examples/M485E_Test/M485E_Test_Reference.xlsx`: Map과 System Variable 검토용이다.
@@ -103,7 +103,7 @@ Device Map의 고유 Port 첫 등장 순서대로 Slot 0~3 설정을 사용한�
 2. System Variable Configuration에서 `Config/System Variables/M485E.vsysvar`를 등록한다.
 3. CANalyzer의 System Variable 창에서 `M485E` Namespace가 보이는지 확인한다.
 4. CAPL Program Node 하나를 만들고 `Config/CAPL/M485E/M485_E_Main.can`을 연결한다.
-5. `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_UI.cin`을 별도 Node로 추가하지 않는다.
+5. `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_ReadOption.cin`, `M485_E_UI.cin`을 별도 Node로 추가하지 않는다.
 6. Phase 1/Phase 9 Probe Node가 있다면 비활성화하거나 제거한다. DLL Context는 Main 하나만 사용한다.
 7. 활성 Port 수만큼 가상 CAN Channel을 준비한다. 기본 1-Port 예제는 Slot 0을 Channel 1에 출력한다.
 8. CAPL을 Compile한다.
@@ -116,9 +116,9 @@ x86 Process인지 확인한다.
 
 Panel을 만들기 전에 CANalyzer의 System Variable 창만 사용한다.
 
-1. `M485E::Connection::ConnectSwitch`가 0인지 확인한다.
-2. Measurement를 시작한다.
-3. CSV Refresh가 끝날 때까지 기다린다. 정상 상태는 다음과 같다.
+1. USB-RS485와 Board가 연결되어 있는지 확인한다.
+2. Measurement를 시작한다. Main이 ConnectSwitch를 자동으로 1로 올린다.
+3. 500ms 연결 제어 Timer가 CSV Refresh 완료를 확인할 때까지 기다린다. 정상 상태는 다음과 같다.
 
 | System Variable | 정상값 | 의미 |
 |---|---:|---|
@@ -250,13 +250,13 @@ Panel 배치 참고 이미지는 [M485E_CANalyzer_Panel_Mockup.png](Panel/M485E_
 
 ## 9. Monitoring 시험 전에 필요한 Rule 등록
 
-`Check_ReadOption[]`의 배열 위치는 자동으로 CSV Rule에 연결되지 않는다. 기본 작은 Map을
-Main과 Panel로 시험할 때는 `M485_E_Main.can`의 `on start` 시작 부분에 다음 세 줄을 추가한다.
+`Check_ReadOption[]`의 배열 위치는 자동으로 CSV Rule에 연결되지 않는다. 기본 작은 Map의
+세 Rule은 `M485_E_ReadOption.cin`에 이미 다음 순서로 등록되어 있다.
 
 ```c
-M485E_Monitoring_ConfigureReadOption(0, 0, 1); // slot 0: Index 0, Rule 1
-M485E_Monitoring_ConfigureReadOption(1, 0, 2); // slot 1: Index 0, Rule 2
-M485E_Monitoring_ConfigureReadOption(2, 1, 1); // slot 2: Index 1, Rule 1
+slot 0: Index 0, Rule 1
+slot 1: Index 0, Rule 2
+slot 2: Index 1, Rule 1
 ```
 
 그 뒤 Panel에서 `Check_ReadOption[0..2]` 중 원하는 항목을 1로 하고 `ReadSwitch=1`로 올린다.
@@ -271,7 +271,7 @@ Configuration에서 `tests/capl/M485E_Phase9_CoreMonitoringProbe.can`을 사용�
 1. 작은 Map의 CSV 검증과 수동 시험을 먼저 통과한다.
 2. SystemBase Multi USB-485에서 사용할 1~4개 COM 번호를 Main과 Device Map에 똑같이 입력한다.
 3. Board와 RS-485를 연결한다.
-4. `ConnectSwitch=1`로 올리고 `State=4(Connected)`를 기다린다.
+4. 자동 연결 후 `State=4(Connected)`를 기다린다. 실패해 Switch가 0으로 내려오면 배선을 확인한 뒤 다시 1로 올린다.
 5. Board에서 FC03, FC04, FC10 요청을 순서대로 보낸다.
 
 작은 기본 Map의 요청 예시는 다음과 같다.
@@ -307,7 +307,7 @@ DB로 확인해야 한다.
 - Gas Reset Address가 40200인지 40201인지
 
 예제에는 Rule이 34개 있으므로 Panel Monitoring을 사용하려면 CSV 행 순서에 맞춰
-`M485E_Monitoring_ConfigureReadOption(slot, Index, Rule_ID)`을 CAPL 코드에 등록해야 한다.
+`M485_E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에 연속 Slot으로 등록해야 한다.
 Register/Signal 수동 시험은 Rule Option 등록 없이 바로 가능하다.
 
 ## 12. 장치별 Panel 탭은 두 번째 작업이다

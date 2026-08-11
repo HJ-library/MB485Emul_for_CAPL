@@ -11,12 +11,14 @@ function Require-Match {
 $apiHeader = Get-Content -LiteralPath (Join-Path $root 'src\M485E.Dll\M485E_DllApi.h') -Raw
 $corePath = Join-Path $root 'Config\CAPL\M485E\M485_E_Core.cin'
 $monitoringPath = Join-Path $root 'Config\CAPL\M485E\M485_E_Monitoring.cin'
+$readOptionPath = Join-Path $root 'Config\CAPL\M485E\M485_E_ReadOption.cin'
 $uiPath = Join-Path $root 'Config\CAPL\M485E\M485_E_UI.cin'
 $mainPath = Join-Path $root 'Config\CAPL\M485E\M485_E_Main.can'
 $systemVariablesPath = Join-Path $root 'Config\System Variables\M485E.vsysvar'
 
 $core = Get-Content -LiteralPath $corePath -Raw
 $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
+$readOption = Get-Content -LiteralPath $readOptionPath -Raw
 $ui = Get-Content -LiteralPath $uiPath -Raw
 $main = Get-Content -LiteralPath $mainPath -Raw
 
@@ -116,6 +118,10 @@ Require-Match $monitoring 'gM485E_ReadOptions\[slot\]\.portSlot\s*==\s*portSlot'
     'Periodic Monitoring must filter each ReadOption by its resolved PortSlot.'
 Require-Match $monitoring 'M485E_Monitoring_GetReadOptionCount' `
     'Monitoring ReadOption count accessor is missing.'
+Require-Match $monitoring 'slot\s*!=\s*gM485E_MonitoringState\.readOptionCount' `
+    'ReadOption slots must be registered once in contiguous order.'
+Require-Match $monitoring 'gM485E_ReadOptions\[existingSlot\]\.index\s*==\s*index[\s\S]*gM485E_ReadOptions\[existingSlot\]\.ruleId\s*==\s*ruleId' `
+    'Monitoring must reject duplicate Index and Rule_ID mappings.'
 Require-Match $monitoring 'long\s+M485E_Monitoring_IsEnabled\s*\(' `
     'Monitoring enabled-state accessor is missing.'
 Require-Match $monitoring 'result\s*=\s*M485E_Monitoring_ApplyCandidates\s*\(\s*\)' `
@@ -152,7 +158,39 @@ Require-Match $ui 'sysGetVariableLongArray\s*\(\s*sysvar::M485E::Monitoring::Che
 if ($ui -match '@sysvar::M485E::(?:ManualRead::Data|ManualWrite::Data|Monitoring::Check_ReadOption)\s*\[') {
     throw 'CANalyzer 9.x must not directly access int array system variable elements.'
 }
-Require-Match $ui 'Connection::ConnectSwitch' 'Connect/Disconnect switch adapter is missing.'
+if ($ui -match 'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch') {
+    throw 'ConnectSwitch ownership must remain in Main connection control.'
+}
+Require-Match $main 'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch' `
+    'Main Connect/Disconnect switch adapter is missing.'
+$connectSwitchHandler = [regex]::Match($main,
+    'on\s+sysvar_update\s+sysvar::M485E::Connection::ConnectSwitch\s*\{(?<Body>[\s\S]*?)\n\}')
+if (-not $connectSwitchHandler.Success -or
+    $connectSwitchHandler.Groups['Body'].Value -match 'M485E_Core_(?:Connect|Disconnect)\s*\(') {
+    throw 'ConnectSwitch handler must schedule Main control instead of calling the DLL lifecycle directly.'
+}
+if ([regex]::Matches($main, 'M485E_Core_Connect\s*\(').Count -ne 1 -or
+    [regex]::Matches($main, 'M485E_Core_Disconnect\s*\(').Count -ne 1) {
+    throw 'Main connection control must have one Connect and one Disconnect command site.'
+}
+Require-Match $main '#include\s+"M485_E_ReadOption\.cin"' `
+    'Main must include the project ReadOption mapping.'
+Require-Match $readOption 'long\s+M485E_ReadOption_ConfigureAll\s*\(' `
+    'Project ReadOption configuration function is missing.'
+Require-Match $readOption 'M485E_Monitoring_ConfigureReadOption\s*\(\s*0\s*,\s*0\s*,\s*1\s*\)' `
+    'FrameRule 0/1 must map to ReadOption slot 0.'
+Require-Match $readOption 'M485E_Monitoring_ConfigureReadOption\s*\(\s*1\s*,\s*0\s*,\s*2\s*\)' `
+    'FrameRule 0/2 must map to ReadOption slot 1.'
+Require-Match $readOption 'M485E_Monitoring_ConfigureReadOption\s*\(\s*2\s*,\s*1\s*,\s*1\s*\)' `
+    'FrameRule 1/1 must map to ReadOption slot 2.'
+Require-Match $main 'M485E_ReadOption_ConfigureAll\s*\([\s\S]*M485E_Core_Initialize\s*\(' `
+    'Main startup must validate ReadOptions before initializing runtime configuration.'
+Require-Match $main '@sysvar::M485E::Connection::ConnectSwitch\s*=\s*1[\s\S]*setTimer\(tM485E_ConnectionControl,\s*500\)' `
+    'Main must automatically request connection with the 500ms startup timer.'
+Require-Match $main 'on\s+timer\s+tM485E_ConnectionControl[\s\S]*M485E_Core_GetLifecycleStatus\s*\(' `
+    'Connection control must wait on the asynchronous lifecycle status.'
+Require-Match $main 'cancelTimer\(tM485E_ConnectionControl\)[\s\S]*M485E_Core_Finalize\s*\(' `
+    'Measurement shutdown must cancel connection control before finalizing the DLL.'
 Require-Match $ui 'setTimer\(tM485E_ManualAutoRead,\s*1000\)' 'AutoRead timer is not started.'
 Require-Match $ui 'setTimer\(tM485E_UISync,\s*100\)' 'ReadOption synchronization timer is not started.'
 Require-Match $core 'M485E_Core_ReportSyncFailure' 'Synchronous error reporting helper is missing.'
@@ -165,7 +203,8 @@ Require-Match $core 'long\s+gM485E_ContextInitialized' 'Core must track initiali
 if ($main -match 'gM485E_ContextHandle\s*==\s*0' -or $core -match 'gM485E_ContextHandle\s*==\s*0') {
     throw 'CAPL must not treat Vector Context Handle 0 as a registration failure sentinel.'
 }
-Require-Match $main 'if\s*\(result\s*!=\s*M485E_OK\)[\s\S]*?M485E_Core_ReportSyncFailure\("Initialize"' 'Main must stop startup configuration after DLL initialization failure.'
+Require-Match $main 'result\s*=\s*M485E_Core_Initialize\s*\(\s*\)[\s\S]*if\s*\(result\s*!=\s*M485E_OK\)\s*return\s+result' `
+    'Main must stop startup configuration after DLL initialization failure.'
 
 [xml]$systemVariables = Get-Content -LiteralPath $systemVariablesPath -Raw
 if ($null -eq $systemVariables) { throw 'System variable XML could not be parsed.' }
@@ -193,6 +232,7 @@ $requiredFiles = @(
     'tests\capl\M485E_Phase2_ContractsProbe.can',
     'tests\capl\M485E_Phase9_CoreMonitoringProbe.can',
     'Config\CAPL\M485E\M485_E_Main.can',
+    'Config\CAPL\M485E\M485_E_ReadOption.cin',
     'Config\Maps\M485E\M485E_Device.csv',
     'Config\Maps\M485E\M485E_FrameRule.csv'
 )

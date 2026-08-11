@@ -19,7 +19,9 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | `M485E.dll` | CSV 검증, 장치/Register 상태, RTU Slave, Queue와 연결 수명주기 처리 |
 | CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
 | CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
+| CAPL ReadOption | 프로젝트 FrameRule의 `slot ↔ Index + Rule_ID` 고정 목록을 한곳에서 관리 |
 | CAPL UI | Panel/System Variable 요청을 캡처해 Core 또는 Monitoring 진입점에 전달 |
+| CAPL Main | 시작 구성, 500ms 자동 연결, ConnectSwitch와 Measurement 종료를 관리 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
 
 Core만 `M485E_Dll_*`을 직접 호출한다. UI는 System Variable과 Panel 표현을, Monitoring은
@@ -68,7 +70,7 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 2. CAPL `preStart`에서 현재 Program Node를 등록하고 Vector Context Handle을 얻는다. Handle 값 0도 정상값이다.
 3. CAPL `start`에서 DLL Context를 초기화하고 DeviceMap/FrameRule 경로와 활성 Port 1~4개의 Serial 설정을 전달한다.
 4. DLL이 DeviceMap에서 참조하는 Register Map까지 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
-5. `ConnectSwitch`가 켜지면 DeviceMap의 모든 활성 COM Port를 연다. 하나라도 실패하면 전체 Connect를 실패시킨다.
+5. 시작 구성이 접수되면 Main이 `ConnectSwitch`를 자동으로 켠다. 500ms 뒤 연결 Timer가 Refresh 완료를 확인하고 DeviceMap의 모든 활성 COM Port를 한 번에 연다. 하나라도 실패하면 전체 Connect를 실패시키고 Switch를 다시 내린다.
 6. Connected 상태에서 Board RTU 요청, CAPL 수동 조작과 CAN Monitoring을 병행한다.
 7. Measurement 종료 시 Monitoring과 Timer를 중지하고 Worker를 취소·Join한 뒤 COM과 Context를 정리한다.
 
@@ -164,10 +166,10 @@ Monitoring을 켤 때 별도 `SourceType=0x04` Init Snapshot은 만들지 않는
 기존 `0x80` Periodic 경로에서 첫 Cycle부터 처리한다. 값 변경 Snapshot은 다음 Output
 Pump에서 우선 처리한다.
 
-프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Rule을 CAPL의
+프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Rule을 `M485_E_ReadOption.cin`의
+`M485E_ReadOption_ConfigureAll()`에서
 `M485E_Monitoring_ConfigureReadOption(slot, Index, Rule_ID)`에 정확히 한 번 등록해야 한다.
-현재 기본 Phase 9 Probe에는 세 Rule 예제가 등록되어 있지만 실제 프로젝트 Main의 Rule
-Table은 회사 Map 확정 후 구성해야 한다.
+Slot은 0부터 빈칸 없이 증가해야 하고 같은 `Index + Rule_ID`의 중복 등록은 거부된다.
 
 Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별 Cursor를 별도로
 유지하므로 한 Port에 Rule이 집중되어도 다른 Port의 Rule이 영구적으로 밀리지 않는다.
@@ -181,6 +183,7 @@ Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별
 - 자동 재연결은 3초 간격, 최대 10회다.
 - 중간에 성공하면 Connected로 돌아가고 요청된 Monitoring을 복구한다.
 - 모두 실패하면 Disconnected 상태와 Error Event를 남긴다.
+- 자동 재연결을 모두 소진하면 ConnectSwitch도 OFF로 동기화하여 수동 재연결을 기다린다.
 - Measurement Stop은 재연결 대기 중에도 취소하고 모든 Worker와 COM Handle을 정리한다.
 
 동기 API 오류는 Context별 Last Sync Error에, Worker·연결 같은 비동기 오류는 bounded
@@ -212,9 +215,9 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
 4. Program Node에 `M485_E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.
-6. Measurement를 시작하고 `ConfigurationValid=1`, `State=Disconnected`를 확인한다.
-7. 연결 전 Manual Register·Signal Read/Write를 먼저 확인한다.
-8. USB-RS485와 Board를 연결하고 `ConnectSwitch`를 켠다.
+6. Measurement를 시작하면 ConnectSwitch가 자동으로 ON 된다. `ConfigurationValid=1`, `State=Connected`를 확인한다.
+7. 필요하면 ConnectSwitch를 OFF로 내려 Manual Register·Signal Read/Write를 확인한다.
+8. 자동 Connect가 실패했다면 USB-RS485와 Board 연결을 확인하고 `ConnectSwitch`를 다시 켠다.
 9. FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
 
 회사에서 수행할 상세 순서는

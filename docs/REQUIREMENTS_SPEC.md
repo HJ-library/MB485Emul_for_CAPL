@@ -206,7 +206,7 @@
 | FR-LIFE-010 | `RefreshCsv`, `Connect`, `Disconnect`는 CAPL 호출 Thread에서 파일 접근, COM Port Open/Close 또는 Worker 종료 대기를 직접 수행하지 않고, 사전 검증 후 하나의 Lifecycle 작업을 DLL Worker에 요청하는 비동기 명령으로 동작한다. |
 | FR-LIFE-011 | 비동기 Lifecycle API의 `M485E_OK(0)` 반환은 작업 완료가 아니라 요청 접수 성공을 의미한다. 접수 전 Argument·State·Configuration·Command Slot 검증 실패는 음수 상태 코드와 `LastSyncError`로 즉시 반환한다. |
 | FR-LIFE-012 | 한 번에 하나의 Lifecycle 작업만 진행하며 진행 중 추가 `RefreshCsv`, `Connect` 또는 `Disconnect` 요청은 기존 작업을 덮어쓰거나 Queue에 누적하지 않고 Busy/State 오류로 거부한다. 단, `Connecting + AUTO_RECONNECT` 중의 Disconnect는 자동 재연결 취소 요청으로 허용한다. |
-| FR-LIFE-013 | Lifecycle 상태는 `Uninitialized`, `Disconnected`, `Refreshing`, `Connecting`, `Connected`, `Disconnecting`, `Error`를 사용한다. `Connecting`은 최초 수동 Connect와 자동 재연결에 공통 사용하고 `ActiveOperation`으로 구분하며 별도 `Reconnecting` 상태는 추가하지 않는다. Connect 성공은 `Connected`, Connect 실패 Rollback은 `Disconnected`, Refresh 성공 또는 실패는 기존 연결이 없는 `Disconnected`로 완료하며 Worker 실패 상세는 Error Event FIFO에 기록한다. 정리 불가능한 내부 오류만 `Error` 상태로 전환한다. |
+| FR-LIFE-013 | Lifecycle 상태는 `Uninitialized`, `Disconnected`, `Refreshing`, `Connecting`, `Connected`, `Disconnecting`, `Error`를 사용한다. `Connecting`은 최초 Connect와 자동 재연결에 공통 사용하고 `ActiveOperation`으로 구분하며 별도 `Reconnecting` 상태는 추가하지 않는다. Connect 성공은 `Connected`, Connect 실패 Rollback은 `Disconnected`, Refresh 성공 또는 실패는 기존 연결이 없는 `Disconnected`로 완료하며 Worker 실패 상세는 Error Event FIFO에 기록한다. 정리 불가능한 내부 오류만 `Error` 상태로 전환한다. |
 | FR-LIFE-014 | CAPL Core는 `GetLifecycleStatus` Polling으로 비동기 Lifecycle 작업의 진행과 완료 결과를 손실 없이 판정하고 Error Event FIFO는 상세 실패 Context를 조회하는 진단 경로로만 사용한다. 중간 상태에서는 관련 제어를 Busy로 표시한다. |
 | FR-LIFE-015 | Lifecycle Status는 현재 상태뿐 아니라 현재 작업과 Generation, 마지막 완료 작업과 Generation, 마지막 결과 및 유효 Configuration 존재 여부를 하나의 불변 Snapshot으로 반환한다. |
 | FR-LIFE-016 | 1차 구현은 동시에 하나의 활성 CAPL Core Context만 허용한다. 다른 Context Handle의 추가 Initialize와 같은 Context의 중복 Initialize는 기존 Context를 변경하지 않고 상태 오류로 거부한다. 성공적인 Finalize 이후 다음 Measurement에서 새로 Initialize할 수 있다. |
@@ -219,14 +219,19 @@
 | FR-LIFE-023 | Modbus RTU Slave는 Client 요청이 없는 유휴 상태와 정상적인 Serial Read Timeout을 연결 장애로 판단하지 않고 COM Handle과 `Connected` 상태를 유지한다. Slave가 무응답 시간을 기준으로 Board 상태를 추정하거나 Heartbeat 요청을 송신하지 않는다. |
 | FR-LIFE-024 | 단발성 Parity, Framing, Overrun 등 복구 가능한 Communications Error는 상태와 오류 Flag를 정리하고 진단한 뒤 Serial 처리를 계속한다. USB-RS485 장치 제거, 유효하지 않은 Handle, 장치 미연결 I/O 오류 또는 Worker가 처리를 계속할 수 없는 오류만 치명적 COM 장애로 분류한다. 사용자 Disconnect/Finalize에 따른 의도적 I/O 취소는 장애로 분류하지 않는다. |
 | FR-LIFE-025 | Connected 상태에서 한 Port에 치명적 COM 장애가 발생하면 Monitoring을 정지하고 모든 활성 Port의 Serial I/O, Worker 및 COM Handle을 정리한 뒤 활성 Port 전체에 대한 자동 재연결을 시작한다. 정상 Port만 남기는 부분 연결과 Port별 독립 자동 재연결은 사용하지 않는다. |
-| FR-LIFE-026 | 자동 재연결은 기존 `Connecting` 상태와 내부 Operation `M485E_OPERATION_AUTO_RECONNECT`를 사용한다. 최초 수동 연결은 `Connecting + CONNECT`, 자동 복구는 `Connecting + AUTO_RECONNECT`로 구분하고 공개 `Reconnecting` 상태를 추가하지 않는다. |
+| FR-LIFE-026 | 자동 재연결은 기존 `Connecting` 상태와 내부 Operation `M485E_OPERATION_AUTO_RECONNECT`를 사용한다. 최초 연결은 `Connecting + CONNECT`, 자동 복구는 `Connecting + AUTO_RECONNECT`로 구분하고 공개 `Reconnecting` 상태를 추가하지 않는다. |
 | FR-LIFE-027 | 자동 재연결은 3,000ms 간격으로 최대 10회 시도한다. 값은 구현 전역의 단일 명명 상수 `M485E_RECONNECT_INTERVAL_MS=3000`, `M485E_RECONNECT_MAX_ATTEMPTS=10`으로 관리하여 후속 변경이 가능하게 하되 1차 공개 DLL API, CAPL API, Panel 또는 System Variable 설정으로 노출하지 않는다. |
 | FR-LIFE-028 | 각 자동 재연결 시도는 모든 활성 Port를 전체 성공 또는 전체 실패로 Open하고 Worker를 준비한다. 일부만 성공하면 해당 시도에서 생성한 Worker와 Handle을 모두 정리한 뒤 다음 간격을 기다린다. |
 | FR-LIFE-029 | 자동 재연결 성공 시 기존 Configuration, Port 설정 및 Register 현재값을 유지한 채 `Connected`로 전환한다. 이전 Monitoring Pending과 Change Snapshot을 재생하지 않으며 ReadSwitch가 ON이면 활성 Rule의 최신 현재값을 기존 `0x80` 경로로 즉시 등록한다. |
 | FR-LIFE-030 | 10회 자동 재연결이 모두 실패하면 재시도를 중단하고 `Disconnected`로 전환하여 사용자의 수동 Connect를 요구한다. 시작·최종 성공·최종 실패를 진단하고 마지막 실패 Port, Stage 및 OS 오류 Context를 보존하되 정상 로그 수준에서 매 시도마다 Error Event를 생성하지 않는다. |
 | FR-LIFE-031 | `Connecting + AUTO_RECONNECT` 중 Connect는 Busy로 거부하고 Disconnect는 재시도를 취소하여 `Disconnected`로 전환한다. Finalize는 재시도를 취소한 뒤 기존 동기 Failsafe 정리를 수행한다. |
-| FR-LIFE-032 | 최초 수동 Connect의 Open 또는 Worker 준비 실패에는 자동 재연결 10회를 적용하지 않고 기존 전체 Rollback 후 `Disconnected`로 완료한다. 자동 재연결은 이전에 정상 `Connected`가 된 Session의 치명적 Runtime COM 장애에만 적용한다. |
+| FR-LIFE-032 | 최초 Connect의 Open 또는 Worker 준비 실패에는 자동 재연결 10회를 적용하지 않고 기존 전체 Rollback 후 `Disconnected`로 완료한다. 자동 재연결은 이전에 정상 `Connected`가 된 Session의 치명적 Runtime COM 장애에만 적용한다. |
 | FR-LIFE-033 | 명시적 Disconnect 또는 치명적 COM 장애 정리 시 Register, Active Configuration, CSV Path, Port 설정, Error Queue, Change Sequence, Queue Counter 및 Latch는 유지한다. Periodic Pending은 제거하고 대기 중 Change Queue는 제거하며 제거된 Change Snapshot 수를 `SuppressedCount`에 포화 합산한다. 재연결 후 과거 Snapshot을 Catch-up 출력하지 않는다. |
+| FR-LIFE-034 | CAPL Main은 시작 구성과 비동기 CSV Refresh 요청이 정상 접수되면 `ConnectSwitch`를 자동으로 ON 하고 500ms 뒤 연결 제어 Timer를 시작한다. Timer는 Lifecycle Status로 Refresh 완료와 `ConfigurationValid=1`을 확인한 뒤 최초 Connect를 정확히 한 번 요청한다. |
+| FR-LIFE-035 | 연결 제어 Timer는 Refreshing, Connecting 또는 Disconnecting 동안 100ms 간격으로 상태만 Polling하며 같은 Connect 또는 Disconnect 명령을 반복 제출하지 않는다. 최초 Connect 실패 시 자동 재연결을 시작하지 않고 Switch를 OFF로 복귀시켜 사용자의 재요청을 기다린다. |
+| FR-LIFE-036 | 사용자가 `ConnectSwitch`를 OFF로 변경하면 Main 연결 제어가 Disconnect를 정확히 한 번 요청한다. 최초 Connect 진행 중에는 현재 DLL의 취소 API를 추가하지 않고 완료 상태를 기다린 뒤 성공한 경우 즉시 Disconnect한다. Runtime 자동 재연결 중의 OFF는 기존 취소 가능한 Disconnect 경로를 사용한다. |
+| FR-LIFE-037 | `on stopMeasurement`는 Connection, UI 및 Monitoring Timer를 먼저 중지한 뒤 `FinalizeContext`의 동기 Failsafe 정리로 Lifecycle 작업, Port Worker와 COM Handle을 모두 해제한다. 종료 직전에 별도 비동기 Disconnect를 시작하지 않는다. |
+| FR-LIFE-038 | 자동 재연결 횟수 소진으로 `Disconnected`가 되면 CAPL UI는 `ConnectSwitch`를 OFF로 동기화하고 마지막 실패 결과를 표시한다. |
 
 #### Device Reset
 
@@ -906,7 +911,7 @@
 | ID | 요구사항 |
 | --- | --- |
 | DATA-LAYOUT-001 | 프로젝트의 CANalyzer Configuration Root는 `Config`이며 그 아래에 `CAPL`, `Panel`, `System Variables`, `Maps`, `Data` 디렉터리와 `CANalyzerConfig.cfg`를 배치한다. |
-| DATA-LAYOUT-002 | `Config/CAPL/DLL`에는 x86 `M485E.dll`을 배치하고 `Config/CAPL/M485E`에는 `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_UI.cin`을 배치한다. |
+| DATA-LAYOUT-002 | `Config/CAPL/DLL`에는 x86 `M485E.dll`을 배치하고 `Config/CAPL/M485E`에는 `M485_E_Core.cin`, `M485_E_Monitoring.cin`, `M485_E_ReadOption.cin`, `M485_E_UI.cin`을 배치한다. |
 | DATA-LAYOUT-003 | `Config/Maps`에는 DeviceMap, FrameRule 및 하나 이상의 장치 유형별 Register Map을 배치한다. `Main.can`은 DeviceMap과 FrameRule 경로를 지정하고 DeviceMap은 각 Register Map 상대경로를 지정한다. |
 | DATA-LAYOUT-004 | Panel 및 System Variable의 세부 파일명과 파일 형식은 해당 산출물을 설계할 때 확정하되 `Config/Panel`, `Config/System Variables` 디렉터리 경계는 유지한다. |
 
@@ -1361,7 +1366,7 @@
 | AC-197 | FR-LIFE-029, FR-LIFE-033 | 자동 재연결이 성공하면 장애 전 Register, Active Configuration 및 Port 설정이 유지되고 오래된 Periodic Pending과 Change Snapshot은 출력되지 않는다. ReadSwitch가 ON이면 활성 Rule의 최신 현재값이 `0x80`으로 즉시 등록된다. |
 | AC-198 | FR-LIFE-030, ERR-038 | 10회 자동 재연결 실패 후 상태는 `Disconnected`이고 재시도가 중단되며 마지막 Port·Stage·OS 오류를 진단할 수 있다. 이후 사용자의 수동 Connect로 새 연결을 시작할 수 있다. |
 | AC-199 | FR-LIFE-031, IF-CTX-008 | 자동 재연결 중 Connect는 Busy이고 Disconnect는 재시도를 취소하여 `Disconnected`로 완료하며 Finalize는 재시도를 취소한 뒤 모든 Context 자원을 정리한다. |
-| AC-200 | FR-LIFE-032 | 최초 수동 Connect에서 Port Open 실패를 강제하면 자동 재연결 없이 한 번의 전체 Rollback 후 `Disconnected`로 완료한다. |
+| AC-200 | FR-LIFE-032 | 최초 Connect에서 Port Open 실패를 강제하면 자동 재연결 없이 한 번의 전체 Rollback 후 `Disconnected`로 완료한다. |
 | AC-201 | FR-LIFE-033 | 명시적 Disconnect 또는 Runtime COM 장애 정리 시 Register와 Active Configuration은 유지되고 Periodic Pending과 Change Queue는 비워지며 제거된 Change Snapshot 수만큼 `SuppressedCount`가 증가하고 Sequence와 기존 진단 Counter/Latch는 유지된다. |
 | AC-202 | FR-CSV-016~019, ERR-035~036 | Last-good Configuration이 있는 상태에서 새 Refresh를 실패시키면 Active Path, Configuration과 Register 값은 유지되지만 Connect는 거부된다. Pending Path를 수정하여 Refresh가 성공하면 신규 Path·Configuration·Init Memory가 원자 적용되고 Connect가 허용된다. |
 | AC-203 | FR-CSV-017, IF-QSTAT-002 | Refresh 성공 시 Change Queue, Sequence, Counter 및 Overflow/Suppressed Latch는 초기화되고 Error Queue와 Port 설정은 유지되며 Refresh 직후 CAN Message는 자동 송출되지 않는다. |
@@ -1401,6 +1406,10 @@
 | AC-237 | DATA-MAP-023 | 같은 Index의 `Power12V`와 `power12v`는 서로 다른 Signal로 조회되고 같은 Index에서 완전히 같은 `Power12V` 이름을 두 번 정의하면 CSV 전체가 거부된다. 다른 Index의 `Power12V` 재사용은 허용된다. |
 | AC-238 | COMP-015 | CANalyzer 9.x x86 최소 ABI 확인 Configuration에서 DLL 로딩과 각 Scalar·Reference·배열·문자열·`float(F)`·경로 호출이 성공하고, 결과가 확정되기 전에는 전체 Emulator API 구현 완료로 판정하지 않는다. |
 | AC-239 | PERF-020 | 시험에 사용한 Board Master Response Timeout을 기록하고 정상 지원 부하의 RTU 요청별 Frame 완료~응답 첫 Byte 송신 시작 시간이 해당 Timeout의 50%를 넘지 않는다. |
+| AC-244 | FR-LIFE-034~035 | Measurement 시작 후 ConnectSwitch가 자동으로 ON 되고 최소 500ms 뒤 Refresh 완료와 ConfigurationValid를 확인한 다음 Connect가 한 번만 접수된다. Connecting 중 100ms Polling에서도 중복 Connect 요청이 발생하지 않는다. |
+| AC-245 | FR-LIFE-035~036 | 최초 Connect 실패 시 자동 재연결 없이 Switch가 OFF가 되고, 사용자가 ON으로 재요청할 수 있다. 초기 Connecting 중 OFF이면 연결 시도 완료 뒤 COM이 닫히고 Runtime 자동 재연결 중 OFF이면 재연결이 취소된다. |
+| AC-246 | FR-LIFE-037 | Connected, Connecting, Refreshing 상태 각각에서 Measurement를 종료해도 CAPL Timer가 재시작되지 않고 모든 Worker가 Join되며 COM Handle이 해제된다. |
+| AC-247 | FR-LIFE-038 | 자동 재연결 10회 실패 후 상태와 ConnectSwitch가 모두 OFF/Disconnected로 일치하고 마지막 실패 ResultCode가 유지된다. |
 | AC-240 | PERF-021 | 정상 지원 부하에서 `0x81`은 변경 완료 후 100ms 이내, 활성 `0x80`은 해당 1,000ms Generation 안에 전체 Snapshot 묶음 출력이 시작된다. |
 | AC-241 | PERF-022, DES-THREAD-005 | Disconnected, Connected 및 진행 중 Lifecycle 작업의 취소 가능한 I/O 상태에서 Finalize가 2,000ms 이내 완료된다. 지연 강제 시험에서도 Thread Detach·강제 종료와 Join 전 Context 해제가 발생하지 않고 목표 초과를 진단한다. |
 | AC-242 | DES-BUILD-005 | 깨끗한 개발 PC에서 지정한 Vector 설치 경로 Build Property와 Visual Studio/MSBuild Win32 Configuration으로 빌드할 수 있고 저장소에 재배포가 확인되지 않은 Vector SDK 파일이 포함되지 않는다. |

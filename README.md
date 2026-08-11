@@ -144,7 +144,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\tools\Prepare-M485EPackage.ps1 -Configuration Release
 ```
 
-CANalyzer Program Node에는 `Config/CAPL/M485E/M485_E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하며, Panel은 `M485E::Connection::ConnectSwitch`와 나머지 System Variable에 연결합니다.
+CANalyzer Program Node에는 `Config/CAPL/M485E/M485_E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하고, FrameRule별 Monitoring 목록은 `M485_E_ReadOption.cin`에서 관리합니다. Measurement 시작 시 Main이 500ms 연결 제어 Timer로 `ConnectSwitch`를 자동 ON 하며, Panel에서는 같은 Switch로 수동 Disconnect/재연결할 수 있습니다.
 
 기본 Main의 CSV 경로는 `".\\Maps\\M485E\\M485E_Device.csv"`와 `".\\Maps\\M485E\\M485E_FrameRule.csv"`입니다. `getAbsFilePath()`는 CANalyzer Configuration 파일 위치를 기준으로 해석하므로 `.cfg`는 `Config`(회사 배치에서는 `ProjectConfig`) 바로 아래에 저장합니다. `Config/Maps/M485E`에는 Device와 FrameRule뿐 아니라 Device의 `CSV_DB_Name`이 참조하는 모든 Register Map도 함께 있어야 합니다.
 
