@@ -1,0 +1,5 @@
+Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_Value,Value_Table,Min,Max
+10000,Power12V,IEEE Float,4,BigEndian,0,32,1,0,V,12.5,,,
+10002,Control_SD_Detect_Switch,Unsigned,4,BigEndian,30,1,1,0,,1,"0 ""OFF"" 1 ""ON""",,
+10004,SignedCurrent,Signed,4,BigEndian,0,16,0.1,0,A,-12.5,,,
+10006,Temperature,IEEE Float,4,LittleEndian,0,32,1,0,degC,25.5,,,

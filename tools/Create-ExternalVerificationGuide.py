@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 from docx import Document
@@ -11,6 +12,7 @@ from docx.shared import Cm, Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "05_Test" / "External_Verification_Guide.docx"
+RELEASE_VERSION = "0.1.0"
 
 NAVY = "17365D"
 BLUE = "2F75B5"
@@ -135,8 +137,8 @@ def main():
     table = doc.add_table(rows=4, cols=2)
     table.style = "Table Grid"
     for row, (label, value) in enumerate([
-        ("문서 목적", "가정 환경에서 자동 검증할 수 없는 CAPL, USB-RS485 및 Board 시험 절차를 고정한다."),
-        ("현재 상태", "Phase 1~8 자동 검증 완료. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일 완료. CANalyzer 9.x SP8 Measurement와 장비 항목은 External Verification Pending"),
+        ("문서 목적", "자동 검증으로 대체할 수 없는 대상 실환경의 CAPL, USB-RS485 및 Board 시험 절차를 정의한다."),
+        ("현재 상태", f"Release {RELEASE_VERSION} Baseline. Phase 1~8 자동 검증 완료. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일 완료. CANalyzer 9.x SP8 Measurement와 장비 항목은 External Verification Pending"),
         ("결과 기록", "Modbus485Emulator_External_Test_Result.xlsx의 Result를 Not Tested에서 갱신한다."),
         ("주의", "가상 CAN 채널만 사용하며 물리 CAN Bus Load를 합격 기준으로 사용하지 않는다."),
     ]):
@@ -160,7 +162,7 @@ def main():
         "CAPL Program Node에 Config/CAPL/M485E/M485E_Main.can을 연결한다. Main은 생성 계약, Core, Monitoring, UI를 포함한다.",
         "Config/System Variables/M485E.vsysvar를 Configuration에 추가한다.",
         "Main.can에서 DeviceMap과 FrameRule 상대경로를 지정한다. Core가 getAbsFilePath()로 절대경로를 DLL에 전달하고 Register Map은 DeviceMap의 CSV_DB_Name으로 선택한다.",
-        "DeviceMap 고유 Port 수와 같은 1~4개 PortSlot의 COM 번호와 BaudRate/DataBits/Parity/StopBits를 설정하고 Refresh 완료를 Polling한 뒤 Connect한다.",
+        "gM485E_ActivePortCount를 DeviceMap 고유 Port 수와 같은 1~4로 설정하고 앞쪽 PortSlot의 COM 번호와 BaudRate/DataBits/Parity/StopBits를 설정한다. 기본 배포 Source Contract가 두 수의 일치를 검사하며, Refresh 완료를 Polling한 뒤 Connect한다.",
         "ReadOption 정적 매핑을 설정하고 ReadSwitch ON에서 Monitoring을 시작한다.",
     ]
     for idx, step in enumerate(steps, 1):
@@ -172,7 +174,7 @@ def main():
     add_heading(doc, "3. 필수 시험 순서", 1)
     rows = [
         ("EV-001", "1/2", "CANalyzer 9.x에서 CAPL Compile 및 #pragma library 로드", "21개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
-        ("EV-002", "3/8", "상대경로 3개 설정 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
+        ("EV-002", "3/8", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
         ("EV-003", "7/8", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
         ("EV-004", "5/7", "Port별 Slave에 FC03 Quantity 1/125 요청", "직접 Address의 Holding 값, CRC Low/High 정상 응답", "Serial trace"),
         ("EV-005", "5/7", "FC04 정상/권한 공백 요청", "정상값 또는 Exception 0x02, 부분 응답 없음", "Serial trace"),
@@ -183,10 +185,10 @@ def main():
         ("EV-010", "6/9", "여러 활성 Port 동시 Change Burst", "활성 Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할", "CAN trace"),
         ("EV-011", "9/10", "ReadSwitch OFF/ON 및 ReadOption 변경", "OFF 중 RTU 유지·CAN 억제, 다음 Cycle에 Candidate 원자 반영", "CAN/Write"),
         ("EV-012", "10", "Panel Manual Write Data[122] 및 Signal Control", "Send 시 요청 Snapshot 사용, Quantity 1~122와 word 범위 검증, ResultCode 표시", "Panel capture"),
-        ("EV-013", "10", "Panel Signal Float/Signed Read/Write", "12.5 등 물리값이 그대로 왕복하고 실패 시 기존 출력 유지", "Panel capture"),
+        ("EV-013", "10", "Panel Signal Float/Signed Read/Write", "12.5 등 물리값이 그대로 왕복하고 실패 시 호출 전 출력 유지", "Panel capture"),
         ("EV-014", "7/8", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected", "Timestamp log"),
         ("EV-015", "8", "Disconnect/Connect와 Finalize", "Disconnect는 값 보존, Finalize는 2초 목표 내 Join/Close 후 Context 폐기", "Status/Process"),
-        ("EV-016", "9/10", "200 Rule, 최대 Quantity, 0x81 Burst 성능 Profile", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표와 bounded Queue 진단", "Trace/metrics"),
+        ("EV-016", "9/10", "200 Rule, 최대 Quantity, 0x81 Burst 성능 Profile", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표와 bounded Queue 진단; Error Queue DropCount 변화/Overflow 최초 전환은 누적 통계 한 번 출력", "Trace/metrics"),
     ]
     add_test_table(doc, rows)
 
@@ -204,6 +206,7 @@ def main():
         "CSV 오류는 FileType, Row, Column, ErrorCode 및 CAPL Write 문장을 함께 저장한다.",
         "Serial 오류는 PortSlot, COM 이름, Stage, Win32 OsError와 발생 시각을 함께 저장한다.",
         "성능 실패는 활성 Rule 목록, Rule별 Quantity, Change Burst 수, Pump Tick 실행시간, Queue Stats 및 Board Timeout을 함께 저장한다.",
+        "Error Queue DropCount 또는 Overflow Latch가 변하면 Write Window의 Pending, Capacity, High-water Mark, DropCount 및 Overflow 누적 통계를 저장한다.",
     ])
 
     add_heading(doc, "6. 종료 및 판정", 1)
@@ -219,6 +222,16 @@ def main():
     run.font.size = Pt(8)
     run.font.color.rgb = RGBColor.from_string("6B7280")
 
+    doc.core_properties.title = "Modbus485Emulator External Verification Guide"
+    doc.core_properties.subject = "Release 0.1.0 external verification procedures"
+    doc.core_properties.author = "Modbus485Emulator Project"
+    doc.core_properties.last_modified_by = "Modbus485Emulator Project"
+    doc.core_properties.comments = ""
+    doc.core_properties.category = "Software Engineering"
+    doc.core_properties.keywords = "Modbus485Emulator, M485E, Modbus RTU, CAPL"
+    doc.core_properties.created = datetime(2026, 8, 12)
+    doc.core_properties.modified = datetime(2026, 8, 12)
+    doc.core_properties.version = RELEASE_VERSION
     doc.save(OUTPUT)
     print(OUTPUT)
 

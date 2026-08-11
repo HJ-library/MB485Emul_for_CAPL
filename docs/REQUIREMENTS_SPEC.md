@@ -1,7 +1,7 @@
-# Modbus485 Emulator for CAPL 요구사항 명세
+# Modbus485Emulator 요구사항 명세
 
-> 상태: 요구사항 수집 및 Plan 단계
-> 기준: 2026-08-08까지 누적된 사용자 요구사항, CANalyzer 13 공식 CAPL DLL Sample 조사 및 Plan 최종 검토 결과
+> 상태: v0.1.0 Release Baseline
+> 기준: 2026-08-12까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
 > 주의: 본 문서의 **제안** 및 **미확정** 항목은 확정 요구사항이 아니다.
 
 ## 1. 프로젝트 목적
@@ -12,8 +12,8 @@
 | PRJ-002 | 외부 Board가 RS-485 Modbus RTU로 요청하면 DLL이 장치별 Register 값을 응답하거나 변경한다. |
 | PRJ-003 | Emulator의 Register 상태를 가상 CAN 채널을 통해 주기 및 변경 이벤트 기반으로 모니터링한다. |
 | PRJ-004 | CAPL Panel에서 Register와 Signal 물리값을 조회·변경할 수 있어야 한다. |
-| PRJ-005 | 기존 Prototype DLL과의 하위 호환을 유지하지 않는 신규 개발로 진행하며, 기존 DLL 구현·API·설명 정보는 구현 단계에서 신규 요구사항 기준 산출물로 교체한다. |
-| PRJ-006 | 프로젝트의 공식 명칭은 `Modbus485Emulator`로 사용한다. 기존 `MB485Emul_for_CAPL` 표기는 신규 산출물에서 사용하지 않는다. |
+| PRJ-005 | 요구사항·설계·구현·시험·사용 안내는 이 저장소의 정식 산출물만으로 완결되어야 한다. |
+| PRJ-006 | 프로젝트와 모든 공개 산출물의 공식 명칭은 `Modbus485Emulator`로 통일한다. |
 
 ## 2. 사용 환경과 제약 조건
 
@@ -27,7 +27,7 @@
 | ENV-006 | COM Port의 Baud Rate, Data Bits, Stop Bits 등 통신 설정은 CAPL에서 DLL로 전달한다. |
 | ENV-007 | CAN Monitoring 메시지는 Extended CAN을 사용한다. |
 | ENV-008 | CAPL Register 배열은 Address당 16bit인 `word` 배열을 사용한다. |
-| ENV-009 | 현재 단계는 요구사항 수집 및 Plan 단계이며 사용자가 명시적으로 “구현 시작”이라고 말하기 전에는 코드 구현, 빌드 및 테스트 단계로 전환하지 않는다. |
+| ENV-009 | v0.1.0은 구현 및 자동 검증을 완료한 Release Baseline이며 CANalyzer 9.x SP8, USB-RS485 Adapter와 실제 Board를 사용하는 대상 실환경 검증은 별도로 수행한다. |
 | ENV-010 | CANalyzer 13 설치 환경과 공식 CAPL DLL Sample은 DLL 연동 구조 및 향후 x64 호환성 검토에 사용한다. 1차 실행 대상은 CANalyzer 9.x x86으로 유지한다. |
 | ENV-011 | 현재 개발·검증·배포 대상 아키텍처는 Win32/x86으로 제한하고, x64 바이너리 지원은 후속 체크리스트에서 별도로 수행한다. |
 | ENV-012 | CAN Monitoring은 가상 CAN 채널만 사용하며 물리 CAN 채널 또는 외부 CAN 장치로 송출하지 않는다. |
@@ -61,7 +61,7 @@
 | FR-RTU-018 | 외부 `0x10` Write 요청의 Quantity는 1~123 Register만 허용한다. |
 | FR-RTU-019 | Quantity가 Function별 허용 범위를 벗어나거나 `0x10` Byte Count가 `Quantity × 2`와 다르면 Register를 변경하지 않고 Exception Code `0x03 Illegal Data Value`를 반환한다. |
 | FR-RTU-020 | `Address + Quantity - 1`은 32bit 이상의 중간값으로 계산한다. 결과가 16bit Address 범위를 초과하거나 요청 범위에 해당 Function Code 권한이 없는 Register가 하나라도 있으면 Exception Code `0x02 Illegal Data Address`를 반환한다. |
-| FR-RTU-021 | `M485E_DeviceMap.csv`의 개별 Device `Slave_ID`는 `1~247`만 허용하고 `0`, `248~255`는 CSV 검증 오류로 처리한다. Wire의 Slave ID `0`은 Port-local Broadcast 식별자로 사용하며 FC10만 지원한다. 이 식별자는 PDU의 16bit Register Address와 독립적이며 Register Address `0`은 정상 주소로 허용한다. |
+| FR-RTU-021 | `M485E_Device.csv`의 개별 Device `Slave_ID`는 `1~247`만 허용하고 `0`, `248~255`는 CSV 검증 오류로 처리한다. Wire의 Slave ID `0`은 Port-local Broadcast 식별자로 사용하며 FC10만 지원한다. 이 식별자는 PDU의 16bit Register Address와 독립적이며 Register Address `0`은 정상 주소로 허용한다. |
 | FR-RTU-022 | Slave ID `0`의 유효한 FC10 요청은 수신 Port에 구성된 모든 Device를 대상으로 범위와 FC03 쓰기 권한을 먼저 검증한 후 원자적으로 적용한다. 한 대상이라도 검증에 실패하면 어떤 Device도 변경하지 않는다. 성공 시 값이 실제 변경된 각 Device/Rule의 Change Snapshot을 생성하되 정상·오류 응답은 모두 송신하지 않는다. Broadcast FC03/FC04, 지원하지 않는 Function, 잘못된 FC10 및 대상이 없는 경우도 무응답·무적용으로 처리한다. 예약 Slave ID `248~255`, 미등록 Slave ID 및 다른 Port의 Slave 프레임에도 응답하지 않는다. |
 | FR-RTU-023 | Serial 통신 모드는 Modbus RTU만 지원하고 ASCII 모드는 지원하지 않는다. RTU ADU는 Address 1Byte, Function 1Byte, Data `0~252Byte`, CRC 2Byte로 구성하며 최대 길이는 256Byte다. |
 | FR-RTU-024 | RTU Wire의 Frame 간 무응답은 `t3.5` 규칙을 따르되 Windows `ReadFile` 완료 시각은 실제 Byte 도착 시각으로 간주하지 않는다. DLL은 FC03/FC04/FC10의 예상 ADU 길이와 CRC-16, 미지원 Function의 bounded CRC sliding 탐색으로 Frame을 복구하며 Serial Read Timeout이나 Read 호출 반환 경계만으로 미완성 후보를 폐기하지 않는다. |
@@ -81,13 +81,13 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| FR-PORT-001 | Serial Configuration은 Device Index가 아니라 `M485E_DeviceMap.csv`의 고유 `Port`별로 한 번 설정한다. 같은 Port의 여러 Slave ID는 하나의 Serial Configuration과 `PortSlot`을 공유한다. |
+| FR-PORT-001 | Serial Configuration은 Device Index가 아니라 `M485E_Device.csv`의 고유 `Port`별로 한 번 설정한다. 같은 Port의 여러 Slave ID는 하나의 Serial Configuration과 `PortSlot`을 공유한다. |
 | FR-PORT-002 | CAPL이 Port별로 전달하는 설정 항목은 `PortSlot`, `Port`, `BaudRate`, `DataBits`, `Parity`, `StopBits`다. `Parity`는 `None`, `Even`, `Odd`, `StopBits`는 `1`, `2`를 지원한다. |
 | FR-PORT-003 | Flow Control은 `None`으로 고정하고 공개 Port 설정 파라미터로 받지 않는다. |
 | FR-PORT-004 | Modbus RTU Inter-character 및 Inter-frame Timing은 DLL이 BaudRate와 Serial Character 형식을 기준으로 계산하며 CAPL 입력 파라미터로 받지 않는다. |
 | FR-PORT-005 | Slave Emulator는 Board 요청에 응답하는 구조이므로 Response Timeout을 공개 Port 설정 파라미터로 받지 않는다. 내부 Serial Read/Polling Timing은 DLL 설계값으로 관리한다. |
 | FR-PORT-006 | Port 설정은 Disconnected 상태에서만 허용하며 Connect 상태의 설정 변경 요청은 실행하지 않고 오류를 반환한다. |
-| FR-PORT-007 | Connect 전에 유효한 CSV Configuration이 로딩되고 `M485E_DeviceMap.csv`가 참조하는 모든 고유 Port에 유효한 Serial Configuration이 존재해야 한다. |
+| FR-PORT-007 | Connect 전에 유효한 CSV Configuration이 로딩되고 `M485E_Device.csv`가 참조하는 모든 고유 Port에 유효한 Serial Configuration이 존재해야 한다. |
 | FR-PORT-008 | Connect 사전 검증은 DeviceMap의 고유 Port 수, Port별 설정과 고유 PortSlot 존재 여부, 각 설정값의 유효성 및 같은 Port 내 Slave_ID 중복 여부를 검사한다. 하나라도 실패하면 실제 COM Port를 열지 않고 전체 Connect를 거부하여 Disconnected 상태를 유지한다. |
 | FR-PORT-009 | 총 고유 COM Port 수는 1~4개이며 각 Port의 실제 Open은 모든 사전 검증이 성공한 뒤 Connect 과정에서 수행한다. 한 Port의 실제 Open 실패는 `FR-PORT-013~017`의 전체 Rollback 정책을 적용한다. |
 | FR-PORT-010 | Modbus RTU Port의 `DataBits`는 `8`만 허용하며 다른 값은 Connect 전에 Port 설정 검증 오류로 처리한다. |
@@ -110,7 +110,7 @@
 | ID | 결정 내용 |
 | --- | --- |
 | DES-RTU-001 | 외부 RTU `0x10`과 CAPL Direct Write는 권한 검사와 SourceType은 분리하되 동일한 원자적 다중 Register Write Engine을 사용한다. |
-| DES-RTU-002 | `0x06` Legacy Handler, 호환 설정 Flag 및 Legacy 전용 DLL을 만들지 않는다. |
+| DES-RTU-002 | RTU Dispatcher는 `0x03`, `0x04`, `0x10`만 지원하고 `0x06` 요청에는 Illegal Function Exception을 반환한다. |
 | DES-RTU-003 | Slave ID `0`의 FC10은 수신 Port의 모든 구성 Device를 Index 오름차순으로 잠근 뒤 전체 대상 검증·Snapshot 준비·일괄 Commit 순서로 처리한다. 적용 성공과 실패 모두 Wire 응답은 보내지 않으며, Broadcast Read와 기타 Function은 무응답·무적용이다. Register Address `0`은 Broadcast 식별자와 무관한 정상 주소다. |
 | DES-RTU-004 | RTU Frame 조립, CRC/주소/Function 검증, 원자적 Register 적용과 응답 송신을 Port별 단일 Worker Pipeline으로 처리한다. |
 | DES-RTU-005 | Serial Transport는 실제 Windows 구현과 시험용 대체 구현을 분리할 수 있는 최소 경계만 둔다. 수신 Parser는 OS Byte Timestamp 의존성을 두지 않으며 범용 통신 Framework나 사용하지 않는 Driver Plug-in 구조는 만들지 않는다. |
@@ -249,7 +249,7 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| FR-CSV-001 | `M485E_DeviceMap.csv`와 `M485E_FrameRule.csv`의 프로젝트별 상대경로는 CAPL `Main.can`에서 각각 관리하고 CANalyzer 시작 시 설정한다. 각 Register Map 경로는 DeviceMap의 `CSV_DB_Name`으로 지정한다. |
+| FR-CSV-001 | `M485E_Device.csv`와 `M485E_FrameRule.csv`의 프로젝트별 상대경로는 CAPL `Main.can`에서 각각 관리하고 CANalyzer 시작 시 설정한다. 각 Register Map 경로는 DeviceMap의 `CSV_DB_Name`으로 지정한다. |
 | FR-CSV-002 | 저장소 기본 예시 파일명은 `M485E_Device.csv`, `M485E_FrameRule.csv` 및 장치 유형별 Register Map으로 한다. 실제 파일명은 프로젝트마다 변경할 수 있고 Register Map 수는 장치 유형 구성에 따라 달라질 수 있다. |
 | FR-CSV-003 | CAPL에서 DeviceMap, FrameRule 및 그 DeviceMap이 참조하는 모든 Register Map 설정을 함께 재로딩할 수 있어야 한다. |
 | FR-CSV-004 | CSV 재로딩은 기존 Register 값을 유지하는 갱신이 아니라 전체 메모리 Refresh로 동작한다. |
@@ -431,7 +431,7 @@
 | NFR-006 | 공개 DLL API는 CANalyzer 9.x x86 환경에서 호출 가능해야 한다. |
 | NFR-007 | CAPL의 Periodic Snapshot DLL 호출은 COM 응답을 기다리지 않고 메모리 Snapshot만 반환하여 Measurement Event 처리를 장시간 차단하지 않아야 한다. |
 | NFR-008 | Monitoring Cycle 생성과 CAN 송출 분산은 서로 다른 CAPL Timer로 분리하여 각 Timer의 책임을 명확하게 유지한다. |
-| NFR-009 | 요구사항 수집 및 Plan 단계에서는 `docs/REQUIREMENTS_SPEC.md`를 프로젝트 요구사항의 단일 기준 문서로 사용한다. |
+| NFR-009 | `docs/REQUIREMENTS_SPEC.md`를 프로젝트 생명주기 전체의 요구사항 단일 기준 문서로 사용한다. |
 | NFR-010 | Measurement 실행 중 호출되는 DLL Export는 전달값 검증, 고정 Buffer 복사, 상태 조회 또는 사전 준비된 작업 요청처럼 실행시간이 제한된 동작만 수행하고 호출 Thread에서 파일 접근, COM Port Windows API, Thread 종료 대기 또는 동적 메모리 할당을 수행하지 않는다. |
 | NFR-011 | CAPL DLL 경계에는 CAPL 사용자 정의 `struct`를 전달하지 않고 Vector Export Table이 지원하는 Scalar, 숫자 Reference 및 1차원 `char[]`, `word[]`, `long[]`만 사용한다. |
 | NFR-012 | DLL은 CSV를 읽기 전용으로 열고 CANalyzer Process의 현재 OS 사용자 권한만 사용하며 권한 상승을 요청하지 않는다. 1차 버전은 Configuration 기준 로컬 경로만 허용하고 UNC·네트워크 경로를 거부한다. Modbus 인증은 제공하지 않으며 구성된 물리 Port에 접근할 수 있는 Master를 신뢰한다. |
@@ -451,9 +451,9 @@
 
 | ID | 내용 |
 | --- | --- |
-| DOC-001 | 기존 `docs/CAPL_DLL_MONITORING_PLAN.md`는 Prototype 기준의 비정규 구 문서로 취급하며 신규 요구사항 판단 근거로 사용하지 않는다. |
-| DOC-002 | `docs/CAPL_DLL_MONITORING_PLAN.md`는 Plan 확정 후 설계 단계에 진입할 때 제거한다. 현재 Plan 단계에서는 삭제하지 않는다. |
-| DOC-003 | 신규 설계 문서는 확정된 `docs/REQUIREMENTS_SPEC.md`를 기준으로 작성하고 구 설계 문서의 내용을 그대로 승계하지 않는다. |
+| DOC-001 | `docs/REQUIREMENTS_SPEC.md`를 요구사항의 단일 기준 문서로 사용한다. |
+| DOC-002 | Release에는 현재 Baseline의 정식 요구사항·기능사양·설계·추적성·검증 문서만 포함한다. |
+| DOC-003 | 설계 문서는 확정된 `docs/REQUIREMENTS_SPEC.md`와 실제 구현·시험 결과에 맞춰 유지한다. |
 | DOC-004 | 요구사항, 아키텍처, 공개 CAPL/DLL API 및 CSV 형식의 문서 역할을 분리하여 같은 규칙을 여러 문서에서 중복 정의하지 않는다. |
 
 ### 제안
@@ -608,7 +608,7 @@
 | IF-META-003 | `OutMeta[1]`은 `M485E_SM_FIELD_COUNT`이며 Version 1의 값은 `11`이다. 이 값은 호출자가 제공한 `MetaCapacity`와 구분되는 DLL Layout의 유효 필드 수다. |
 | IF-META-004 | `OutMeta[2]`는 `M485E_SM_SEQUENCE`다. Periodic Snapshot은 `0`, Change Snapshot은 해당 Port별 Change Queue Sequence를 사용한다. |
 | IF-META-005 | `OutMeta[3]`은 `M485E_SM_PORT_SLOT`이며 `0` 또는 `1`로 가상 CAN 출력 채널을 선택한다. |
-| IF-META-006 | `OutMeta[4]`는 `M485E_SM_DEVICE_INDEX`이며 `M485E_DeviceMap.csv`의 `Index`와 CAN ID의 `II`에 대응한다. |
+| IF-META-006 | `OutMeta[4]`는 `M485E_SM_DEVICE_INDEX`이며 `M485E_Device.csv`의 `Index`와 CAN ID의 `II`에 대응한다. |
 | IF-META-007 | `OutMeta[5]`는 `M485E_SM_RULE_ID`이며 `M485E_FrameRule.csv`의 `Rule_ID`와 CAN ID의 `RR`에 대응한다. |
 | IF-META-008 | `OutMeta[6]`은 `M485E_SM_SLAVE_ID`이며 CAN Header Byte 1에 사용한다. |
 | IF-META-009 | `OutMeta[7]`은 `M485E_SM_FUNCTION_CODE`이며 Rule에 정의된 `0x03` 또는 `0x04`를 사용하고 CAN Header Byte 2에 사용한다. |
@@ -792,7 +792,7 @@
 | IF-CTX-001 | CAPL Core는 `registerCAPLDLL()`로 획득한 CAPL Context Handle을 보관하고 저수준 DLL Export 호출 시 자동 전달한다. 숫자값 `0`도 정상 Handle로 허용하며 등록·초기화 여부는 별도 Flag로 관리한다. |
 | IF-CTX-002 | 사용자용 `M485E_Core_*` API에는 CAPL Context Handle을 노출하지 않는다. |
 | IF-CTX-003 | DLL의 초기화, 종료 및 상태를 사용하는 저수준 `M485E_Dll_*` Export는 CAPL Context Handle로 호출 인스턴스를 식별한다. |
-| IF-CTX-004 | 장치별 API는 `M485E_DeviceMap.csv`의 `Index`를 명시적으로 전달하고 DLL이 이를 `Port + Slave ID`로 변환한다. |
+| IF-CTX-004 | 장치별 API는 `M485E_Device.csv`의 `Index`를 명시적으로 전달하고 DLL이 이를 `Port + Slave ID`로 변환한다. |
 | IF-CTX-005 | Port 설정 API는 Port 식별자를 사용하고, 전체 Lifecycle 및 CSV API에는 Device Index를 사용하지 않는다. |
 | IF-CTX-006 | `M485E_Core`만 DLL을 직접 호출하며 `M485E_UI`와 `M485E_Mon`은 Core Wrapper를 통해 기능을 사용한다. |
 | IF-CTX-007 | `InitializeContext`는 활성 Context가 없는 경우에만 허용하고 성공 시 `Disconnected` 상태를 생성한다. |
@@ -884,7 +884,7 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| DATA-001 | `M485E_DeviceMap.csv`와 `M485E_FrameRule.csv`는 기본 예시명이며 실제 파일명은 프로젝트별로 변경할 수 있다. 장치 유형별 Register Map도 각 프로젝트가 파일명을 정하되 본 문서의 Register Map 스키마를 따라야 한다. |
+| DATA-001 | `M485E_Device.csv`와 `M485E_FrameRule.csv`는 저장소 기본 예시명이며 실제 파일명은 프로젝트별로 변경할 수 있다. 장치 유형별 Register Map도 각 프로젝트가 파일명을 정하되 본 문서의 Register Map 스키마를 따라야 한다. |
 | DATA-002 | DeviceMap과 FrameRule 상대경로는 `Main.can`에서 지정하고 `getAbsFilePath()`로 변환된 절대경로를 DLL에 전달한다. Register Map은 DeviceMap의 `CSV_DB_Name` 상대경로로 지정한다. |
 | DATA-003 | FrameRule은 Device Index로 DeviceMap과 연계하고 Register Map 템플릿은 DeviceMap의 `CSV_DB_Name`으로 Device Index에 할당한다. |
 | DATA-004 | CSV의 관리용 필드는 DLL 내부 제어에 불필요한 경우 사용하지 않는다. |
@@ -904,7 +904,7 @@
 | DATA-018 | 큰따옴표로 감싼 Cell 내부에도 CR 또는 LF 줄바꿈을 허용하지 않는다. 하나의 물리적 CSV 줄은 Header 또는 하나의 데이터 행에 대응해야 한다. |
 | DATA-019 | 파일 끝의 빈 물리적 줄은 무시하되 데이터 행 사이의 빈 줄은 잘못된 칼럼 개수의 행으로 처리하여 CSV 검증 오류로 한다. |
 | DATA-020 | Device Index별 유효 Register 집합은 Rule 범위와 Signal Frame 범위의 합집합이며 외부 RTU Function 권한은 `M485E_FrameRule.csv`의 Function별 범위 합집합으로 별도 구성한다. |
-| DATA-021 | 모든 `M485E_FrameRule.csv`의 Index는 `M485E_DeviceMap.csv`에 존재해야 한다. Register Map에는 Index 칼럼을 두지 않고 이를 참조한 DeviceMap 행의 Index를 적용한다. Address 끝값 계산은 32bit 이상의 중간값을 사용하여 결과가 `65535`를 넘으면 CSV 검증 오류로 처리한다. |
+| DATA-021 | 모든 `M485E_FrameRule.csv`의 Index는 `M485E_Device.csv`에 존재해야 한다. Register Map에는 Index 칼럼을 두지 않고 이를 참조한 DeviceMap 행의 Index를 적용한다. Address 끝값 계산은 32bit 이상의 중간값을 사용하여 결과가 `65535`를 넘으면 CSV 검증 오류로 처리한다. |
 | DATA-022 | CSV File Byte 수, 물리적 행 Byte 수, 데이터 행 수와 문자열 Cell Byte 길이는 `IF-LIMIT-003~005`를 초과할 수 없다. UTF-8 문자열 한도는 문자 수가 아니라 인코딩된 Byte 수로 검사한다. |
 | DATA-023 | Resource 한도 검사는 임시 Configuration을 Active 상태로 승격하기 전에 수행하며 하나라도 초과하면 전체 Load 또는 Refresh를 실패시키고 Last-good Configuration과 Register Memory를 유지한다. |
 | DATA-024 | Rule 범위와 Signal Frame 범위가 겹치는 것은 정상이며 같은 `Index + Address`의 공유 Register를 참조한다. Signal Frame끼리의 겹침은 기존 `DATA-MAP-011~014` 규칙을 따른다. |
@@ -918,7 +918,7 @@
 | DATA-LAYOUT-003 | `Config/Maps`에는 DeviceMap, FrameRule 및 하나 이상의 장치 유형별 Register Map을 배치한다. `Main.can`은 DeviceMap과 FrameRule 경로를 지정하고 DeviceMap은 각 Register Map 상대경로를 지정한다. |
 | DATA-LAYOUT-004 | Panel 및 System Variable의 세부 파일명과 파일 형식은 해당 산출물을 설계할 때 확정하되 `Config/Panel`, `Config/System Variables` 디렉터리 경계는 유지한다. |
 
-### 6.2 M485E_DeviceMap.csv
+### 6.2 M485E_Device.csv
 
 | 순서 | 칼럼 | 설명 |
 | ---: | --- | --- |
@@ -952,7 +952,7 @@
 
 | ID | 검증 요구사항 |
 | --- | --- |
-| DATA-RULE-001 | Index는 `M485E_DeviceMap.csv`에 존재해야 한다. |
+| DATA-RULE-001 | Index는 `M485E_Device.csv`에 존재해야 한다. |
 | DATA-RULE-002 | `Function_Code`는 `0x03` 또는 `0x04`여야 한다. |
 | DATA-RULE-003 | `Function_Code`가 `0x03`인 범위는 외부 `0x10` 쓰기가 가능하다. |
 | DATA-RULE-004 | Rule ID는 CAN ID의 1Byte `RR` 필드에 사용할 수 있어야 한다. |
@@ -1052,7 +1052,7 @@
 | ERR-036 | Refresh 실패 후 Last-good Configuration이 존재하더라도 성공한 새 Refresh 전 Connect 요청은 Stale Configuration 상태 오류로 거부하고 기존 Configuration과 Register Memory를 유지한다. |
 | ERR-037 | 정상 유휴, Serial Read Timeout 및 복구 가능한 Communications Error는 자동 재연결을 시작하지 않는다. 치명적 COM 장애는 실패 Port, I/O Operation, Stage 및 캡처한 Win32 오류를 Error Event에 기록하고 현재 활성 Port 전체 정리와 자동 재연결을 시작한다. |
 | ERR-038 | 자동 재연결의 개별 시도에서 일부 Port만 Open되면 생성된 Worker와 Handle을 모두 Rollback하고 다음 시도를 계속한다. 10회 실패 후 최종 오류를 기록하고 `Disconnected`로 완료하며 Register와 Last-good Configuration을 유지한다. |
-| ERR-039 | `M485E_DeviceMap.csv`의 Slave ID가 `0` 또는 `248~255`이면 파일·행·`Slave_ID` 칼럼과 잘못된 값을 포함한 CSV 검증 오류로 처리한다. Wire의 Slave ID `0` FC10은 Broadcast 정책에 따라 적용하되 Exception을 송신하지 않고, `248~255`는 무응답으로 폐기한다. |
+| ERR-039 | `M485E_Device.csv`의 Slave ID가 `0` 또는 `248~255`이면 파일·행·`Slave_ID` 칼럼과 잘못된 값을 포함한 CSV 검증 오류로 처리한다. Wire의 Slave ID `0` FC10은 Broadcast 정책에 따라 적용하되 Exception을 송신하지 않고, `248~255`는 무응답으로 폐기한다. |
 | ERR-040 | CRC 오류, 불완전 Frame, 4Byte 미만 또는 256Byte 초과 ADU, 다른 Slave 및 등록되지 않은 Slave 프레임은 무응답으로 폐기한다. 반복 Noise가 Error Event FIFO를 고갈시키지 않도록 동일 Context 이벤트는 Counter 또는 RepeatCount로 병합한다. |
 | ERR-041 | 유효한 개별 Slave와 CRC를 가진 알려진 Function의 PDU 길이·Quantity·ByteCount 오류는 Exception `0x03`, Address 또는 Function 권한 공백은 `0x02`, 미지원 Function은 `0x01`로 응답한다. |
 | ERR-042 | Device·Rule·Signal·문자열·CSV 크기·행 길이·Queue 입력이 `IF-LIMIT-001~007`의 공개 한도를 초과하면 명시적인 범위 또는 Resource 오류를 반환하고 Active Configuration, Register, 출력 Buffer와 Queue를 부분 변경하지 않는다. |
@@ -1082,7 +1082,7 @@
 | LOG-010 | CAPL Core는 동기 DLL API 실패 직후 해당 Context Handle의 `LastSyncError`를 조회하여 오류 코드별 사용자 메시지와 유효한 동적 Context를 Write Window에 한 번 출력한다. |
 | LOG-011 | CAPL Core는 Error Event FIFO를 Polling하여 Sequence 순서로 출력하고 RepeatCount가 1보다 크면 병합된 반복 횟수를 함께 표시한다. |
 | LOG-012 | Error Event FIFO의 Pending, Capacity, High-water Mark, Enqueue 수, Dequeue 수, 병합 수, DropCount, Overflow Latch 및 마지막 Sequence를 조회할 수 있어야 한다. |
-| LOG-013 | Error Event FIFO Overflow 시 제거된 Sequence 범위, DropCount와 Error Queue Overflow Latch를 진단한다. 별도 범용 Critical Latch는 표시하지 않는다. |
+| LOG-013 | Error Event FIFO Overflow는 Sequence 불연속, DropCount와 Error Queue Overflow Latch로 진단한다. CAPL Control은 100ms Polling에서 DropCount가 변하거나 Overflow Latch가 처음 1로 전환될 때 Pending, Capacity, High-water Mark, DropCount와 Latch를 Write Window에 한 번 출력하며, 별도 범용 Critical Latch는 표시하지 않는다. |
 | LOG-014 | 오류 Context의 ValidMask에 포함되지 않은 File, Port, Device, Rule 또는 Address 필드는 임의의 기본값으로 출력하지 않는다. |
 | LOG-015 | CAPL Core는 `Refreshing`, `Connecting`, `Disconnecting` 전환과 완료 상태를 기록하고 비동기 실패 Event를 해당 작업의 Operation/Stage와 연결하여 출력한다. |
 | LOG-016 | Port별로 CRC 오류, 불완전·Oversize Frame, Noise 재동기화, 적용·무시한 Broadcast, 예약·미등록 Slave Frame, Modbus Exception별 발생 수와 Response 송신 실패 수를 진단 Counter로 구분한다. Windows Read 완료 간격만으로 `t1.5` 위반 Counter를 증가시키지 않는다. |
@@ -1137,8 +1137,8 @@
 | COMP-006 | Signal `Value_Table`은 후속 DBC 변환 도구가 `VAL_` 문장을 생성할 수 있는 Raw-to-Label 쌍의 본문 형식이어야 한다. 후속 변환 도구는 Decimal과 `0x`/`0X` Hex 입력을 받아 최종 DBC Raw 값을 Decimal로 출력하고 Emulator DLL은 이 내용을 해석하지 않는다. |
 | COMP-007 | Register Map의 `Byte_Order` 표기 `BigEndian` 및 `LittleEndian`을 처리해야 한다. |
 | COMP-008 | x86과 향후 x64 바이너리는 동일한 CAPL-visible 논리 API를 유지해야 한다. 단, 아키텍처별 DLL은 별도로 빌드·배포한다. |
-| COMP-009 | 기존 Prototype의 `M485_` Export API, DLL 바이너리 및 동작은 신규 개발의 하위 호환 대상이 아니다. |
-| COMP-010 | 구현 단계에서는 기존 Prototype 소스·API·빌드 설정·샘플·설명 정보를 신규 `M485E` 요구사항과 구조에 맞는 산출물로 교체하고, 최종 산출물에 혼재시키지 않는다. |
+| COMP-009 | 공개 Export는 `M485E_` Prefix의 확정된 21개 API만 제공한다. |
+| COMP-010 | CAPL, DLL, Build, Example 및 문서는 동일한 현행 `M485E` 인터페이스와 소스 구조를 사용한다. |
 | COMP-011 | x86과 향후 x64 DLL은 동일한 32bit signed 상태 코드 값과 의미를 유지해야 한다. |
 | COMP-012 | 출시된 M485E 상태 코드는 이후 버전에서 숫자를 변경하거나 다른 의미로 재사용하지 않아야 하며 CAPL Core가 구버전 코드도 동일하게 해석해야 한다. |
 | COMP-013 | RTU Wire 처리는 Modbus Serial Line의 256Byte ADU, CRC Low-Byte-first와 `t1.5/t3.5` 규칙 및 Modbus Application Protocol의 FC03/04/10 Quantity·Exception 규칙과 호환되어야 한다. Windows 수신 경계는 Function별 길이와 CRC-16으로 복구하고 응답 전 `t3.5` Guard를 적용한다. |
@@ -1152,7 +1152,7 @@
 | DES-BUILD-001 | 하나의 이식 가능한 공통 소스를 사용하되 현재 필수 Build Configuration과 산출물은 Win32/x86으로 한정한다. |
 | DES-BUILD-002 | x86과 향후 x64는 별도 DLL로 빌드·배포하며 CAPL-visible 논리 API 이름과 동작은 동일하게 유지한다. |
 | DES-BUILD-003 | 공통 소스는 고정 크기 정수 타입을 사용하고 Pointer 크기에 의존하는 CAPL ABI 또는 Casting을 사용하지 않는다. |
-| DES-BUILD-004 | 기존 x64 중심 README와 Prototype Build 정보는 구현 단계에서 CANalyzer 9.x x86 기준 문서로 교체한다. |
+| DES-BUILD-004 | README와 Build 문서는 CANalyzer 9.x용 Win32/x86 빌드·배포·검증 절차를 기준으로 유지한다. |
 | DES-BUILD-005 | 1차 공식 Build는 Visual Studio/MSBuild Win32 Configuration을 기준으로 한다. Vector Sample Header 또는 SDK 파일을 저장소에 임의 복사하지 않고 설치 경로를 Build Property로 주입하며 재배포가 필요한 파일은 Vector 사용 조건 확인 후 별도 결정한다. |
 
 ### x64 후속 체크리스트
@@ -1208,12 +1208,12 @@
 | AC-037 | FR-RTU-012 | 외부 `0x10` 요청 범위가 두 개의 인접한 `0x03` Rule 경계에 걸쳐도 모든 Address의 `0x03` 권한이 연속되면 전체 Write를 원자적으로 허용한다. 중간 권한 공백이 있으면 부분 Write 없이 전체 요청을 거부한다. |
 | AC-038 | FR-RTU-016 | 외부에서 `0x06` 요청을 보내면 Exception Function `0x86`, Exception Code `0x01`을 반환하고 Register 값과 Snapshot 상태는 변경되지 않는다. |
 | AC-039 | DES-RTU-001 | 외부 RTU `0x10`과 CAPL Direct Write가 공통 원자적 다중 Register Write Engine을 사용하되, 각각의 접근 권한과 SourceType 규칙이 구분되어 적용된다. |
-| AC-040 | COMP-009, COMP-010 | 최종 신규 개발 산출물에는 기존 `M485_` Export API, FC `0x06` 정상 처리 코드, 구 Prototype DLL 및 이를 현행 기능으로 설명하는 문서가 남아 있지 않다. |
+| AC-040 | COMP-009, COMP-010 | 최종 산출물의 공개 Export가 확정된 `M485E_` 21개 API와 일치하며, FC `0x06` 요청은 정상 Write가 아니라 Illegal Function으로 처리된다. |
 | AC-041 | IF-CTX-001~003 | CAPL Core가 보관한 유효한 Context Handle `0`과 비영(非零) 값으로 각각 DLL을 초기화·호출·종료할 수 있으며 CAPL 사용자용 Core API에서는 Handle 입력이 요구되지 않는다. |
 | AC-042 | IF-CTX-004 | 서로 다른 Device Index의 API 호출을 교대로 수행해도 각 호출은 DeviceMap에 정의된 올바른 `Port + Slave ID` 장치에만 적용된다. |
 | AC-043 | IF-REG-010~012 | Register Read가 `OutData[]` 길이를 검증한 후 정확히 Quantity개의 16bit Register를 출력 Buffer에 기록하며 Buffer 범위를 벗어나지 않는다. |
-| AC-044 | ENV-011, DES-BUILD-001~004 | 현재 신규 개발의 기본 빌드·문서·검증 대상이 Win32/x86 및 CANalyzer 9.x로 일치하고 x64를 현재 지원 완료로 표시하지 않는다. |
-| AC-045 | NFR-009, DOC-001~004 | Plan 단계의 요구사항 판단은 `REQUIREMENTS_SPEC.md`만을 기준으로 하며, 설계 단계 산출물에는 구 `CAPL_DLL_MONITORING_PLAN.md`의 상충하거나 누락된 규칙이 현행 요구사항으로 남지 않는다. |
+| AC-044 | ENV-011, DES-BUILD-001~004 | 기본 빌드·문서·검증 대상이 Win32/x86 및 CANalyzer 9.x로 일치하고 x64를 현재 지원 완료로 표시하지 않는다. |
+| AC-045 | NFR-009, DOC-001~004 | 요구사항 → 기능사양 → 개발설계 → 검증 연결이 현재 Baseline을 기준으로 일관되게 추적된다. |
 | AC-046 | FR-CAN-029~031 | 같은 Rule에 값 A와 값 B를 연속 Write한 뒤 Queue를 처리하면 두 Snapshot이 FIFO 순서로 각각 A와 B의 변경 당시 값을 보존한다. |
 | AC-047 | IF-MON-007 | Change Queue가 비어 있을 때 `TryDequeueChangeSnapshot`은 No Data 상태를 반환하고 출력 Buffer와 Queue 상태를 변경하지 않는다. |
 | AC-048 | IF-MON-009~010 | 출력 Buffer가 부족하면 Buffer Capacity 오류 상태를 반환하고 Queue 선두 Snapshot을 제거하지 않으며 충분한 Buffer로 다시 호출하면 동일 Snapshot을 받을 수 있다. |
@@ -1319,7 +1319,7 @@
 | AC-147 | DES-ERR-004, ERR-033 | 지원하지 않는 Serial 설정 또는 Port Open 실패를 강제로 발생시키면 M485E 오류 코드와 실패 직후의 Win32 `OsError`가 별도 필드로 보존되고 이후 Windows API 호출로 바뀌지 않는다. |
 | AC-148 | IF-ERR-010~013, LOG-011 | 두 Worker에서 비동기 오류를 순차 발생시키면 Error Event가 Sequence와 발생 당시 Context를 유지하고 CAPL Polling이 한 건씩 원자적으로 Dequeue하며 Buffer 오류 또는 No Data에서 Queue가 변경되지 않는다. |
 | AC-149 | IF-ERR-014~015, ERR-032, PERF-013 | 동일한 비동기 오류 Burst는 RepeatCount로 병합되고 FIFO Capacity를 넘는 서로 다른 이벤트 Burst에서는 oldest-drop, DropCount, Sequence 불연속 및 Overflow Latch가 관찰되며 유효한 RTU 요청은 계속 처리된다. |
-| AC-150 | IF-ERR-015, LOG-013 | Error FIFO Overflow 후에도 Error Queue Overflow Latch와 DropCount를 조회할 수 있고 Lifecycle 완료 결과와 Change Queue Overflow 상태는 각각의 전용 Status/Latch에 유지된다. 별도 범용 Critical Latch API는 존재하지 않는다. |
+| AC-150 | IF-ERR-015, LOG-013 | Error FIFO Overflow 후에도 Error Queue Overflow Latch와 DropCount를 조회할 수 있고 CAPL은 DropCount 변화 또는 Latch 최초 전환에만 누적 통계를 출력한다. Lifecycle 완료 결과와 Change Queue Overflow 상태는 각각의 전용 Status/Latch에 유지되며 별도 범용 Critical Latch API는 존재하지 않는다. |
 | AC-151 | IF-ERR-008~009 | CANalyzer CAPL DLL 경계에서 사용자 정의 struct 없이 지원되는 숫자 Reference 또는 Metadata 배열과 `char[]` Buffer로 오류 Context를 복사하며 Capacity 부족 시 출력 Buffer와 원본 오류 Snapshot을 부분 변경하지 않는다. |
 | AC-152 | DES-ERR-003, LOG-014 | 동일 ErrorCode의 사용자 메시지는 CAPL Core에서 생성하고 DLL은 유효한 원시 Context만 제공하며 ValidMask에 없는 필드는 Write Window 메시지에서 생략된다. |
 | AC-153 | IF-CODE-001~004 | 성공한 Read는 `0`과 유효한 출력값을 반환하고 빈 FIFO Polling은 `1`과 불변 출력 Buffer를 반환하며 잘못된 입력은 해당 영역의 음수 오류를 반환한다. |
@@ -1419,13 +1419,9 @@
 | AC-242 | DES-BUILD-005 | 깨끗한 개발 PC에서 지정한 Vector 설치 경로 Build Property와 Visual Studio/MSBuild Win32 Configuration으로 빌드할 수 있고 저장소에 재배포가 확인되지 않은 Vector SDK 파일이 포함되지 않는다. |
 | AC-243 | IF-CODE-019~020, DES-CODE-004 | 확정 오류 코드와 C++·CAPL 상수·Message Key가 일치한다. 시험용 신규 오류 코드를 해당 영역의 미사용 번호에 추가해도 기존 코드의 숫자·이름·의미가 바뀌지 않고 기준 목록, 양쪽 언어 매핑, 문서와 시험이 함께 갱신된다. |
 
-## 12. 미확정 사항
+## 12. 확정 설계 및 검증 추적
 
-`★`는 공개 API, 데이터 손실, 데이터 해석, 호환성 또는 안정성에 영향을 주므로 Plan 확정 전에 사용자의 명시적 확인이 필요한 항목이다.
-
-`◆`는 방향은 확정되었지만 CANalyzer 9.x SP8 또는 실제 부하 환경에서 검증해야 하는 항목이다.
-
-`◇`는 외부 동작을 바꾸지 않는 세부 설계값으로 설계 단계까지 미룰 수 있는 항목이다.
+`TBD-*` ID는 요구사항 수집 과정에서 부여한 추적 식별자로 유지한다. 이 절의 선택 사항은 모두 확정되었으며, `◆`는 CANalyzer 9.x SP8 또는 실제 부하 환경에서 검증 결과만 추가로 기록해야 하는 항목을 뜻한다.
 
 ### 12.1 확정되었고 검증만 남은 사항
 
@@ -1472,7 +1468,7 @@
 | TBD-017 ◆ | Port별 Serial Configuration은 `PortSlot`, `ComPortNumber(1~999)`, `BaudRate`, `DataBits`, `Parity`, `StopBits`를 CAPL에서 입력받는다. CAPL Core는 숫자를 `COM%d`로 변환하고 저수준 DLL은 문자열 Port ABI를 유지한다. Flow Control은 None으로 고정하고 RTU Timing은 DLL이 계산하며 Response Timeout은 공개 설정에서 제외한다. DeviceMap의 1~4개 활성 Port·Slot 설정과 CSV 교차 검증이 성공해야 Connect를 시도한다. | ComPortNumber 경계, `COM%d` 변환, 저수준 문자열 ABI, 1~4개 활성 Port 설정 교차 검증, Timing 계산과 Connect 전 설정 누락 시험 |
 | TBD-045 ◆ | `DataBits`는 Modbus RTU에 맞춰 8만 허용한다. `BaudRate`는 양의 정수이며 고정 목록으로 제한하지 않고 Windows Serial Driver가 실제 지원 여부를 판단한다. 지원하지 않는 설정은 실패 Port와 OS 오류 Context를 반환한다. | DataBits와 BaudRate 경계, 일반·비표준 BaudRate, Driver 미지원 설정 및 Port별 오류 Context 시험 |
 | TBD-038 ◆ | Connect는 DeviceMap의 1~4개 활성 Port 전체 성공 또는 전체 실패 방식으로 처리한다. 한 Port 또는 Worker 준비가 실패하면 이미 열린 활성 Port와 Worker를 모두 정리하고 Disconnected 상태를 유지하되 CSV Configuration, Register Memory 및 Port 설정은 보존하여 재시도를 허용한다. | 각 활성 Port/Worker 강제 실패, Handle·Thread 정리, 상태·데이터 보존, 실패 Context 및 재시도 시험 |
-| TBD-046 ◆ | 기존 `GetState`를 9개 필드의 Versioned `GetLifecycleStatus`로 교체하고 Lifecycle 완료 결과를 Error FIFO와 독립된 Latch에 보존한다. | CANalyzer 9.x `long[]` 출력 ABI, Generation Polling, Refresh 성공·실패와 Error FIFO Overflow 시험 |
+| TBD-046 ◆ | 9개 필드의 Versioned `GetLifecycleStatus`를 제공하고 Lifecycle 완료 결과를 Error FIFO와 독립된 Latch에 보존한다. | CANalyzer 9.x `long[]` 출력 ABI, Generation Polling, Refresh 성공·실패와 Error FIFO Overflow 시험 |
 | TBD-052 ◆ | Change Queue Dequeue와 Stats API는 설정용 Port 문자열을 반복 전달하지 않고 `long PortSlot`으로 Port별 Queue를 선택한다. | CANalyzer 9.x 숫자 ABI, 활성 Port Round-robin, 잘못된 Slot 및 Metadata Routing 시험 |
 | TBD-051 ◆ | Write Buffer 길이는 Capacity로 정의하고 `InCount >= Quantity`이면 앞의 Quantity개만 사용한다. Core는 `elcount()`를 전달하고 DLL이 최종 검증한다. | CANalyzer 9.x 고정 `word[]`의 `elcount()` 전달, Quantity 경계 및 Buffer 부족 시험 |
 | TBD-063 ◆ | 수동 Register Panel은 `M485E::ManualWrite` System Variable만 UI Adapter로 사용하고, `Send` 시 Private CAPL 요청 구조체 Snapshot을 만든다. 수동 Read 및 AutoRead UI는 제공하지 않으며 공개 Register Read API는 유지한다. | CANalyzer 9.x Private struct, `SysGetVariableLongArray`, Momentary Send 컴파일·Panel 연동 시험 |
@@ -1643,16 +1639,16 @@
 | CON-004 | CAPL 공개 Wrapper는 네 개 논리 파라미터를 유지하되 Core Wrapper가 `elcount(Data)`를 DLL `ArrayLength`로 전달하고 DLL이 `Quantity`와 비교해 오류를 반환하도록 확정했다. | `IF-REG-005`~`009`, `DES-IF-001`~`002`, `AC-031`~`032` |
 | CON-010 | DLL이 Pointer만으로 배열 길이를 알 수 없는 문제를 `ArrayLength` 명시 전달과 DLL 검증으로 해소했다. | `IF-REG-006`~`009`, `TBD-004` |
 | CON-005 | `Index + Address` 공유 Register Memory를 사용한다. 유효 Register는 Rule과 Signal Frame 범위의 합집합이고 CAPL Direct API는 전체 유효 집합에 접근하며 외부 RTU는 Function별 Rule 권한 합집합으로 제한한다. 요청이 인접·중첩 Rule을 가로질러도 같은 Function 권한이 빈틈없이 연속되면 허용하고 공백이 하나라도 있으면 전체 거부한다. | `FR-RTU-010`~`014`, `FR-REG-007`~`018`, `DES-REG-001`~`005`, `AC-033`~`037`, `AC-219`~`223` |
-| CON-006 | 기존 Prototype을 호환 대상으로 유지하지 않는 신규 개발로 확정했다. 신규 RTU Dispatcher는 `0x03`, `0x04`, `0x10`만 지원하고 `0x06`은 Illegal Function으로 거부하며, RTU `0x10`과 CAPL Direct Write는 공통 Write Engine을 사용한다. | `PRJ-005`, `FR-RTU-015`~`016`, `DES-RTU-001`~`002`, `COMP-009`~`010`, `AC-038`~`040` |
+| CON-006 | RTU Dispatcher는 `0x03`, `0x04`, `0x10`만 지원하고 `0x06`은 Illegal Function으로 거부하며, RTU `0x10`과 CAPL Direct Write는 공통 Write Engine을 사용한다. | `PRJ-005`, `FR-RTU-015`~`016`, `DES-RTU-001`~`002`, `COMP-009`~`010`, `AC-038`~`040` |
 | CON-007 | Vector CAPL Context Handle과 DeviceMap Index를 분리한 2계층 식별 구조로 확정했다. Core가 Context Handle을 숨겨 관리하고 장치 API는 Index를 명시적으로 받으며, Device Handle·Current Device·Port와 Slave ID 직접 전달 방식은 사용하지 않는다. | `FACT-DLL-009`~`010`, `IF-CTX-001`~`006`, `DES-CTX-001`~`003`, `AC-041`~`042` |
-| CON-008 | 공통 소스는 향후 x64 이식 가능하게 유지하되 현재 빌드·검증·배포는 CANalyzer 9.x용 Win32/x86으로 한정했다. 기존 x64 중심 README는 구현 단계에서 교체하고 x64 지원은 별도 후속 체크리스트로 분리했다. | `ENV-011`, `COMP-002`, `COMP-008`, `DES-BUILD-001`~`004`, `FUT-001`~`005`, `AC-044` |
-| CON-009 | `REQUIREMENTS_SPEC.md`를 Plan 단계의 단일 기준 문서로 지정하고, `Type` 누락과 폐기된 `Cycle_ms` Open Item이 남아 있는 구 `CAPL_DLL_MONITORING_PLAN.md`는 비정규 문서로 분류하여 Plan 확정 후 제거하기로 했다. 신규 설계 문서는 확정 요구사항에서 다시 작성한다. | `NFR-009`, `DOC-001`~`004`, `DATA-MAP-001`~`002`, `AC-045` |
+| CON-008 | 공통 소스는 향후 x64 이식 가능하게 유지하되 현재 빌드·검증·배포는 CANalyzer 9.x용 Win32/x86으로 한정하고, x64 지원은 별도 후속 체크리스트로 관리한다. | `ENV-011`, `COMP-002`, `COMP-008`, `DES-BUILD-001`~`004`, `FUT-001`~`005`, `AC-044` |
+| CON-009 | `REQUIREMENTS_SPEC.md`를 요구사항 단일 기준 문서로 지정하고, 정식 기능사양·설계·추적성·검증 문서는 해당 Baseline과 실제 구현 결과에 맞춰 유지한다. | `NFR-009`, `DOC-001`~`004`, `DATA-MAP-001`~`002`, `AC-045` |
 | CON-011 | `0x81` 변경 Snapshot은 Port별 256개 고정 용량 불변 Snapshot FIFO에 변경 당시 값을 저장하고 CAPL 10ms Output Pump가 원자적 단건 Dequeue로 Polling한다. VIA Callback과 DLL 직접 CAN 출력은 사용하지 않는다. Overflow 시 oldest-drop으로 최신 Snapshot과 RTU 동작을 유지하고 손실을 진단한다. | `FR-CAN-029`~`039`, `DES-CAN-010`~`015`, `IF-MON-006`~`012`, `ERR-008`, `LOG-005`~`006`, `PERF-008`~`009`, `AC-046`~`053`, `TBD-026` |
 | CON-012 | CAN Monitoring은 가상 CAN 전용이므로 물리 Bus Load 계산과 Performance Monitor 기반 Application Queue Load, 75/85/90% Warning·자동 정지·Critical Latch를 제거했다. 보호는 Output Pump Frame·실행시간 예산, Rule별 Latest-Wins Pending, Port별 256개 Change Queue, Deadline/Drop 진단과 실환경 처리량 시험으로 수행하며 RTU와 Register 처리는 독립적으로 유지한다. | `ENV-012`~`013`, `FR-CAN-032`~`048`, `FR-LOAD-001`~`019`, `LOG-001`~`003`, `LOG-007`~`008`, `PERF-004`~`019`, `AC-018`~`021`, `AC-027`, `AC-054`~`061`, `AC-175`~`176`, `AC-207`~`210`, `AC-231`, `TBD-012`, `TBD-013`, `TBD-024`, `TBD-029`, `TBD-040`, `TBD-053`, `TBD-054` |
 | CON-013 | Periodic Pending은 Register 데이터를 보관하는 Historical Queue가 아니라 Rule별 최신 Snapshot 요청 상태로 정의했다. Cycle Deadline Miss 시 최신 Generation 한 개로 병합하고 지속 Rule Cursor로 공정하게 처리하며, Missed Sample을 진단하되 Deadline Miss만으로 Monitoring을 정지하지 않는다. | `FR-CAN-022`, `FR-CAN-042`~`048`, `DES-CAN-005`, `DES-CAN-008`, `DES-CAN-017`~`018`, `FR-LOAD-012`, `LOG-008`, `PERF-011`~`012`, `AC-029`, `AC-057`~`061`, `TBD-027` |
 | CON-014 | Modbus 표준의 Slave ID `0` Broadcast는 FC10에 한해 수신 Port의 모든 구성 Device에 무응답 원자 적용하는 것으로 확정했다. CSV의 개별 Slave ID는 `1~247`만 허용하고 Broadcast Read·기타 Function과 예약·미등록·다른 Slave Frame은 무응답·무적용이다. Register Address `0`은 별개의 정상 16bit Address다. | `FR-RTU-021`~`022`, `DES-RTU-003`, `DATA-DEV-005`, `ERR-039`~`040`, `COMP-014`, `AC-211`~`212`, `TBD-018` |
 | CON-015 | RTU 최대 ADU, CRC 순서, Function별 예상 길이+bounded CRC sliding 재동기화, 응답 전 `t3.5` Guard, FC03/04/10 길이와 Exception, Partial I/O 및 FC10 적용 후 응답 송신 실패의 비-Rollback 정책을 공식 Serial Line 규칙과 Windows USB 특성을 함께 고려하여 확정했다. | `FR-RTU-023`~`035`, `FR-PORT-021`, `DES-RTU-004`, `ERR-040`~`043`, `COMP-013`, `AC-213`~`218`, `TBD-048` |
-| CON-016 | 1차 공개 숫자·문자열·CSV·Device/Rule/Signal·Queue 한도를 고정했다. 기존 최대값 축소와 같은 ABI에서 Buffer 의미 변경은 호환성을 깨는 변경으로 관리한다. | `IF-LIMIT-001`~`008`, `DATA-022`~`023`, `ERR-042`, `PERF-014`, `PERF-018`, `COMP-014`, `AC-224`~`228`, `TBD-062` |
+| CON-016 | 1차 공개 숫자·문자열·CSV·Device/Rule/Signal·Queue 한도를 고정했다. 공개 최대값 축소와 같은 ABI에서 Buffer 의미 변경은 호환성을 깨는 변경으로 관리한다. | `IF-LIMIT-001`~`008`, `DATA-022`~`023`, `ERR-042`, `PERF-014`, `PERF-018`, `COMP-014`, `AC-224`~`228`, `TBD-062` |
 | CON-017 | 1차 RS-485 하드웨어를 자동 방향 제어 USB-RS485 Adapter로 한정하고 DLL의 RTS/GPIO 방향 제어와 Local Echo 제거를 후속 범위로 분리했다. | `ENV-014`~`015`, `FR-PORT-022`~`023`, `OOS-014`, `AC-229` |
 | CON-018 | Performance 기반 Critical Latch 제거에 맞춰 범용 Critical 상태 Latch도 추가하지 않는다. Lifecycle 결과와 Change/Error Queue 손실은 각 전용 Status, Latch 및 Counter로 조회한다. | `IF-ERR-015`, `LOG-005`, `LOG-013`, `AC-149`~`150`, `TBD-025` |
 | CON-019 | ReadSwitch는 CAPL UI에서 Monitoring Start/Stop 진입점을 호출하는 입력으로만 사용하고, Monitoring은 CAPL Timer와 Core Start/Stop을 함께 제어하며, DLL에는 하나의 MonitoringEnabled 상태만 둔다. | `FR-LIFE-004`~`006`, `AC-230` |
@@ -1684,7 +1680,7 @@
 | RISK-003 | ReadSwitch OFF와 StopMonitoring에서는 Pending/Change Queue를 폐기하고 SuppressedCount로 의도적 손실을 진단하며 재시작 시 최신 `0x80`만 생성한다. Performance Monitor 기반 Critical 전이는 제거했다. 구현에서 Queue Overflow가 전체 정지나 Queue 전체 폐기로 잘못 연결되지 않는지는 `TBD-006`, `TBD-023`, `TBD-024`, `TBD-053`에서 검증한다. |
 | RISK-004 | 최대 200 Rule과 `0x81` Burst의 CANalyzer 애플리케이션 처리량이 CANalyzer 9.x SP8 x86에서 아직 측정되지 않았다. 최대 6,600 Frame/Cycle은 물리 CAN Bus Load, 자동 정지 Threshold 또는 지원 보장값이 아닌 시험 Profile이며 실제 위험은 CAPL Handler·Output Pump 실행시간, Deadline Miss, Pending/Queue 상태와 RTU 영향이다. `TBD-027`, `TBD-030`, `TBD-039`, `TBD-054`에서 추적한다. |
 | RISK-005 | Port 설정, Connect 사전 검증, 지원 범위와 부분 Open Rollback 정책은 `TBD-017`, `TBD-045`, `TBD-038`에서 확정했다. 구현 시 Port/Worker 단계별 강제 실패 후 Handle·Thread 정리와 Runtime 데이터 보존을 검증해야 한다. |
-| RISK-006 | 현재 저장소의 Prototype 코드·README·CAPL 예시는 신규 요구사항과 호환되지 않으며 구현 단계에서 혼재하면 잘못된 API와 Function Code가 다시 사용될 위험이 있다. `COMP-009`~`010`, `DOC-001`~`003`에 따라 교체한다. |
+| RISK-006 | 공개 API, 지원 Function Code와 문서가 서로 달라질 위험은 Contract Test, CAPL Source Contract와 Traceability 검증으로 관리한다. |
 | RISK-007 | 비동기 Lifecycle 완료 결과를 Error FIFO와 분리된 Status Latch로 보존하도록 확정했다. Latch와 Error Event 기록 순서 또는 Generation 갱신이 원자적이지 않으면 결과를 잘못 연결할 수 있으므로 `TBD-046`에서 검증한다. |
 | RISK-008 | 단일 Context와 모든 초기화 상태에서의 동기 Finalize 계약을 확정했다. 구현에서 Serial I/O 취소 또는 Worker Join이 완료되기 전에 Context를 해제하면 DLL Unload 후 접근이 발생할 수 있으므로 `TBD-047`, `TBD-057`의 종료·동기화 시험으로 검증한다. |
 | RISK-009 | Runtime 치명적 COM 장애는 현재 활성 Port 전체 정리와 제한 자동 재연결로 처리한다. RTU Stream Parser는 Windows Read Timeout을 Frame 경계로 오판하지 않고 예상 길이+CRC로 복구하며, 실제 USB-RS485 Adapter의 Chunking·Noise와 응답 `t3.5` Guard는 `TBD-048`의 실환경 검증 항목으로 시험한다. |
@@ -1702,7 +1698,7 @@
 
 | ID | 제외 내용 |
 | --- | --- |
-| OOS-001 | 현재 단계에서 코드 구현, 빌드 및 테스트 |
+| OOS-001 | 대상 실환경 검증 결과를 자동시험 결과로 대체하는 것 |
 | OOS-002 | 사용자 요청 없는 커밋, Push, 릴리스 및 파일 삭제 |
 | OOS-003 | Modbus485Master 기능 구현 |
 | OOS-004 | 런타임 Register 값을 원본 CSV 파일에 저장하는 기능 |
@@ -1712,7 +1708,7 @@
 | OOS-008 | 상세 Panel 화면 배치와 디자인 |
 | OOS-009 | 요구사항에 포함되지 않은 Modbus Function Code 구현 |
 | OOS-010 | IEEE 타입 외의 추가 Signal 타입 지원 |
-| OOS-011 | 기존 Prototype DLL, `M485_` Export API 및 FC `0x06` 정상 처리 동작에 대한 하위 호환 제공 |
+| OOS-011 | 확정된 21개 외 추가 공개 Export API 및 FC `0x06` 정상 Write 지원 |
 | OOS-012 | FC10 이외 Function의 Broadcast 적용, Broadcast 응답 송신 및 수신 Port를 넘어선 Cross-Port Broadcast |
 | OOS-013 | 1차 버전의 DBC 변환 실행 파일, DLL Export 및 CAPL API 구현 |
 | OOS-014 | DLL의 RTS/GPIO 기반 RS-485 방향 제어와 Local Echo 제거 기능 |

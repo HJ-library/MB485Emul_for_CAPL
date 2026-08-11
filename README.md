@@ -1,9 +1,11 @@
 # Modbus485Emulator
 
-CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 신규 설계의 Phase 1~8 C++ 구현과 자동 검증, Phase 9~10의 CAPL Core/Monitoring/UI Adapter 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다. 이전 `src/Modbus485EmulatorDll` 코드는 참고용 Prototype이며 신규 Solution에서 빌드하지 않습니다.
+현재 릴리스는 **v0.1.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+
+CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. C++ Runtime과 CAPL Core/Monitoring/UI Adapter, 자동 검증 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다.
 
 프로젝트가 어떻게 동작하는지 먼저 보려면 [Modbus485Emulator 한눈에 보기](docs/PROJECT_OVERVIEW.md)를 참조하세요.
-회사 PC에서 처음 적용할 때는 [회사 PC 적용 및 첫 시험 가이드](examples/M485E_Test/START_HERE_COMPANY_TEST.md)를 위에서부터 따라가세요.
+처음 적용할 때는 [기본 예제 시작 가이드](examples/M485E_Test/START_HERE.md)를 위에서부터 따라가세요.
 
 ## Phase 1 범위
 
@@ -24,8 +26,8 @@ CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. 신
 - `tools/Generate-M485EContracts.ps1`: C++/CAPL 계약 생성 및 stale 결과 검사
 - `generated/cpp/M485E_Contracts.generated.h`: DLL과 C++ 시험이 사용하는 생성 계약
 - `generated/capl/M485E_Contracts.generated.cin`: CAPL Core가 사용할 생성 계약
-- 기존 90개 오류 계약과 185개 공개 상수의 변경·누락 회귀 검사
-- 기존 90개 오류 뒤에 신규 오류를 추가하는 호환 확장 지원
+- 90개 오류 계약과 185개 공개 상수의 변경·누락 회귀 검사
+- 90개 오류 뒤에 신규 오류를 추가하는 호환 확장 지원
 - 잘못된 입력, 중복 코드·상수·Message Key, 잘못된 Severity 및 stale 생성 결과 시험
 
 계약 원본을 변경한 경우 다음 명령으로 생성 결과를 갱신하고 검증합니다.
@@ -42,16 +44,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - Phase 3: UTF-8/RFC4180 CSV Loader, 정식 Header/교차 검증, 256 Device·200 Rule·4,096 Signal·4MiB 한도, Last-good 원자 Refresh
 - Phase 4: Device별 16bit Register Memory, FC03/FC04 권한, Direct Read/Write, Signal 물리값 Codec, Init/Reset
 - Phase 5: CRC-16/Modbus, FC03/FC04/FC10, 표준 Exception 및 무응답 정책
-- Phase 6: Port별 Change Snapshot FIFO와 Error FIFO, 고정 용량 256, oldest-drop·병합·통계
+- Phase 6: Port별 Change Snapshot FIFO와 Error FIFO, 고정 용량 256, oldest-drop·병합·통계. CAPL은 Error FIFO DropCount 변화 또는 Overflow Latch 최초 전환만 Write Window에 누적 통계로 알림
 - Phase 7: Win32 Overlapped Chunk I/O, 예상 길이+CRC RTU Stream Parser, 응답 t3.5 Guard, Port Worker, 취소 가능한 I/O
 - Phase 8: 비동기 Refresh/Connect/Disconnect, 활성 Port 전체 성공/전체 실패, 3초 간격 최대 10회 자동 재연결, 21개 Export의 실제 Core 연결
 - Phase 9: CAPL Core Wrapper, 1,000ms Monitoring Cycle, 10ms Output Pump, 1~4 Port Round-robin, Vector Extended CAN ID와 Header/Data Frame 생성
 - Phase 10: Manual Write, Signal 물리값 제어, ReadSwitch/ReadOption System Variable Adapter와 외부 시험 패키지. 수동 Register Read/AutoRead Panel은 제거했으며 공개 Register Read API는 유지
 
-자동 시험은 실제 COM 장치 대신 Fake Transport 또는 존재하지 않는 COM Port를 사용합니다. 실제 SystemBase Adapter의 제거·복구, Board RTU, CANalyzer CAPL Compile/Measurement와 Panel 동작은 [외부 검증 가이드](docs/05_Test/External_Verification_Guide.docx)에 따라 회사 환경에서 수행하고, 결과는 [외부 시험 결과서](docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx)에 기록합니다. 모든 외부 결과의 초기값은 `Not Tested`입니다.
+자동 시험은 실제 COM 장치 대신 Fake Transport 또는 존재하지 않는 COM Port를 사용합니다. 실제 SystemBase Adapter의 제거·복구, Board RTU, CANalyzer CAPL Compile/Measurement와 Panel 동작은 [외부 검증 가이드](docs/05_Test/External_Verification_Guide.docx)에 따라 대상 환경에서 수행하고, 결과는 [외부 시험 결과서](docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx)에 기록합니다. 모든 외부 결과의 초기값은 `Not Tested`입니다.
 
-회사에서 순서대로 수행할 간단 체크리스트는
-[`examples/M485E_Test/COMPANY_TEST_CHECKLIST.md`](examples/M485E_Test/COMPANY_TEST_CHECKLIST.md)를 참조합니다.
+순서대로 수행할 간단 체크리스트는
+[`examples/M485E_Test/VALIDATION_CHECKLIST.md`](examples/M485E_Test/VALIDATION_CHECKLIST.md)를 참조합니다.
 
 ## 필수 환경
 
@@ -63,7 +65,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 ## MSBuild
 
-아래 예시는 CANalyzer 13 Sample 경로입니다. 회사의 CANalyzer 9.x 환경에서는 해당 버전 Sample의 `Includes` 경로로 바꿉니다.
+아래 예시는 CANalyzer 13 Sample 경로입니다. CANalyzer 9.x 환경에서는 해당 버전 Sample의 `Includes` 경로로 바꿉니다.
 
 ```powershell
 $vectorIncludes = 'C:\Users\Public\Documents\Vector\CANalyzer\Sample Configurations 13.0.172\Programming\CAPLdll\Includes'
@@ -146,7 +148,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 
 CANalyzer Program Node에는 `Config/CAPL/M485E/M485E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하고, FrameRule별 Monitoring 목록은 `M485E_ReadOption.cin`에서 관리합니다. Measurement 시작 시 Main이 500ms 연결 제어 Timer로 `ConnectSwitch`를 자동 ON 하며, Panel에서는 같은 Switch로 수동 Disconnect/재연결할 수 있습니다.
 
-기본 Main의 CSV 경로는 `".\\Maps\\M485E\\M485E_Device.csv"`와 `".\\Maps\\M485E\\M485E_FrameRule.csv"`입니다. `getAbsFilePath()`는 CANalyzer Configuration 파일 위치를 기준으로 해석하므로 `.cfg`는 `Config`(회사 배치에서는 `ProjectConfig`) 바로 아래에 저장합니다. `Config/Maps/M485E`에는 Device와 FrameRule뿐 아니라 Device의 `CSV_DB_Name`이 참조하는 모든 Register Map도 함께 있어야 합니다.
+기본 Main의 CSV 경로는 `".\\Maps\\M485E\\M485E_Device.csv"`와 `".\\Maps\\M485E\\M485E_FrameRule.csv"`입니다. `getAbsFilePath()`는 CANalyzer Configuration 파일 위치를 기준으로 해석하므로 `.cfg`는 배포 구성의 `Config` 또는 `ProjectConfig` 루트에 저장합니다. 같은 루트의 `Maps/M485E`에는 Device와 FrameRule뿐 아니라 Device의 `CSV_DB_Name`이 참조하는 모든 Register Map도 함께 있어야 합니다.
 
 CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[4]` 배열로 관리합니다. `gM485E_ActivePortCount`는 DeviceMap의 고유 Port 수와 같은 `1~4`로 설정하고 앞쪽 Slot만 적용합니다. 기본 예제는 활성 Slot 0의 `comPortNumber = 8`을 `COM8`로 전달하며, Slot 1의 COM9는 비활성 예비 설정이고 Slot 2~3은 0입니다. COM 번호 허용 범위는 활성 Slot에서 `1~999`이고 DeviceMap의 Port 값은 Windows 이름 형식인 `COM8`을 사용합니다.
 
@@ -167,5 +169,4 @@ CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[4]` �
 - `Config/CAPL/M485E`: CAPL Core/Monitoring/UI Adapter
 - `Config/System Variables`: Panel 연동용 System Variable 정의
 - `Config/Maps/M485E`: 이동 가능한 기본 예제 CSV 세트
-- `docs/05_Test`: 회사 환경 외부 검증 가이드와 결과 기록서
-- `src/Modbus485EmulatorDll`: 참고용 기존 Prototype(신규 Solution에서 제외)
+- `docs/05_Test`: 대상 실환경 검증 가이드와 결과 기록서
