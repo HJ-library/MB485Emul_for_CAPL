@@ -58,6 +58,56 @@ void M485E_UI_LoadSignalRequest()
           @sysvar::M485E::SignalControl::PhysicalValue;
 }
 
+// Lifecycle 상태를 Panel 표시 전용 LED와 문자열로 변환한다.
+// ConnectSwitch는 사용자 의도이므로 실제 연결 완료 여부에는 사용하지 않는다.
+void M485E_UI_UpdateConnectionIndicators(long currentState)
+{
+     @sysvar::M485E::Connection::ConnectedLed =
+          currentState == M485E_STATE_CONNECTED;
+     @sysvar::M485E::Connection::BusyLed =
+          currentState == M485E_STATE_REFRESHING ||
+          currentState == M485E_STATE_CONNECTING ||
+          currentState == M485E_STATE_DISCONNECTING;
+     @sysvar::M485E::Connection::ErrorLed =
+          currentState == M485E_STATE_ERROR;
+
+     switch (currentState)
+     {
+          case M485E_STATE_UNINITIALIZED:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Uninitialized");
+               break;
+          case M485E_STATE_DISCONNECTED:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Disconnected");
+               break;
+          case M485E_STATE_REFRESHING:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Refreshing");
+               break;
+          case M485E_STATE_CONNECTING:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Connecting");
+               break;
+          case M485E_STATE_CONNECTED:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Connected");
+               break;
+          case M485E_STATE_DISCONNECTING:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Disconnecting");
+               break;
+          case M485E_STATE_ERROR:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Error");
+               break;
+          default:
+               sysSetVariableString(sysvar::M485E::Connection::StateText,
+                    "Unknown");
+               break;
+     }
+}
+
 // Register Read를 실행하고 성공한 word 결과를 Panel용 32-bit int array에 복사한다.
 // 성공 요청은 Auto Read용 마지막 요청으로 보관하며 결과 코드는 항상 시스템변수에 기록한다.
 // request.quantity는 최대 125이며, 실제 범위 검증은 DLL이 단일 책임으로 수행한다.
@@ -258,6 +308,7 @@ on timer tM485E_LifecycleStatus
                gM485E_UILifecycleStatus[M485E_LS_LAST_RESULT];
           @sysvar::M485E::Connection::ConfigurationValid =
                gM485E_UILifecycleStatus[M485E_LS_CONFIGURATION_VALID];
+          M485E_UI_UpdateConnectionIndicators(currentState);
           // 자동 재연결 횟수를 모두 소진하면 Switch를 내려 사용자가 다시 연결하도록 한다.
           // 정상적인 수동 Disconnect에는 적용하지 않아 Panel 의도를 보존한다.
           if (currentState == M485E_STATE_DISCONNECTED &&

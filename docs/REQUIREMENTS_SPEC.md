@@ -297,6 +297,7 @@
 | FR-UI-014 | CAPL Monitoring은 최대 200개의 정적 `ReadOption` 항목에 `SysvarIndex`, `Index`, `RuleId`를 명시한다. `SysvarIndex`는 `0..ReadOptionCount-1`의 연속된 고유값이고 `Index + RuleId` 조합도 중복될 수 없으며, `Check_ReadOption[]`의 논리 길이는 `ReadOptionCount`와 일치해야 한다. |
 | FR-UI-015 | 프로젝트의 모든 `M485E_FrameRule.csv` Rule은 CAPL `ReadOption`에 정확히 한 번 매핑하고 전체 Rule 수는 200개를 넘지 않는다. CAPL Table과 CSV의 일치 여부는 프로젝트 Configuration 검증 대상으로 관리하며 1차 구현에 Rule Catalog 조회용 신규 공개 DLL API를 추가하지 않는다. |
 | FR-UI-016 | CAPL은 Checkbox에서 읽은 Candidate ReadOption 집합과 실제 Monitoring에 사용하는 Applied ReadOption 집합을 분리한다. Candidate 전체가 검증된 경우에만 Applied 집합을 원자 교체하고 거부 시 Checkbox를 직전 Applied 값으로 복원한다. |
+| FR-UI-017 | CAPL UI는 100ms Lifecycle Polling 결과로 실제 연결, 진행 중, 오류 상태를 각각 `Connection::ConnectedLed`, `BusyLed`, `ErrorLed`에 배타적으로 게시하고, 같은 상태를 `Connection::StateText`의 읽을 수 있는 문자열로 게시한다. `ConnectSwitch`는 사용자 의도이므로 실제 연결 LED로 사용하지 않는다. |
 
 ### 3.6 CAN Monitoring
 
@@ -1410,6 +1411,7 @@
 | AC-245 | FR-LIFE-035~036 | 최초 Connect 실패 시 자동 재연결 없이 Switch가 OFF가 되고, 사용자가 ON으로 재요청할 수 있다. 초기 Connecting 중 OFF이면 연결 시도 완료 뒤 COM이 닫히고 Runtime 자동 재연결 중 OFF이면 재연결이 취소된다. |
 | AC-246 | FR-LIFE-037 | Connected, Connecting, Refreshing 상태 각각에서 Measurement를 종료해도 CAPL Timer가 재시작되지 않고 모든 Worker가 Join되며 COM Handle이 해제된다. |
 | AC-247 | FR-LIFE-038 | 자동 재연결 10회 실패 후 상태와 ConnectSwitch가 모두 OFF/Disconnected로 일치하고 마지막 실패 ResultCode가 유지된다. |
+| AC-248 | FR-UI-017 | Lifecycle 상태 0~6 각각에서 Connected LED는 Connected에서만, Busy LED는 Refreshing/Connecting/Disconnecting에서만, Error LED는 Error에서만 1이고 StateText는 해당 상태 문자열이며, 이 값들이 100ms Lifecycle Polling에서 함께 갱신된다. |
 | AC-240 | PERF-021 | 정상 지원 부하에서 `0x81`은 변경 완료 후 100ms 이내, 활성 `0x80`은 해당 1,000ms Generation 안에 전체 Snapshot 묶음 출력이 시작된다. |
 | AC-241 | PERF-022, DES-THREAD-005 | Disconnected, Connected 및 진행 중 Lifecycle 작업의 취소 가능한 I/O 상태에서 Finalize가 2,000ms 이내 완료된다. 지연 강제 시험에서도 Thread Detach·강제 종료와 Join 전 Context 해제가 발생하지 않고 목표 초과를 진단한다. |
 | AC-242 | DES-BUILD-005 | 깨끗한 개발 PC에서 지정한 Vector 설치 경로 Build Property와 Visual Studio/MSBuild Win32 Configuration으로 빌드할 수 있고 저장소에 재배포가 확인되지 않은 Vector SDK 파일이 포함되지 않는다. |

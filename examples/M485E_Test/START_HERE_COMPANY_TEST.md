@@ -195,6 +195,10 @@ Momentary 방식으로 설정한다. CAPL이 처리 후 0으로 되돌린다.
 | CSV Valid LED | `M485E::Connection::ConfigurationValid` | 1일 때 Green |
 | Last Result | `M485E::Connection::LastResult` | 읽기 전용 숫자 |
 | Command Result | `M485E::Connection::ResultCode` | 읽기 전용 숫자 |
+| Connected LED | `M485E::Connection::ConnectedLed` | 실제 연결 완료 시 Green |
+| Busy LED | `M485E::Connection::BusyLed` | Refresh/Connect/Disconnect 진행 시 Yellow |
+| Error LED | `M485E::Connection::ErrorLed` | Lifecycle Error 시 Red |
+| State Text | `M485E::Connection::StateText` | 읽기 전용 상태 문자열 |
 
 Refresh에 성공하면 현재 Register 값은 모두 폐기되고 CSV의 `Init_Value`로 다시 만들어진다.
 Refresh는 반드시 Disconnected 상태에서만 누른다.

@@ -161,6 +161,10 @@ Panel Control 속성에서 사용자 편집을 막고 표시 전용으로 사용
 | CSV Valid | `M485E::Connection::ConfigurationValid` | LED | 1=검증 성공 |
 | Last Result | `M485E::Connection::LastResult` | Numeric Display | 마지막 비동기 작업 결과 |
 | Command Result | `M485E::Connection::ResultCode` | Numeric Display | 마지막 명령 접수 결과 |
+| Connected | `M485E::Connection::ConnectedLed` | Green LED | 실제 State=4일 때만 1 |
+| Busy | `M485E::Connection::BusyLed` | Yellow LED | State=2, 3, 5일 때 1 |
+| Error | `M485E::Connection::ErrorLed` | Red LED | State=6일 때만 1 |
+| State Text | `M485E::Connection::StateText` | Text Display | CAPL이 상태 문자열 갱신 |
 
 State 표시값은 다음과 같다.
 
@@ -173,6 +177,10 @@ State 표시값은 다음과 같다.
 | 4 | Connected |
 | 5 | Disconnecting |
 | 6 | Error |
+
+`ConnectSwitch`는 사용자의 연결 의도이며 실제 연결 완료 상태가 아니다. 따라서 연결 LED는
+`ConnectedLed`에 연결하고, 진행 상태와 오류는 각각 `BusyLed`, `ErrorLed`에 연결한다.
+네 표시 변수는 100ms Lifecycle Polling에서 갱신되며 Panel Control은 읽기 전용으로 설정한다.
 
 ### 4.3 Manual Read 영역
 

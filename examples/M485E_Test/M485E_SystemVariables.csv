@@ -5,6 +5,10 @@ Existing,M485E::Connection,State,M485E::Connection::State,int32,,No,0,Indicator,
 Existing,M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,No,0,Numeric display,,,Last completed lifecycle result; CAPL output displayed read-only on Panel
 Existing,M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,No,0,LED,,,CSV validation state; CAPL output displayed read-only on Panel
 Existing,M485E::Connection,ResultCode,M485E::Connection::ResultCode,int32,,No,0,Numeric display,,,Last lifecycle command result
+Existing,M485E::Connection,ConnectedLed,M485E::Connection::ConnectedLed,int32,,No,0,Green LED,,,Actual connected state; 1 only when State is Connected
+Existing,M485E::Connection,BusyLed,M485E::Connection::BusyLed,int32,,No,0,Yellow LED,,,Lifecycle busy state; 1 while Refreshing Connecting or Disconnecting
+Existing,M485E::Connection,ErrorLed,M485E::Connection::ErrorLed,int32,,No,0,Red LED,,,Lifecycle error state; 1 only when State is Error
+Existing,M485E::Connection,StateText,M485E::Connection::StateText,string,,No,Uninitialized,Text display,,,Readable lifecycle state; CAPL output displayed read-only on Panel
 Existing,M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,No,0,Toggle,,,Master monitoring switch
 Existing,M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,No,0,Rule checkboxes,,,Periodic Rule selection array
 Existing,M485E::Monitoring,ResultCode,M485E::Monitoring::ResultCode,int32,,No,0,Numeric display,,,Last monitoring result

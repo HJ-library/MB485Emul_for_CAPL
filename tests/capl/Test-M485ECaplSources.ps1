@@ -216,6 +216,48 @@ foreach ($statusName in @('State', 'LastResult', 'ConfigurationValid')) {
         throw "Connection::$statusName must be writable by the CAPL lifecycle adapter."
     }
 }
+$connectionIndicatorNames = @('ConnectedLed', 'BusyLed', 'ErrorLed')
+foreach ($indicatorName in $connectionIndicatorNames) {
+    $indicatorVariable = $connectionNamespace.SelectSingleNode("variable[@name='$indicatorName']")
+    if ($null -eq $indicatorVariable -or
+        $indicatorVariable.type -ne 'int' -or
+        $indicatorVariable.readOnly -ne 'false') {
+        throw "Connection::$indicatorName must be a CAPL-writable int system variable."
+    }
+}
+$stateTextVariable = $connectionNamespace.SelectSingleNode("variable[@name='StateText']")
+if ($null -eq $stateTextVariable -or
+    $stateTextVariable.type -ne 'string' -or
+    $stateTextVariable.readOnly -ne 'false') {
+    throw 'Connection::StateText must be a CAPL-writable string system variable.'
+}
+Require-Match $ui 'void\s+M485E_UI_UpdateConnectionIndicators\s*\(\s*long\s+currentState\s*\)' `
+    'Connection indicator derivation helper is missing.'
+Require-Match $ui 'Connection::ConnectedLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_CONNECTED' `
+    'Connected LED must reflect only the Connected lifecycle state.'
+Require-Match $ui 'Connection::BusyLed\s*=\s*[\s\S]*?M485E_STATE_REFRESHING[\s\S]*?M485E_STATE_CONNECTING[\s\S]*?M485E_STATE_DISCONNECTING' `
+    'Busy LED must cover Refreshing, Connecting, and Disconnecting states.'
+Require-Match $ui 'Connection::ErrorLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_ERROR' `
+    'Error LED must reflect only the Error lifecycle state.'
+Require-Match $ui 'M485E_UI_UpdateConnectionIndicators\s*\(\s*currentState\s*\)' `
+    'The 100 ms lifecycle poll must update the Panel connection indicators.'
+$stateTextMappings = @(
+    @('M485E_STATE_UNINITIALIZED', 'Uninitialized'),
+    @('M485E_STATE_DISCONNECTED', 'Disconnected'),
+    @('M485E_STATE_REFRESHING', 'Refreshing'),
+    @('M485E_STATE_CONNECTING', 'Connecting'),
+    @('M485E_STATE_CONNECTED', 'Connected'),
+    @('M485E_STATE_DISCONNECTING', 'Disconnecting'),
+    @('M485E_STATE_ERROR', 'Error')
+)
+foreach ($stateTextMapping in $stateTextMappings) {
+    $stateConstant = [regex]::Escape($stateTextMapping[0])
+    $stateText = [regex]::Escape($stateTextMapping[1])
+    Require-Match $ui ("case\s+$stateConstant\s*:\s*" +
+        'sysSetVariableString\s*\(\s*sysvar::M485E::Connection::StateText\s*,\s*' +
+        "`"$stateText`"\s*\)\s*;\s*break\s*;") `
+        "Connection StateText mapping is missing for $($stateTextMapping[0])."
+}
 $arrayVariables = @(
     $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="Monitoring"]/variable[@name="Check_ReadOption"]'),
     $systemVariables.SelectSingleNode('//namespace[@name="M485E"]/namespace[@name="ManualRead"]/variable[@name="Data"]'),
