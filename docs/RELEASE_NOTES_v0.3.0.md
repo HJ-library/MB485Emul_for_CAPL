@@ -1,6 +1,6 @@
 # Modbus485Emulator v0.3.0 릴리스 노트
 
-> 릴리스 기준일: 2026-08-12
+> 릴리스 기준일: 2026-08-13
 > 대상: CANalyzer 9.x SP8 Windows x86, CANalyzer 18 Windows x64
 
 ## 주요 변경 사항
@@ -36,18 +36,21 @@ Timestamp,Sequence,Record_Type,Port,Slave_ID,Index,Device_Name,Function_Code,Add
 - DLL은 파일 I/O를 수행하지 않는다. Serial Worker는 최대 256개 완결 Transaction Queue에 게시하고 CAPL이 10ms마다 CSV로 배출한다.
 - Queue가 가득 차면 가장 오래된 미출력 Transaction을 버리고 `DroppedCount`를 증가시키되, 이미 출력한 REQ의 결과 행은 보존한다.
 - `RtuLog::ActiveLed`는 파일이 열려 있거나 OFF 후 잔여 Queue를 배출하는 동안만 1이다.
+- 로그 파일을 먼저 연 뒤 DLL Capture를 시작하므로 Open 실패 시 미배출 Queue가 남지 않는다.
+- Measurement 종료 시 신규 Capture를 중지하고 처리 중 Transaction을 최대 2,000ms 기다린 뒤 완료 행을 배출한다. 시간 초과는 `-6012`로 기록하고 완료된 행까지 보존한 후 종료한다.
 
 ## 공개 인터페이스
 
-CAPL-visible API는 21개에서 26개로 확장했다. 기존 21개 API의 이름, 파라미터와 `caplDllTable4` 순서는 유지하고 아래 API를 22~26번에 추가했다.
+CAPL-visible API는 21개에서 27개로 확장했다. 기존 21개 API의 이름, 파라미터와 `caplDllTable4` 순서는 유지하고 아래 API를 22~27번에 추가했다.
 
 1. `M485E_Dll_SetDeviceCommunicationEnabled`
 2. `M485E_Dll_GetDeviceCommunicationStates`
 3. `M485E_Dll_SetRtuLogEnabled`
 4. `M485E_Dll_TryDequeueRtuLogLine`
 5. `M485E_Dll_GetRtuLogStats`
+6. `M485E_Dll_WaitRtuLogIdle`
 
-공개 계약은 ErrorCodes 92개, PublicConstants 207개다. 최초 90개 오류와 기존 공개 상수의 값은 변경하지 않고 신규 계약을 뒤에 추가했다.
+공개 계약은 ErrorCodes 93개, PublicConstants 210개다. 최초 90개 오류와 기존 공개 상수의 값은 변경하지 않고 신규 계약을 뒤에 추가했다.
 
 ## 배포 파일
 
@@ -57,8 +60,8 @@ CAPL-visible API는 21개에서 26개로 확장했다. 기존 21개 API의 이�
 
 | 파일 | SHA-256 |
 |---|---|
-| Windows-x86 `M485E.dll` | `868E1CC64D7EDF035886781E3158A7DFD02D6EF1881607BF35D3274746ED76D3` |
-| Windows-x64 `M485E.dll` | `C7222AD1A89FD2B7BB96F24F3F3D2A7EEBF373F7F0DE3E768C03F99C7A4E393B` |
+| Windows-x86 `M485E.dll` | `0129EBC2FEB28D0B95F991CFD87C0AF211F4914F14D7434CC09725851048C47D` |
+| Windows-x64 `M485E.dll` | `CFD17CDB4D6F4DEBBD9C6D7575E756EF80097F1B111A62C74B00187B181A3029` |
 
 CANalyzer 9.x는 x86 DLL을 직접 로드한다. CANalyzer 13 이상과 CANalyzer 18은 `M485E.vmodule`을 사용해 실행 환경에 맞는 DLL을 선택한다.
 
@@ -78,8 +81,8 @@ CANalyzer 9.x는 x86 DLL을 직접 로드한다. CANalyzer 13 이상과 CANalyze
 - Windows x64 Debug: CTest 7/7 PASS
 - Windows x64 Release: CTest 7/7 PASS
 - 합계: 28/28 PASS
-- ABI Probe: x86/x64 26개 API, 기존 21개 순서, Context 0, caller-owned Buffer 보호 PASS
-- Contract: ErrorCodes 92개, PublicConstants 207개 생성·stale 검사 PASS
+- ABI Probe: x86/x64 27개 API, 기존 21개 순서, Context 0, caller-owned Buffer 보호 PASS
+- Contract: ErrorCodes 93개, PublicConstants 210개 생성·stale 검사 PASS
 - CANalyzer 13 Exec32 CAPL Compiler: Phase 1, Phase 2, Phase 9 Probe 3종 PASS
 - CAPL: CP949, CRLF, Tab 없음 및 소스 책임 경계 검사 PASS
 - 정식 DOCX 4개와 XLSX 3개의 ZIP/XML 무결성, 외부 링크, 수식 오류와 렌더 시각 검사 PASS

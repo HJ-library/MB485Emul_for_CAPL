@@ -211,9 +211,12 @@ inline constexpr std::int32_t M485E_OPERATION_GET_DEVICE_COMMUNICATION_STATES = 
 inline constexpr std::int32_t M485E_OPERATION_SET_RTU_LOG_ENABLED = 24;
 inline constexpr std::int32_t M485E_OPERATION_TRY_DEQUEUE_RTU_LOG_LINE = 25;
 inline constexpr std::int32_t M485E_OPERATION_GET_RTU_LOG_STATS = 26;
+inline constexpr std::int32_t M485E_OPERATION_WAIT_RTU_LOG_IDLE = 27;
 inline constexpr std::int32_t M485E_RTU_LOG_TRANSACTION_CAPACITY = 256;
 inline constexpr std::int32_t M485E_MAX_RTU_LOG_LINE_LENGTH = 1535;
-inline constexpr std::int32_t M485E_ERROR_CODE_COUNT = 92;
+inline constexpr std::int32_t M485E_RTU_LOG_IDLE_TIMEOUT_MS = 2000;
+inline constexpr std::int32_t M485E_MAX_RTU_LOG_IDLE_TIMEOUT_MS = 60000;
+inline constexpr std::int32_t M485E_ERROR_CODE_COUNT = 93;
 
 inline constexpr std::int32_t M485E_ERR_INVALID_ARGUMENT = -100;
 inline constexpr std::int32_t M485E_ERR_INVALID_ENUM = -101;
@@ -307,6 +310,7 @@ inline constexpr std::int32_t M485E_ERR_INTERNAL_QUEUE = -7004;
 inline constexpr std::int32_t M485E_ERR_INTERNAL_WORKER = -7005;
 inline constexpr std::int32_t M485E_ERR_RTU_LOG_FILE_OPEN = -6010;
 inline constexpr std::int32_t M485E_ERR_RTU_LOG_FILE_WRITE = -6011;
+inline constexpr std::int32_t M485E_ERR_RTU_LOG_IDLE_TIMEOUT = -6012;
 
 struct ErrorDefinition
 {
@@ -409,5 +413,6 @@ inline constexpr std::array<ErrorDefinition, M485E_ERROR_CODE_COUNT> kErrorDefin
     {M485E_ERR_INTERNAL_WORKER, M485E_SEVERITY_CRITICAL, "M485E_ERR_INTERNAL_WORKER", "ERR_INTERNAL_WORKER"},
     {M485E_ERR_RTU_LOG_FILE_OPEN, M485E_SEVERITY_ERROR, "M485E_ERR_RTU_LOG_FILE_OPEN", "ERR_RTU_LOG_FILE_OPEN"},
     {M485E_ERR_RTU_LOG_FILE_WRITE, M485E_SEVERITY_ERROR, "M485E_ERR_RTU_LOG_FILE_WRITE", "ERR_RTU_LOG_FILE_WRITE"},
+    {M485E_ERR_RTU_LOG_IDLE_TIMEOUT, M485E_SEVERITY_ERROR, "M485E_ERR_RTU_LOG_IDLE_TIMEOUT", "ERR_RTU_LOG_IDLE_TIMEOUT"},
 }};
 }  // namespace m485e

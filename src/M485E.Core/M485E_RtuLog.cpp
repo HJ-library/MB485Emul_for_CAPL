@@ -129,21 +129,24 @@ std::uint32_t RtuLogQueue::SaturatingIncrement(const std::uint32_t value) noexce
 
 std::int32_t RtuLogQueue::SetEnabled(const bool enabled) noexcept
 {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (enabled)
   {
-    if (stats_.captureEnabled) return M485E_OK;
-    if (stats_.inFlight != 0U || size_ != 0U || hasPendingOutcome_)
-      return M485E_ERR_OPERATION_BUSY;
-    head_ = 0;
-    size_ = 0;
-    hasPendingOutcome_ = false;
-    nextSequence_ = 1;
-    stats_ = {};
-    stats_.captureEnabled = true;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (enabled)
+    {
+      if (stats_.captureEnabled) return M485E_OK;
+      if (stats_.inFlight != 0U || size_ != 0U || hasPendingOutcome_)
+        return M485E_ERR_OPERATION_BUSY;
+      head_ = 0;
+      size_ = 0;
+      hasPendingOutcome_ = false;
+      nextSequence_ = 1;
+      stats_ = {};
+      stats_.captureEnabled = true;
+    }
+    else
+      stats_.captureEnabled = false;
   }
-  else
-    stats_.captureEnabled = false;
+  idleCondition_.notify_all();
   return M485E_OK;
 }
 
@@ -201,9 +204,12 @@ RtuLogToken RtuLogQueue::Begin(const std::uint8_t portSlot,
 
 void RtuLogQueue::CancelToken() noexcept
 {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (stats_.inFlight != 0U) --stats_.inFlight;
-  stats_.droppedCount = SaturatingIncrement(stats_.droppedCount);
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stats_.inFlight != 0U) --stats_.inFlight;
+    stats_.droppedCount = SaturatingIncrement(stats_.droppedCount);
+  }
+  idleCondition_.notify_all();
 }
 
 void RtuLogQueue::Complete(RtuLogToken token,
@@ -232,17 +238,28 @@ void RtuLogQueue::Complete(RtuLogToken token,
     return;
   }
 
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (stats_.inFlight != 0U) --stats_.inFlight;
-  if (size_ == items_.size())
   {
-    head_ = (head_ + 1U) % items_.size();
-    --size_;
-    stats_.droppedCount = SaturatingIncrement(stats_.droppedCount);
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (stats_.inFlight != 0U) --stats_.inFlight;
+    if (size_ == items_.size())
+    {
+      head_ = (head_ + 1U) % items_.size();
+      --size_;
+      stats_.droppedCount = SaturatingIncrement(stats_.droppedCount);
+    }
+    items_[(head_ + size_) % items_.size()] = transaction;
+    ++size_;
+    stats_.completedCount = SaturatingIncrement(stats_.completedCount);
   }
-  items_[(head_ + size_) % items_.size()] = transaction;
-  ++size_;
-  stats_.completedCount = SaturatingIncrement(stats_.completedCount);
+  idleCondition_.notify_all();
+}
+
+bool RtuLogQueue::WaitUntilIdle(const std::chrono::milliseconds timeout) noexcept
+{
+  std::unique_lock<std::mutex> lock(mutex_);
+  if (stats_.captureEnabled) return false;
+  return idleCondition_.wait_for(lock, timeout,
+                                 [this] { return stats_.inFlight == 0U; });
 }
 
 std::int32_t RtuLogQueue::TryDequeue(const std::uint32_t capacity,

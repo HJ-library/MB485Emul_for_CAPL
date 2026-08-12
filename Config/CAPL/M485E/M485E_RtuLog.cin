@@ -134,12 +134,18 @@ long M485E_RtuLog_Enable()
 {
      long result;
      if (gM485E_RtuLogFileHandle != 0) return M485E_OK;
-     result = M485E_Core_SetRtuLogEnabled(1);
+     result = M485E_Core_GetRtuLogStats(gM485E_RtuLogStats);
      if (result != M485E_OK) return result;
+     if (gM485E_RtuLogStats[M485E_RLS_CAPTURE_ENABLED] != 0 ||
+          gM485E_RtuLogStats[M485E_RLS_PENDING_LINES] != 0 ||
+          gM485E_RtuLogStats[M485E_RLS_IN_FLIGHT] != 0)
+          return M485E_ERR_OPERATION_BUSY;
      result = M485E_RtuLog_OpenFile();
+     if (result != M485E_OK) return result;
+     result = M485E_Core_SetRtuLogEnabled(1);
      if (result != M485E_OK)
      {
-          M485E_Core_SetRtuLogEnabled(0);
+          M485E_RtuLog_CloseFile();
           return result;
      }
      gM485E_RtuLogDraining = 0;
@@ -189,9 +195,17 @@ void M485E_RtuLog_Start()
 void M485E_RtuLog_Shutdown()
 {
      long attempt;
+     long result;
      cancelTimer(tM485E_RtuLogDrain);
      if (gM485E_RtuLogFileHandle == 0) return;
-     M485E_Core_SetRtuLogEnabled(0);
+     result = M485E_Core_SetRtuLogEnabled(0);
+     if (result == M485E_OK)
+          result = M485E_Core_WaitRtuLogIdle(M485E_RTU_LOG_IDLE_TIMEOUT_MS);
+     if (result != M485E_OK)
+     {
+          @sysvar::M485E::RtuLog::ResultCode = result;
+          M485E_Core_ReportSyncFailure("RtuLogShutdown", result);
+     }
      gM485E_RtuLogDraining = 1;
      for (attempt = 0; attempt < 64 && gM485E_RtuLogFileHandle != 0; attempt++)
           if (M485E_RtuLog_DrainOnce() < M485E_OK) break;

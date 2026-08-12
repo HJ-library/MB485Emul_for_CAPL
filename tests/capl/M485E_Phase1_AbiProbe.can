@@ -172,6 +172,12 @@ void M485E_Test()
   result = M485E_Dll_GetRtuLogStats(gM485EContext, 9, gM485ERtuLogStats);
   if (result != 0 || gM485ERtuLogStats[0] != 1 || gM485ERtuLogStats[1] != 9)
     failureCount++;
+  result = M485E_Dll_WaitRtuLogIdle(gM485EContext, -1);
+  if (result != -100) failureCount++;
+  result = M485E_Dll_WaitRtuLogIdle(gM485EContext, 60001);
+  if (result != -100) failureCount++;
+  result = M485E_Dll_WaitRtuLogIdle(gM485EContext, 0);
+  if (result != -2002) failureCount++;
 
   gM485EFixtureWordsIn[0] = 0x1234;
   gM485EFixtureWordsIn[1] = 0xABCD;

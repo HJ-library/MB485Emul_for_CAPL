@@ -13,7 +13,7 @@ await fs.mkdir(outputDir, { recursive: true });
 await fs.mkdir(previewDir, { recursive: true });
 
 const tests = [
-  ["EV-001", "1/2", "IF-API-001~026, COMP-001, COMP-002, COMP-015", "CANalyzer 9.x SP8 x86 / CANalyzer 18 x64", "CAPL Compile 및 직접 DLL/.vmodule 로드", "두 환경에서 26개 API가 중복·누락 없이 Compile되고 Measurement가 시작됨"],
+  ["EV-001", "1/2", "IF-API-001~027, COMP-001, COMP-002, COMP-015", "CANalyzer 9.x SP8 x86 / CANalyzer 18 x64", "CAPL Compile 및 직접 DLL/.vmodule 로드", "두 환경에서 27개 API가 중복·누락 없이 Compile되고 Measurement가 시작됨"],
   ["EV-002", "3/8", "FR-CSV-001~018, FR-LIFE-010~015", "CANalyzer 9.x SP8 x86", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling", "Disconnected, ConfigurationValid=1, LastResult=0"],
   ["EV-003", "7/8/9", "FR-PORT-007~020, TBD-038", "CANalyzer + Multi USB 485", "1~4개 활성 COM Port 전체 Connect와 CAPL/CSV 활성 Port 수 확인", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback; ActivePortCount와 Device CSV 고유 Port 수 일치"],
   ["EV-004", "5/7", "FR-RTU-002, FR-RTU-017, FR-RTU-028", "Board + Serial trace", "Port별 Slave FC03 Quantity 1/125", "직접 Address Holding 값과 올바른 CRC 응답"],
@@ -30,7 +30,7 @@ const tests = [
   ["EV-015", "8", "FR-LIFE-017~022, PERF-022", "CANalyzer + Process monitor", "Disconnect/Connect와 Finalize", "Disconnect 값 보존; Finalize Join/Close 후 Context 폐기"],
   ["EV-016", "6/9/10", "PERF-004~021, LOG-011~017, REQ-DIAG-002, TBD-027, TBD-030, TBD-039", "200 Rule stress profile", "200 Rule, Quantity 125, 0x81 Burst 및 Error Queue overflow", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표를 유지하고 DropCount 또는 OverflowLatch 변화 시 CAPL이 Pending/Capacity/High-water를 한 번 진단"],
   ["EV-017", "5/7/10", "FR-RTU-036~039, FR-UI-019~020", "CANalyzer Panel + Board + Serial trace", "Index별 RTU 통신 OFF/ON", "비활성 Index는 FC03/04/10 무응답·무변경; 동일 Port의 다른 Slave와 Direct/CAN은 유지; Refresh 성공 후 활성화"],
-  ["EV-018", "7/10", "FR-UI-021, LOG-018~024, IF-API-024~026", "CANalyzer Panel + CSV", "RTU Log OFF→ON, 정상·무응답·용량 경계", "새 파일 생성; REQ/RES 또는 REQ/NO_RES 동일 Sequence; 12 Column·전체 ADU·DroppedCount·ActiveLed 확인"],
+  ["EV-018", "7/10", "FR-UI-021, LOG-018~024, IF-API-024~027", "CANalyzer Panel + CSV", "RTU Log OFF→ON, 정상·무응답·용량·종료 경계", "파일 Open 후 Capture; REQ/RES 또는 REQ/NO_RES 동일 Sequence; 12 Column·전체 ADU·DroppedCount·2초 idle wait·ActiveLed 확인"],
 ];
 
 const workbook = Workbook.create();
@@ -90,10 +90,10 @@ environment.getRange("A1").values = [["Test Environment"]];
 environment.getRange("A3:D3").values = [["Category", "Item", "Value", "Evidence / Notes"]];
 const environmentRows = [
   ["Baseline", "Release Version", "0.3.0", "Release Baseline"],
-  ["Baseline", "Baseline Date", "2026-08-12", "docs/REQUIREMENTS_SPEC.md"],
+  ["Baseline", "Baseline Date", "2026-08-13", "docs/REQUIREMENTS_SPEC.md"],
   ["Baseline", "Git Commit", "", ""],
   ["Baseline", "M485E.dll SHA-256", "", ""],
-  ["Baseline", "Generated Contracts", "ErrorCodes=92; PublicConstants=207", "tests/contracts/Test-M485EContractGeneration.ps1"],
+  ["Baseline", "Generated Contracts", "ErrorCodes=93; PublicConstants=210", "tests/contracts/Test-M485EContractGeneration.ps1"],
   ["CANalyzer", "Version / Service Pack", "CANalyzer 9.x SP8 x86 / CANalyzer 18 x64", ""],
   ["Vector", "Driver / License", "", ""],
   ["Adapter", "Model", "SystemBase Multi USB 485", "Automatic direction control"],
@@ -160,10 +160,10 @@ if (resultRows.length !== 18 || resultRows.some((row) => row[7] !== "Not Tested"
 if (tests.find((row) => row[0] === "EV-002")?.[4] !== "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling") {
   throw new Error("EV-002 current configuration contract mismatch");
 }
-if (environmentRows[0][2] !== "0.3.0" || environmentRows[1][2] !== "2026-08-12") {
+if (environmentRows[0][2] !== "0.3.0" || environmentRows[1][2] !== "2026-08-13") {
   throw new Error("External verification release baseline mismatch");
 }
-if (!environmentRows.some((row) => row[1] === "Generated Contracts" && row[2] === "ErrorCodes=92; PublicConstants=207")) {
+if (!environmentRows.some((row) => row[1] === "Generated Contracts" && row[2] === "ErrorCodes=93; PublicConstants=210")) {
   throw new Error("Generated contract baseline mismatch");
 }
 

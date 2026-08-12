@@ -204,5 +204,8 @@
 "Operation","M485E_OPERATION_SET_RTU_LOG_ENABLED","24","M485E_Dll_SetRtuLogEnabled"
 "Operation","M485E_OPERATION_TRY_DEQUEUE_RTU_LOG_LINE","25","M485E_Dll_TryDequeueRtuLogLine"
 "Operation","M485E_OPERATION_GET_RTU_LOG_STATS","26","M485E_Dll_GetRtuLogStats"
+"Operation","M485E_OPERATION_WAIT_RTU_LOG_IDLE","27","M485E_Dll_WaitRtuLogIdle"
 "Limit","M485E_RTU_LOG_TRANSACTION_CAPACITY","256","Context별 RTU Log Transaction 용량"
 "Limit","M485E_MAX_RTU_LOG_LINE_LENGTH","1535","NUL 제외 RTU Log CSV Line 최대 Byte"
+"Limit","M485E_RTU_LOG_IDLE_TIMEOUT_MS","2000","Measurement 종료 시 RTU Log in-flight 완료 대기 기본 Timeout"
+"Limit","M485E_MAX_RTU_LOG_IDLE_TIMEOUT_MS","60000","RTU Log in-flight 완료 대기 API 최대 Timeout"

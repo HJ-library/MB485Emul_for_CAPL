@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <memory>
@@ -46,6 +47,7 @@
 #define M485E_Dll_SetRtuLogEnabled M485E_Dll_SetRtuLogEnabled_Impl
 #define M485E_Dll_TryDequeueRtuLogLine M485E_Dll_TryDequeueRtuLogLine_Impl
 #define M485E_Dll_GetRtuLogStats M485E_Dll_GetRtuLogStats_Impl
+#define M485E_Dll_WaitRtuLogIdle M485E_Dll_WaitRtuLogIdle_Impl
 
 namespace
 {
@@ -1113,6 +1115,35 @@ std::int32_t __stdcall M485E_Dll_GetRtuLogStats(
   return RecordSuccess(*gContext);
 }
 
+std::int32_t __stdcall M485E_Dll_WaitRtuLogIdle(
+    const std::uint32_t contextHandle, const std::int32_t timeoutMs)
+{
+  std::lock_guard<std::mutex> lock(gMutex);
+  const std::int32_t status = ValidateContext(contextHandle);
+  if (status != M485E_OK) return status;
+  if (timeoutMs < 0 || timeoutMs > M485E_MAX_RTU_LOG_IDLE_TIMEOUT_MS)
+    return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
+                         "RTU Log idle timeout is out of range.",
+                         M485E_SUBSYSTEM_CORE, M485E_OPERATION_WAIT_RTU_LOG_IDLE,
+                         M485E_STAGE_ARGUMENT_VALIDATION);
+  if (!gContext->rtuLog)
+    return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
+                         "A successful CSV refresh is required before waiting for RTU Log.",
+                         M485E_SUBSYSTEM_CORE, M485E_OPERATION_WAIT_RTU_LOG_IDLE,
+                         M485E_STAGE_STATE_VALIDATION);
+  if (gContext->rtuLog->GetStats().captureEnabled)
+    return RecordFailure(*gContext, M485E_ERR_OPERATION_BUSY,
+                         "RTU Log capture must be disabled before waiting for idle.",
+                         M485E_SUBSYSTEM_CORE, M485E_OPERATION_WAIT_RTU_LOG_IDLE,
+                         M485E_STAGE_STATE_VALIDATION);
+  if (!gContext->rtuLog->WaitUntilIdle(std::chrono::milliseconds(timeoutMs)))
+    return RecordFailure(*gContext, M485E_ERR_RTU_LOG_IDLE_TIMEOUT,
+                         "RTU Log in-flight transaction did not finish before timeout.",
+                         M485E_SUBSYSTEM_CORE, M485E_OPERATION_WAIT_RTU_LOG_IDLE,
+                         M485E_STAGE_STOP);
+  return RecordSuccess(*gContext);
+}
+
 #undef M485E_Dll_InitializeContext
 #undef M485E_Dll_FinalizeContext
 #undef M485E_Dll_SetCsvPath
@@ -1139,6 +1170,7 @@ std::int32_t __stdcall M485E_Dll_GetRtuLogStats(
 #undef M485E_Dll_SetRtuLogEnabled
 #undef M485E_Dll_TryDequeueRtuLogLine
 #undef M485E_Dll_GetRtuLogStats
+#undef M485E_Dll_WaitRtuLogIdle
 
 namespace
 {
@@ -1406,5 +1438,13 @@ std::int32_t __stdcall M485E_Dll_GetRtuLogStats(
 {
   return GuardExport(contextHandle, [&] {
     return M485E_Dll_GetRtuLogStats_Impl(contextHandle, statsCapacity, outStats);
+  });
+}
+
+std::int32_t __stdcall M485E_Dll_WaitRtuLogIdle(
+    const std::uint32_t contextHandle, const std::int32_t timeoutMs)
+{
+  return GuardExport(contextHandle, [&] {
+    return M485E_Dll_WaitRtuLogIdle_Impl(contextHandle, timeoutMs);
   });
 }

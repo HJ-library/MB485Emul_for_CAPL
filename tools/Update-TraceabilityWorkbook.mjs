@@ -175,8 +175,8 @@ updateRequirement("REQ-PERF-001", {
 });
 updateRequirement("REQ-COMP-003", {
   category: "Baseline",
-  summary: "요구사항·설계·구현·시험·사용 안내는 저장소의 정식 산출물만으로 완결되어야 하며, 모든 공개 Export와 CAPL/DLL/Build 문서는 확정된 M485E 26 API 및 현행 소스 구조를 사용해야 한다. 기존 21개 ABI 순서는 유지하고 FC 0x06은 Illegal Function으로 거부한다.",
-  verificationMethod: "공개 Export 21개, M485E Prefix, 현행 소스·문서 구조와 FC 0x06 거부 규칙 검사",
+  summary: "요구사항·설계·구현·시험·사용 안내는 저장소의 정식 산출물만으로 완결되어야 하며, 모든 공개 Export와 CAPL/DLL/Build 문서는 확정된 M485E 27 API 및 현행 소스 구조를 사용해야 한다. 기존 21개 ABI 순서는 유지하고 FC 0x06은 Illegal Function으로 거부한다.",
+  verificationMethod: "전체 공개 Export 27개와 기존 21개 순서, M485E Prefix, 현행 소스·문서 구조 및 FC 0x06 거부 규칙 검사",
   sourceRequirements: "PRJ-005~006; COMP-009~010",
 });
 updateRequirement("REQ-DATA-001", {
@@ -202,7 +202,7 @@ requirements.getRange("A2:G132").values = requirementValues;
 const cover = workbook.worksheets.getItem("Cover");
 cover.getRange("B7").values = [["0.3.0"]];
 cover.getRange("B8").values = [["Release Baseline"]];
-cover.getRange("B9").values = [["2026-08-12"]];
+cover.getRange("B9").values = [["2026-08-13"]];
 cover.getRange("B10:B11").values = [[138], [40]];
 cover.getRange("E5:E8").values = [[19], [138], [138], [138]];
 cover.getRange("F5:F8").clear({contentsOnly:true});
@@ -234,7 +234,7 @@ designComponents.getRange("A19:C20").values = [
 ];
 designComponents.getRange("A19:C20").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
 designComponents.getRange("19:20").format.autofitRows();
-designComponents.getRange("C2").values = [["CAPL_DLL_INFO4, __stdcall, 불투명 Context Handle(0 포함), Length/Capacity 검증, caller-owned 출력 보호, Signal F[1] 저수준 출력, 생산 26개 Export(기존 21개 순서 유지)"]];
+designComponents.getRange("C2").values = [["CAPL_DLL_INFO4, __stdcall, 불투명 Context Handle(0 포함), Length/Capacity 검증, caller-owned 출력 보호, Signal F[1] 저수준 출력, 생산 27개 Export(기존 21개 순서 유지)"]];
 designComponents.getRange("C16:C17").format.wrapText = true;
 designComponents.getRange("16:17").format.autofitRows();
 
@@ -242,14 +242,14 @@ const phase1Verification = workbook.worksheets.getItem("Phase 1 Verification");
 phase1Verification.getRange("D7").values = [["CANalyzer 9.x SP8 x86 / CANalyzer 18 x64"]];
 
 const phase2Verification = workbook.worksheets.getItem("Phase 2 Verification");
-phase2Verification.getRange("F2").values = [["오류 코드 92개, 공개 상수 207개에서 C++/CAPL 생성"]];
+phase2Verification.getRange("F2").values = [["오류 코드 93개, 공개 상수 210개에서 C++/CAPL 생성"]];
 phase2Verification.getRange("D7:F7").values = [["CANalyzer 13 x86", "PASS", "CAPL 컴파일 경고 0개; Measurement는 실환경 검증 대상"]];
 phase2Verification.getRange("D8").values = [["CANalyzer 9.x SP8 x86"]];
 phase2Verification.getRange("E7").format = { fill: "#E2F0D9", font: { bold: true, color: "#006100" } };
 
-phase1Verification.getRange("B2").values = [["Win32 빌드와 생산 CAPL Table 26 API"]];
-phase1Verification.getRange("F2").values = [["x86(14C), 생산 API 정확히 26개, caplDllTable4 확인"]];
-phase1Verification.getRange("F4").values = [["시험 Fixture는 생산 26개 API와 분리"]];
+phase1Verification.getRange("B2").values = [["Win32 빌드와 생산 CAPL Table 27 API"]];
+phase1Verification.getRange("F2").values = [["x86(14C), 생산 API 정확히 27개, caplDllTable4 확인"]];
+phase1Verification.getRange("F4").values = [["시험 Fixture는 생산 27개 API와 분리"]];
 
 const verification = workbook.worksheets.getOrAdd("Phase 3-10 Verification");
 verification.showGridLines = false;
@@ -263,7 +263,7 @@ const verificationRows = [
   ["TC-P8-AUTO-001", "8", "Automated", "Async refresh/connect, 1~4 active-Port rollback, 누락 active PortSlot 거부, inactive stale Slot 무시, zero/nonzero Handle ABI integration", "M485E.IntegrationTests", "PASS", "EV-002, EV-003, EV-014, EV-015"],
   ["TC-P9-STATIC-001", "9", "Static + CAPL Compile", "CAPL Core wrappers, Error Queue Stats 변화기반 출력, 1s/10ms pump, ActivePortCount=Device CSV 고유 Port 수, Port별 Rule Cursor/round-robin, 66/33 budget, Extended CAN", "Test-M485ECaplSources.ps1 + CANalyzer 13 Exec32 caplcompexec", "PASS", "EV-008~EV-011, EV-016"],
   ["TC-P10-STATIC-001", "10", "Static", "UI System Variable adapter, Manual Write Data[122], Signal Control, Register Read UI 부재 계약", "Test-M485ECaplSources.ps1; Main compile in configured CANalyzer project", "Static PASS / External Pending", "EV-011~EV-013, EV-016"],
-  ["TC-REG-AUTO-001", "1~10", "Automated", "Windows x86/x64 Debug/Release, /W4 /WX, ErrorCodes 92/PublicConstants 207, 26 API ABI, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-018"],
+  ["TC-REG-AUTO-001", "1~10", "Automated", "Windows x86/x64 Debug/Release, /W4 /WX, ErrorCodes 93/PublicConstants 210, 27 API ABI, RTU 로그 idle wait, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-018"],
   ["TC-V03-AUTO-001", "5/7/10", "Automated + Static", "Index별 RTU 비활성화, Broadcast 제외, RTU Log REQ/RES/NO_RES pairing, queue overflow, CAPL Device/Log adapters", "M485E.Core.Tests + M485E.IntegrationTests + Test-M485ECaplSources.ps1", "PASS", "EV-017~EV-018"],
   ["EV-001~EV-018", "External", "External", "CANalyzer 9.x/18, SystemBase Multi USB-485, Board, Panel, virtual CAN, RTU CSV", "External Verification Guide", "Not Tested", "대상 실환경에서 결과 기록"],
   ["TC-CAPL13-COMPILE-001", "1/2/9", "Compiler", "Phase 1 ABI, Phase 2 Contracts, Phase 9 Core/Monitoring CAPL probes", "CANalyzer 13 Exec32 caplcompexec.exe", "PASS (warning-free)", "CANalyzer 9.x SP8 Compile/Measurement remains EV-001"],
@@ -290,7 +290,7 @@ verification.getRange("2:13").format.autofitRows();
 
 const inputs = workbook.worksheets.getItem("Verification Inputs");
 inputs.getRange("B3").values = [["실환경 입력 필요"]];
-inputs.getRange("C2").values = [["생산 26 API + 시험 전용 ABI Fixture 자동 Probe 후 CANalyzer 9.x SP8 측정 실행"]];
+inputs.getRange("C2").values = [["생산 27 API + 시험 전용 ABI Fixture 자동 Probe 후 CANalyzer 9.x SP8 측정 실행"]];
 inputs.getRange("A8:C9").values = [
   ["External Verification Guide", "작성 완료", "docs/05_Test/External_Verification_Guide.docx"],
   ["External Test Result", "18건 Not Tested", "docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx"],
@@ -305,9 +305,9 @@ const v030Rows = [
   ["REQ-FUNC-046", "FS-DEVICE-001", "DC-18", "M485E_DeviceCommunication.cin", "TC-V03-AUTO-001; TC-P9-STATIC-001", "EV-017", "Auto PASS / External Pending"],
   ["REQ-FUNC-047", "FS-CONNECTION-LED-001", "DC-15", "M485E_Control.cin; M485E.vsysvar", "TC-P9-STATIC-001", "EV-017", "Static PASS / External Pending"],
   ["REQ-FUNC-048", "FS-RTULOG-001", "DC-19", "RtuLogQueue; PortWorker; M485E_RtuLog.cin", "TC-V03-AUTO-001", "EV-018", "Auto PASS / External Pending"],
-  ["REQ-FUNC-049", "FS-RTULOG-001", "DC-19", "M485E_RtuLog.cin CAPL CSV writer", "TC-P9-STATIC-001", "EV-018", "Static PASS / External Pending"],
-  ["REQ-IF-015", "FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-18; DC-19", "caplDllTable4 entries 22~26", "M485E.AbiProbe; TC-REG-AUTO-001", "EV-001", "Auto PASS / External Pending"],
-  ["REQ-IF-016", "FS-RTULOG-001", "DC-19", "Context RtuLogQueue; caller-owned line buffer", "TC-V03-AUTO-001", "EV-018", "Auto PASS / External Pending"],
+  ["REQ-FUNC-049", "FS-RTULOG-001", "DC-19", "M485E_RtuLog.cin CAPL CSV writer; M485E_Dll_WaitRtuLogIdle", "TC-V03-AUTO-001; TC-P9-STATIC-001", "EV-018", "Auto/Static PASS / External Pending"],
+  ["REQ-IF-015", "FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-18; DC-19", "caplDllTable4 entries 22~27", "M485E.AbiProbe; TC-REG-AUTO-001", "EV-001", "Auto PASS / External Pending"],
+  ["REQ-IF-016", "FS-RTULOG-001", "DC-19", "Context RtuLogQueue; caller-owned line buffer; capture-disabled idle wait", "TC-V03-AUTO-001; TC-P9-STATIC-001", "EV-018", "Auto/Static PASS / External Pending"],
   ["AC-GRP-009", "FS-DEVICE-001; FS-CONNECTION-LED-001; FS-RTULOG-001", "DC-15; DC-18~19", "Device gate, status LEDs, RTU CSV pipeline", "TC-V03-AUTO-001; TC-P9-STATIC-001", "EV-017~EV-018", "Auto PASS / External Pending"],
 ];
 v030.getRange("A1:G9").values = v030Rows;
@@ -331,9 +331,9 @@ const v030RequirementRows = [
   ["REQ-FUNC-046", "UI", "Device Index별 Unconfigured/Disabled/Disconnected/Available 상태와 AvailableLed 100ms 게시", "FR-UI-019~020", "FS-DEVICE-001", "DC-18", "CAPL source contract와 EV-017"],
   ["REQ-FUNC-047", "UI", "실제 Lifecycle Connected/Disconnected 상태를 서로 독립된 LED로 표시", "FR-UI-016~018", "FS-CONNECTION-LED-001", "DC-15", "CAPL source contract와 EV-017"],
   ["REQ-FUNC-048", "Diagnostics", "RTU 요청과 실제 응답 또는 무응답을 동일 Sequence의 REQ/RES 또는 REQ/NO_RES CSV 행으로 기록", "LOG-018~024", "FS-RTULOG-001", "DC-19", "RtuLogQueue/PortWorker 자동 시험과 EV-018"],
-  ["REQ-FUNC-049", "Diagnostics", "RTU Log OFF→ON마다 새 Timestamp 파일을 만들고 CAPL만 파일 I/O 수행", "FR-UI-021; LOG-022~024", "FS-RTULOG-001", "DC-19", "CAPL source contract와 EV-018"],
-  ["REQ-IF-015", "API", "기존 21개 Entry 순서를 유지하고 Device 통신 2개와 RTU Log 3개 API를 22~26번에 추가", "IF-API-022~026; COMP-009", "FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-18; DC-19", "x86/x64 ABI Probe와 EV-001"],
-  ["REQ-IF-016", "Buffer", "Context별 완결 Transaction 256개와 caller-owned RTU CSV line Buffer; DLL 파일 I/O 금지", "IF-LIMIT-009; LOG-023~024", "FS-RTULOG-001", "DC-19", "Queue 경계·overflow·pair 보존 자동 시험과 EV-018"],
+  ["REQ-FUNC-049", "Diagnostics", "RTU Log 파일 Open 성공 후 Capture를 시작하고, OFF·종료 시 최대 2,000ms Idle 대기 후 완료 행을 배출", "FR-UI-021; LOG-022~024; ERR-044", "FS-RTULOG-001", "DC-19", "Core/Integration/CAPL source contract와 EV-018"],
+  ["REQ-IF-015", "API", "기존 21개 Entry 순서를 유지하고 Device 통신 2개와 RTU Log 4개 API를 22~27번에 추가", "IF-API-022~027; COMP-009", "FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-18; DC-19", "x86/x64 ABI Probe와 EV-001"],
+  ["REQ-IF-016", "Buffer", "Context별 완결 Transaction 256개와 caller-owned RTU CSV line Buffer; Capture Disabled에서만 Idle 대기; DLL 파일 I/O 금지", "IF-LIMIT-009; LOG-023~024; ERR-044", "FS-RTULOG-001", "DC-19", "Queue 경계·overflow·idle wake/timeout·pair 보존 자동 시험과 EV-018"],
 ];
 requirements.getRange("A133:G139").values = v030RequirementRows;
 requirements.getRange("A133:G139").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
@@ -344,9 +344,9 @@ const v030RtmRows = [
   ["REQ-FUNC-046", v030RequirementRows[1][2], "FS-DEVICE-001", "DC-18 Device Communication Gate", "CAPL 상태 Polling과 배열 게시", "TC-V03-AUTO-001; TC-P9-STATIC-001; EV-017", "Automated PASS / External Pending", "FR-UI-019~020"],
   ["REQ-FUNC-047", v030RequirementRows[2][2], "FS-CONNECTION-LED-001", "DC-15 CAPL UI", "Connected/Disconnected LED 상태표", "TC-P9-STATIC-001; EV-017", "Static PASS / External Pending", "FR-UI-016~018"],
   ["REQ-FUNC-048", v030RequirementRows[3][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Transaction pair·overflow·send result", "TC-V03-AUTO-001; EV-018", "Automated PASS / External Pending", "LOG-018~024"],
-  ["REQ-FUNC-049", v030RequirementRows[4][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "CAPL file lifecycle·naming·drain", "TC-P9-STATIC-001; EV-018", "Static PASS / External Pending", "FR-UI-021; LOG-022~024"],
-  ["REQ-IF-015", v030RequirementRows[5][2], "FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-18; DC-19", "26-entry x86/x64 ABI table", "M485E.AbiProbe; TC-REG-AUTO-001; EV-001", "Automated PASS / External Pending", "IF-API-022~026; COMP-009"],
-  ["REQ-IF-016", v030RequirementRows[6][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Capacity/caller-owned buffer/file boundary", "TC-V03-AUTO-001; EV-018", "Automated PASS / External Pending", "IF-LIMIT-009; LOG-023~024"],
+  ["REQ-FUNC-049", v030RequirementRows[4][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Open-before-capture·2,000ms idle wait·drain", "TC-V03-AUTO-001; TC-P9-STATIC-001; EV-018", "Automated/Static PASS / External Pending", "FR-UI-021; LOG-022~024; ERR-044"],
+  ["REQ-IF-015", v030RequirementRows[5][2], "FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-18; DC-19", "27-entry x86/x64 ABI table", "M485E.AbiProbe; TC-REG-AUTO-001; EV-001", "Automated PASS / External Pending", "IF-API-022~027; COMP-009"],
+  ["REQ-IF-016", v030RequirementRows[6][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Capacity/caller-owned buffer/file boundary/idle wait", "TC-V03-AUTO-001; TC-P9-STATIC-001; EV-018", "Automated/Static PASS / External Pending", "IF-LIMIT-009; LOG-023~024; ERR-044"],
 ];
 rtm.getRange("A133:H139").values = v030RtmRows;
 rtm.getRange("A133:H139").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
@@ -366,11 +366,11 @@ for (const sheet of workbook.worksheets.items) {
 }
 require(cover.getRange("B7").values[0][0] === "0.3.0", "Release version mismatch");
 require(cover.getRange("B8").values[0][0] === "Release Baseline", "Release status mismatch");
-require(cover.getRange("B9").values[0][0] === "2026-08-12", "Release baseline date mismatch");
+require(cover.getRange("B9").values[0][0] === "2026-08-13", "Release baseline date mismatch");
 require(findRow(rtmValues, "REQ-DIAG-002")[5] === "TC-P6-AUTO-001; TC-P9-STATIC-001", "REQ-DIAG-002 traceability mismatch");
 require(findRow(rtmValues, "REQ-FUNC-004")[5].includes("TC-P8-AUTO-001"), "REQ-FUNC-004 integration trace missing");
 require(findRow(rtmValues, "REQ-COM-002")[5].includes("TC-P9-STATIC-001"), "REQ-COM-002 active-Port trace missing");
-require(findRow(rtmValues, "REQ-COMP-003")[1].includes("M485E 26 API"), "Current public API baseline missing");
+require(findRow(rtmValues, "REQ-COMP-003")[1].includes("M485E 27 API"), "Current public API baseline missing");
 require(v030.getRange("A2:G9").values.length === 8, "v0.3.0 traceability row count mismatch");
 require(requirements.getRange("A133:A139").values.length === 7, "v0.3.0 requirement integration mismatch");
 require(findRow(rtmValues, "REQ-DATA-006")[1].includes("M485E_Device.csv"), "Current device file baseline missing");

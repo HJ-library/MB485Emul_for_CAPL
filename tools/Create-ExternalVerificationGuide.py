@@ -173,7 +173,7 @@ def main():
 
     add_heading(doc, "3. 필수 시험 순서", 1)
     rows = [
-        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 26개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
+        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 27개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
         ("EV-002", "3/8", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
         ("EV-003", "7/8", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
         ("EV-004", "5/7", "Port별 Slave에 FC03 Quantity 1/125 요청", "직접 Address의 Holding 값, CRC Low/High 정상 응답", "Serial trace"),

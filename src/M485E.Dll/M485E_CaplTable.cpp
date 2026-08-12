@@ -92,6 +92,10 @@ CAPL_DLL_INFO4 gM485ECaplTable[] = {
      reinterpret_cast<CAPL_FARCALL>(M485E_Dll_GetRtuLogStats),
      kCategory, "Read RTU log statistics V1", 'L', 3, "DDL", "\000\000\001",
      {"ContextHandle", "StatsCapacity", "OutStats"}},
+    {"M485E_Dll_WaitRtuLogIdle",
+     reinterpret_cast<CAPL_FARCALL>(M485E_Dll_WaitRtuLogIdle),
+     kCategory, "Wait for RTU log transactions to complete", 'L', 2, "DL", "\000\000",
+     {"ContextHandle", "TimeoutMs"}},
     {0, 0}};
 
 // The symbol name is fixed by Vector's CAPL DLL loader.

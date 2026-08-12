@@ -82,7 +82,7 @@ if ($ui -match '\boutput\s*\(') {
 
 $apiNames = [regex]::Matches($apiHeader, 'M485E_API\s+(M485E_Dll_[A-Za-z0-9_]+)\s*\(') |
     ForEach-Object { $_.Groups[1].Value }
-if ($apiNames.Count -ne 26) { throw "Expected 26 public APIs, found $($apiNames.Count)." }
+if ($apiNames.Count -ne 27) { throw "Expected 27 public APIs, found $($apiNames.Count)." }
 foreach ($apiName in $apiNames) {
     Require-Match $core ([regex]::Escape($apiName) + '\s*\(') "CAPL Core does not wrap $apiName."
 }
@@ -408,6 +408,10 @@ Require-Match $rtuLog 'Timestamp,Sequence,Record_Type,Port,Slave_ID,Index,Device
     'RTU Log CSV header is incomplete.'
 Require-Match $rtuLog 'M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*M485E_RtuLogDraining\s*=\s*1' `
     'RTU Log OFF must stop capture and drain before close.'
+Require-Match $rtuLog 'M485E_RtuLog_OpenFile\s*\(\s*\)[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*1\s*\)' `
+    'RTU Log must open the CSV before enabling DLL capture.'
+Require-Match $rtuLog 'M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*?M485E_Core_WaitRtuLogIdle\s*\([\s\S]*?M485E_RtuLog_DrainOnce\s*\(' `
+    'RTU Log shutdown must stop capture, wait for in-flight transactions, and then drain.'
 Require-Match $rtuLog 'long\s+M485E_RtuLog_Disable\s*\(\s*\)[\s\S]*?gM485E_RtuLogFileHandle\s*==\s*0\s*\)\s*return\s+M485E_OK;[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)' `
     'An already inactive RTU Log OFF command must not call the DLL before CSV refresh.'
 Require-Match $rtuLog 'on\s+timer\s+tM485E_RtuLogDrain[\s\S]*?result\s*!=\s*M485E_OK[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*?M485E_RtuLog_CloseFile\s*\(' `
@@ -454,4 +458,4 @@ foreach ($device in $devices) {
     }
 }
 
-Write-Output 'M485E CAPL source contract checks PASS: 26 wrappers, module boundaries, device control, RTU logging, monitoring policy, UI adapter, XML, and probe inputs.'
+Write-Output 'M485E CAPL source contract checks PASS: 27 wrappers, module boundaries, device control, RTU logging, monitoring policy, UI adapter, XML, and probe inputs.'

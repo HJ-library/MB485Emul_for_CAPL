@@ -434,3 +434,14 @@ long M485E_Core_GetRtuLogStats(long outStats[])
      return M485E_Dll_GetRtuLogStats(gM485E_ContextHandle, elcount(outStats),
           outStats);
 }
+
+/*
+ * 함수명: M485E_Core_WaitRtuLogIdle
+ * 기능: Capture 중지 전에 접수된 RTU Transaction이 모두 완료될 때까지 기다린다.
+ * 파라미터: timeoutMs - 최대 대기 시간(ms, 0~60000)
+ * 반환값: M485E_OK 또는 Timeout/상태 오류 코드
+ */
+long M485E_Core_WaitRtuLogIdle(long timeoutMs)
+{
+     return M485E_Dll_WaitRtuLogIdle(gM485E_ContextHandle, timeoutMs);
+}

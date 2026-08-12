@@ -680,6 +680,23 @@ void TestRtuLogQueue()
   Require(log.SetEnabled(true) == M485E_OK,
           "new RTU Log capture session did not start after drain");
   token = log.Begin(0, request);
+  Require(token.active && log.SetEnabled(false) == M485E_OK &&
+              !log.WaitUntilIdle(std::chrono::milliseconds(0)),
+          "RTU Log idle wait did not observe an active transaction");
+  std::thread completion([&log, token = std::move(token), response]() mutable {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    log.Complete(std::move(token), &response,
+                 m485e::core::RtuNoResponseReason::None);
+  });
+  Require(log.WaitUntilIdle(std::chrono::milliseconds(100)),
+          "RTU Log idle wait did not wake after transaction completion");
+  completion.join();
+  Require(log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK &&
+              log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK,
+          "RTU Log idle-wait transaction rows were not drainable");
+  Require(log.SetEnabled(true) == M485E_OK,
+          "RTU Log capture did not restart after idle wait drain");
+  token = log.Begin(0, request);
   log.Complete(std::move(token), &response, m485e::core::RtuNoResponseReason::None);
   Require(log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK &&
               std::string(line.data()).find(",1,REQ,") != std::string::npos,

@@ -317,3 +317,14 @@ M485E_API M485E_Dll_TryDequeueRtuLogLine(std::uint32_t contextHandle,
 M485E_API M485E_Dll_GetRtuLogStats(std::uint32_t contextHandle,
                                    std::uint32_t statsCapacity,
                                    std::int32_t* outStats);
+
+/**
+ * @brief Waits until every RTU transaction accepted before capture stop is complete.
+ * @param contextHandle Active CAPL context handle.
+ * @param timeoutMs Maximum wait in milliseconds, from 0 through 60000.
+ * @return M485E_OK when no transaction is in flight, otherwise a negative error code.
+ * @note Capture must be disabled before this call. Completed queue rows remain available
+ *       for CAPL to drain after the wait succeeds.
+ */
+M485E_API M485E_Dll_WaitRtuLogIdle(std::uint32_t contextHandle,
+                                   std::int32_t timeoutMs);

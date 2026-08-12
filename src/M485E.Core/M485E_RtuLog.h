@@ -4,8 +4,10 @@
 #include "M485E_ModbusRtu.h"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -52,6 +54,7 @@ class RtuLogQueue final
                     const std::vector<std::uint8_t>& request) noexcept;
   void Complete(RtuLogToken token, const std::vector<std::uint8_t>* response,
                 RtuNoResponseReason noResponseReason) noexcept;
+  bool WaitUntilIdle(std::chrono::milliseconds timeout) noexcept;
   std::int32_t TryDequeue(std::uint32_t capacity, char* output) noexcept;
   RtuLogStats GetStats() const noexcept;
 
@@ -76,5 +79,6 @@ class RtuLogQueue final
   std::uint32_t nextSequence_ = 1;
   RtuLogStats stats_{};
   mutable std::mutex mutex_;
+  std::condition_variable idleCondition_;
 };
 }  // namespace m485e::core

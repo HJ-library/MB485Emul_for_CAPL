@@ -118,6 +118,7 @@ int main(int argc, char** argv)
     const auto dequeueRtuLog =
         Load<LogLine>(table, "M485E_Dll_TryDequeueRtuLogLine");
     const auto getRtuLogStats = Load<Status>(table, "M485E_Dll_GetRtuLogStats");
+    const auto waitRtuLogIdle = Load<Toggle>(table, "M485E_Dll_WaitRtuLogIdle");
     Fixture fixture;
     constexpr std::uint32_t handle = 0x484F4D45U;
     Require(initialize(handle) == M485E_OK, "Initialize failed");
@@ -163,7 +164,11 @@ int main(int argc, char** argv)
                 rtuLogStats[M485E_RLS_CAPTURE_ENABLED] == 1 &&
                 dequeueRtuLog(handle, static_cast<std::uint32_t>(rtuLogLine.size()),
                               rtuLogLine.data()) == M485E_STATUS_NO_DATA &&
-                setRtuLog(handle, 0) == M485E_OK,
+                setRtuLog(handle, 0) == M485E_OK &&
+                waitRtuLogIdle(handle, -1) == M485E_ERR_INVALID_ARGUMENT &&
+                waitRtuLogIdle(handle, M485E_MAX_RTU_LOG_IDLE_TIMEOUT_MS + 1) ==
+                    M485E_ERR_INVALID_ARGUMENT &&
+                waitRtuLogIdle(handle, 0) == M485E_OK,
             "RTU Log public API state or empty queue contract failed");
 
     std::array<std::uint16_t, 8> words{};

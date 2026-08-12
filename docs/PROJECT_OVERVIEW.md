@@ -19,7 +19,7 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | Board | Modbus RTU Master로 FC03·FC04 Read와 FC10 Write 요청 전송 |
 | SystemBase Multi USB-485 | 자동 방향 제어 방식으로 PC와 Board의 RS-485 연결 |
 | `M485E.dll` | CSV 검증, 장치/Register 상태, RTU Slave, Queue와 연결 수명주기 처리 |
-| CAPL Core | 26개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
+| CAPL Core | 27개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
 | CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
 | CAPL ReadOption | 프로젝트 FrameRule의 `slot ↔ Index + Rule_ID` 고정 목록을 한곳에서 관리 |
 | CAPL Connection | ConnectSwitch, 500ms 자동 연결 Timer와 Connect/Disconnect 요청을 관리 |

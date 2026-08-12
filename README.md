@@ -4,7 +4,7 @@
 
 - CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드합니다.
 - CANalyzer 13 이상(CANalyzer 18 포함)은 `M485E.vmodule`에서 실행 환경에 맞는 x86/x64 DLL을 선택합니다.
-- 두 아키텍처는 같은 26개 CAPL-visible API, CSV 형식과 Runtime 동작을 유지합니다.
+- 두 아키텍처는 같은 27개 CAPL-visible API, CSV 형식과 Runtime 동작을 유지합니다.
 - 정식 배포 파일은 `dist/M485E.vmodule`, `dist/Windows-x86/M485E.dll`, `dist/Windows-x64/M485E.dll`입니다.
 
 ```powershell
@@ -35,7 +35,7 @@ CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니�
 - Windows x86/x64 `M485E.dll`과 아키텍처 선택용 `M485E.vmodule`
 - Vector `CAPL_DLL_INFO4` / `caplDllTable4`
 - x86 `__stdcall` 및 x64 Windows 호출 규약
-- 요구사양서 Appendix A의 저수준 API 26개 ABI 등록(기존 21개 순서 유지)
+- 요구사양서 Appendix A의 저수준 API 27개 ABI 등록(기존 21개 순서 유지)
 - `registerCAPLDLL()` Context Handle 기반 최소 Initialize/Finalize 수명주기
 - 생산 API의 scalar/배열/문자열 경계와 caller-owned 출력 보호 Probe
 - 생산 API와 분리된 시험 전용 `M485E.CaplAbiFixture.dll`의 `char[]`, `word[]`, `long[]`, `F[1]` 성공 왕복
@@ -49,7 +49,7 @@ CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니�
 - `tools/Generate-M485EContracts.ps1`: C++/CAPL 계약 생성 및 stale 결과 검사
 - `generated/cpp/M485E_Contracts.generated.h`: DLL과 C++ 시험이 사용하는 생성 계약
 - `generated/capl/M485E_Contracts.generated.cin`: CAPL Core가 사용할 생성 계약
-- 92개 오류 계약과 207개 공개 상수의 변경·누락 회귀 검사
+- 93개 오류 계약과 210개 공개 상수의 변경·누락 회귀 검사
 - 90개 오류 뒤에 신규 오류를 추가하는 호환 확장 지원
 - 잘못된 입력, 중복 코드·상수·Message Key, 잘못된 Severity 및 stale 생성 결과 시험
 
@@ -128,7 +128,7 @@ Probe는 다음을 검사합니다.
 
 - DLL이 현재 Win32 Process에서 로드되는지
 - `caplDllTable4`의 Version Entry와 종료 Entry
-- 생산 API 26개의 이름, 순서, 개수와 종료 Entry(기존 21개 Entry 순서 불변)
+- 생산 API 27개의 이름, 순서, 개수와 종료 Entry(기존 21개 Entry 순서 불변)
 - 반환형, 파라미터형, 배열 차원, 파라미터명 및 Function Pointer
 - Vector가 반환한 Handle 0 허용, 중복/불일치 Handle 거부, Finalize 후 호출과 재초기화
 - 작은 Capacity, Embedded NUL, 문자열 길이 불일치 검증
@@ -137,7 +137,7 @@ Probe는 다음을 검사합니다.
 
 ## CANalyzer CAPL Probe
 
-[`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 생산 Release DLL과 시험 전용 Fixture를 `#pragma library`로 각각 로드합니다. 생산 API 26개의 반환 계약·Buffer 보호를 확인하고 Fixture로 배열과 `F[1]` 성공 왕복을 검사합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
+[`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 생산 Release DLL과 시험 전용 Fixture를 `#pragma library`로 각각 로드합니다. 생산 API 27개의 반환 계약·Buffer 보호를 확인하고 Fixture로 배열과 `F[1]` 성공 왕복을 검사합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
 
 1. CANalyzer 9.x 시험은 Release/Win32, CANalyzer 18 시험은 Release/x64로 빌드합니다.
 2. CAPL Probe 파일을 CANalyzer Configuration의 Program Node에 연결합니다.
