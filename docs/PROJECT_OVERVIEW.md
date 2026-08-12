@@ -1,13 +1,13 @@
 # Modbus485Emulator 한눈에 보기
 
-> Release baseline: v0.1.0 (2026-08-12)
+> Release baseline: v0.2.0 (2026-08-12)
 
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
-그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 x86 CAPL DLL이다.
+그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 Windows x86/x64 CAPL DLL이다.
 Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Emulator의 설정,
 수동 조작과 Monitoring 출력을 담당한다.
 
-> 현재 구현 기준: Win32/x86, CANalyzer 9.x 대상, RS-485 Port 1~4개, FC03·FC04·FC10,
+> 현재 구현 기준: CANalyzer 9.x용 Windows x86와 CANalyzer 18용 Windows x64, RS-485 Port 1~4개, FC03·FC04·FC10,
 > Device 최대 256개, Monitoring Rule 최대 200개, Signal 최대 4,096개.
 
 ## 1. 시스템 구성
@@ -70,7 +70,7 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 
 ![전체 동작 흐름](assets/overall_operation_flow.png)
 
-1. CANalyzer가 `M485E_Main.can`을 로드하고 `#pragma library`로 x86 `M485E.dll`을 연결한다.
+1. CANalyzer가 `M485E_Main.can`을 로드한다. 9.x는 x86 DLL을 직접 연결하고 13 이상은 `M485E.vmodule`에서 실행 아키텍처에 맞는 DLL을 선택한다.
 2. CAPL `preStart`에서 현재 Program Node를 등록하고 Vector Context Handle을 얻는다. Handle 값 0도 정상값이다.
 3. CAPL `start`에서 DLL Context를 초기화하고 DeviceMap/FrameRule 경로와 활성 Port 1~4개의 Serial 설정을 전달한다.
 4. DLL이 DeviceMap에서 참조하는 Register Map까지 비동기로 읽고 전체 검증에 성공하면 새 Runtime Model을 원자적으로 적용한다.
@@ -214,12 +214,14 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 | `tests` | ABI, Core, Integration, CAPL 계약과 실환경 Probe |
 | `examples/M485E_Test` | 저장소 자체 완결형 Device A/B Map, Panel 가이드와 검증 체크리스트 |
 | `docs/05_Test` | 대상 실환경 검증 가이드와 결과 기록서 |
-| `dist/M485E.dll` | CANalyzer에 배치할 Release/Win32 DLL |
+| `dist/M485E.vmodule` | CANalyzer 13 이상에서 아키텍처별 DLL을 선택하는 Manifest |
+| `dist/Windows-x86/M485E.dll` | CANalyzer 9.x에 배치할 Release/x86 DLL |
+| `dist/Windows-x64/M485E.dll` | CANalyzer 18에 배치할 Release/x64 DLL |
 
 ## 9. 처음 실행하는 순서
 
-1. Solution을 `Release/Win32`로 빌드하여 `dist/M485E.dll`을 만든다.
-2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 DLL을 `Config/CAPL/Dll`에 배치한다.
+1. Solution을 `Release/Win32`와 `Release/x64`로 빌드하여 두 DLL과 `M485E.vmodule`을 만든다.
+2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 Manifest와 DLL을 `Config/CAPL/Dll`에 배치한다.
 3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
 4. Program Node에 `M485E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.
@@ -238,6 +240,7 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 완료되어 있다. 다음은 실제 대상 환경에서 확인해야 한다.
 
 - CANalyzer 9.x SP8에서 x86 DLL Load와 전체 Main CAPL Compile/Measurement
+- CANalyzer 18에서 `M485E.vmodule`을 통한 x64 DLL 선택, 전체 Main CAPL Compile/Measurement
 - SystemBase Multi USB-485와 실제 Board의 FC03·FC04·FC10 응답시간
 - COM 분리·복구와 3초 x 10회 자동 재연결
 - 두 가상 CAN Channel의 Extended Header/Data Message
@@ -246,4 +249,4 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 - SystemBase Multi USB 485와 실제 Board에서 RTU Chunk 분할·병합, 응답 Timing 및 Noise 재동기화 검증
 - 장치별 탭을 포함한 실제 CANalyzer Panel `.xvp`
 
-x64 DLL과 최신 CANalyzer 지원은 현재 Release 범위가 아니라 후속 체크리스트 대상이다.
+x86/x64 DLL의 자동 Build·ABI 검증은 완료되어 있다. CANalyzer 9.x와 18에서 실제 Measurement를 수행하는 항목은 대상 실환경 검증으로 남아 있다.

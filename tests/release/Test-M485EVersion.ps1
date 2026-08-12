@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$DllPath
+    [string]$DllPath,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Windows-x86', 'Windows-x64')]
+    [string]$Architecture
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,4 +39,12 @@ if ($fileVersion.FileVersion -ne "$version.0" -or $fileVersion.ProductVersion -n
     throw "Built DLL version mismatch: File=$($fileVersion.FileVersion), Product=$($fileVersion.ProductVersion)"
 }
 
-Write-Output "M485E release version contract PASS: $version"
+$bytes = [IO.File]::ReadAllBytes($resolvedDll)
+$peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+$machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+$expectedMachine = if ($Architecture -eq 'Windows-x64') { 0x8664 } else { 0x014C }
+if ($machine -ne $expectedMachine) {
+    throw ('Built DLL architecture mismatch: Expected={0}, Machine=0x{1:X4}' -f $Architecture, $machine)
+}
+
+Write-Output "M485E release version contract PASS: $version, $Architecture"

@@ -8,7 +8,8 @@
 #include <iostream>
 #include <string>
 
-static_assert(sizeof(void*) == 4, "M485E Phase 1 ABI Probe must be built for Win32/x86.");
+static_assert(sizeof(void*) == 4 || sizeof(void*) == 8,
+              "M485E ABI Probe supports Windows x86 and x64 only.");
 
 namespace
 {
@@ -364,6 +365,7 @@ int main(int argc, char** argv)
 
   FreeLibrary(fixtureModule);
   FreeLibrary(productionModule);
-  std::cout << "PASS: Win32/x86 VIA registration export and production table with exactly 21 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
+  std::cout << "PASS: Windows " << (sizeof(void*) == 8 ? "x64" : "x86")
+            << " VIA registration export and production table with exactly 21 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
   return 0;
 }

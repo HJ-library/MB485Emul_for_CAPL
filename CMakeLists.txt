@@ -1,9 +1,15 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Modbus485Emulator VERSION 0.1.0 LANGUAGES CXX)
+project(Modbus485Emulator VERSION 0.2.0 LANGUAGES CXX)
 
-if(NOT WIN32 OR CMAKE_SIZEOF_VOID_P EQUAL 8)
-  message(FATAL_ERROR "Modbus485Emulator must be configured for Win32/x86.")
+if(NOT WIN32)
+  message(FATAL_ERROR "Modbus485Emulator supports Windows x86 and x64 only.")
+endif()
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  set(M485E_ARCH_DIRECTORY "Windows-x64")
+else()
+  set(M485E_ARCH_DIRECTORY "Windows-x86")
 endif()
 
 set(VECTOR_CAPL_DLL_INCLUDE_DIR "" CACHE PATH
@@ -38,9 +44,8 @@ target_include_directories(M485E.Core PUBLIC
 )
 add_dependencies(M485E.Core M485E.VerifyContracts)
 
-add_library(M485E SHARED
+set(M485E_DLL_SOURCES
   src/M485E.Dll/dllmain.cpp
-  src/M485E.Dll/M485E.def
   src/M485E.Dll/M485E_CaplTable.cpp
   src/M485E.Dll/M485E_DllApi.cpp
   src/M485E.Dll/M485E_ViaRegistration.cpp
@@ -48,6 +53,10 @@ add_library(M485E SHARED
   src/M485E.Dll/M485E_Connection.cpp
   src/M485E.Dll/M485E_Version.rc
 )
+if(CMAKE_SIZEOF_VOID_P EQUAL 4)
+  list(APPEND M485E_DLL_SOURCES src/M485E.Dll/M485E.def)
+endif()
+add_library(M485E SHARED ${M485E_DLL_SOURCES})
 target_compile_features(M485E PRIVATE cxx_std_17)
 target_include_directories(M485E PRIVATE
   src/M485E.Dll
@@ -59,7 +68,8 @@ add_dependencies(M485E M485E.VerifyContracts)
 target_link_libraries(M485E PRIVATE M485E.Core)
 set_target_properties(M485E PROPERTIES OUTPUT_NAME M485E)
 
-set(M485E_DIST_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
+set(M485E_DIST_DIRECTORY
+    "${CMAKE_CURRENT_SOURCE_DIR}/dist/${M485E_ARCH_DIRECTORY}")
 set(M485E_DIST_FILE_NAME
     "$<IF:$<CONFIG:Release>,M485E.dll,M485E.$<CONFIG>.dll>")
 add_custom_command(TARGET M485E POST_BUILD
@@ -70,6 +80,16 @@ add_custom_command(TARGET M485E POST_BUILD
   COMMENT "Copying M485E DLL to dist"
   VERBATIM
 )
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  add_custom_command(TARGET M485E POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/packaging/M485E.vmodule"
+            "${CMAKE_CURRENT_SOURCE_DIR}/dist/M485E.vmodule"
+    COMMENT "Copying M485E architecture manifest to dist"
+    VERBATIM
+  )
+endif()
 
 add_library(M485E.CaplAbiFixture SHARED
   tests/M485E.CaplAbiFixture/M485E_CaplAbiFixture.cpp
@@ -128,4 +148,5 @@ add_test(NAME M485E.CaplSourceContracts
 add_test(NAME M485E.ReleaseVersion
          COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
                  -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/release/Test-M485EVersion.ps1"
-                 -DllPath $<TARGET_FILE:M485E>)
+                 -DllPath $<TARGET_FILE:M485E>
+                 -Architecture ${M485E_ARCH_DIRECTORY})

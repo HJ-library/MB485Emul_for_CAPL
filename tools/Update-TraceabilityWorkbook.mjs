@@ -200,7 +200,7 @@ rtm.getRange("A2:H132").values = rtmValues;
 requirements.getRange("A2:G132").values = requirementValues;
 
 const cover = workbook.worksheets.getItem("Cover");
-cover.getRange("B7").values = [["0.1.0"]];
+cover.getRange("B7").values = [["0.2.0"]];
 cover.getRange("B8").values = [["Release Baseline"]];
 cover.getRange("B9").values = [["2026-08-12"]];
 cover.getRange("E9").values = [["자동·실환경 Test Case ID 부여 완료"]];
@@ -220,7 +220,7 @@ designComponents.getRange("C16:C17").format.wrapText = true;
 designComponents.getRange("16:17").format.autofitRows();
 
 const phase1Verification = workbook.worksheets.getItem("Phase 1 Verification");
-phase1Verification.getRange("D7").values = [["CANalyzer 9.x SP8 x86"]];
+phase1Verification.getRange("D7").values = [["CANalyzer 9.x SP8 x86 / CANalyzer 18 x64"]];
 
 const phase2Verification = workbook.worksheets.getItem("Phase 2 Verification");
 phase2Verification.getRange("F2").values = [["오류 코드 90개, 공개 상수 185개에서 C++/CAPL 생성"]];
@@ -240,7 +240,7 @@ const verificationRows = [
   ["TC-P8-AUTO-001", "8", "Automated", "Async refresh/connect, 1~4 active-Port rollback, 누락 active PortSlot 거부, inactive stale Slot 무시, zero/nonzero Handle ABI integration", "M485E.IntegrationTests", "PASS", "EV-002, EV-003, EV-014, EV-015"],
   ["TC-P9-STATIC-001", "9", "Static + CAPL Compile", "CAPL Core wrappers, Error Queue Stats 변화기반 출력, 1s/10ms pump, ActivePortCount=Device CSV 고유 Port 수, Port별 Rule Cursor/round-robin, 66/33 budget, Extended CAN", "Test-M485ECaplSources.ps1 + CANalyzer 13 Exec32 caplcompexec", "PASS", "EV-008~EV-011, EV-016"],
   ["TC-P10-STATIC-001", "10", "Static", "UI System Variable adapter, Manual Write Data[122], Signal Control, Register Read UI 부재 계약", "Test-M485ECaplSources.ps1; Main compile in configured CANalyzer project", "Static PASS / External Pending", "EV-011~EV-013, EV-016"],
-  ["TC-REG-AUTO-001", "1~10", "Automated", "Win32 Debug/Release, /W4 /WX, ErrorCodes 90/PublicConstants 185, ABI, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-016"],
+  ["TC-REG-AUTO-001", "1~10", "Automated", "Windows x86/x64 Debug/Release, /W4 /WX, ErrorCodes 90/PublicConstants 185, 21 API ABI, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-016"],
   ["EV-001~EV-016", "External", "External", "CANalyzer 9.x, SystemBase Multi USB-485, Board, Panel, virtual CAN, stress", "External Verification Guide", "Not Tested", "대상 실환경에서 결과 기록"],
   ["TC-CAPL13-COMPILE-001", "1/2/9", "Compiler", "Phase 1 ABI, Phase 2 Contracts, Phase 9 Core/Monitoring CAPL probes", "CANalyzer 13 Exec32 caplcompexec.exe", "PASS (warning-free)", "CANalyzer 9.x SP8 Compile/Measurement remains EV-001"],
 ];
@@ -283,7 +283,7 @@ for (const sheet of workbook.worksheets.items) {
     }
   }
 }
-require(cover.getRange("B7").values[0][0] === "0.1.0", "Release version mismatch");
+require(cover.getRange("B7").values[0][0] === "0.2.0", "Release version mismatch");
 require(cover.getRange("B8").values[0][0] === "Release Baseline", "Release status mismatch");
 require(cover.getRange("B9").values[0][0] === "2026-08-12", "Release baseline date mismatch");
 require(findRow(rtmValues, "REQ-DIAG-002")[5] === "TC-P6-AUTO-001; TC-P9-STATIC-001", "REQ-DIAG-002 traceability mismatch");

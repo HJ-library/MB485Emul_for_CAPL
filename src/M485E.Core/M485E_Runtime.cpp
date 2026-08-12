@@ -152,14 +152,16 @@ std::vector<std::vector<std::uint16_t>> RuntimeModel::CaptureRuleValuesAfterWrit
   std::vector<std::vector<std::uint16_t>> snapshots;
   snapshots.reserve(ruleIndices.size());
   const std::uint32_t writeEnd =
-      static_cast<std::uint32_t>(writeAddress) + writeValues.size();
+      static_cast<std::uint32_t>(writeAddress) +
+      static_cast<std::uint32_t>(writeValues.size());
   for (const std::size_t ruleIndex : ruleIndices)
   {
     const RuleDefinition& rule = configuration.rules[ruleIndex];
     std::vector<std::uint16_t> values(rule.quantity);
     for (std::size_t offset = 0; offset < rule.quantity; ++offset)
     {
-      const std::uint32_t current = static_cast<std::uint32_t>(rule.address) + offset;
+      const std::uint32_t current =
+          static_cast<std::uint32_t>(rule.address) + static_cast<std::uint32_t>(offset);
       values[offset] = current >= writeAddress && current < writeEnd
                            ? writeValues[current - writeAddress]
                            : image.values[current];

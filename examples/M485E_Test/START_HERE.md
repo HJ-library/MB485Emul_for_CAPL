@@ -10,7 +10,9 @@
 ProjectConfig/
   CANalyzerConfig.cfg
   CAPL/
-    Dll/M485E.dll
+    Dll/M485E.vmodule
+    Dll/Windows-x86/M485E.dll
+    Dll/Windows-x64/M485E.dll
     M485E/*.can, *.cin
   Maps/M485E/*.csv
   System Variables/M485E.vsysvar
@@ -22,7 +24,7 @@ ProjectConfig/
 
 1. `Config/System Variables/M485E.vsysvar`를 CANalyzer Configuration에 등록한다.
 2. Program Node에 `Config/CAPL/M485E/M485E_Main.can`을 연결한다.
-3. `dist/M485E.dll`을 `Config/CAPL/DLL/M485E.dll`로 복사한다.
+3. `tools/Prepare-M485EPackage.ps1 -Configuration Release`를 실행해 `.vmodule`과 x86/x64 DLL을 `Config/CAPL/DLL`에 배치한다.
 4. 이 폴더의 네 CSV를 `Config/Maps/M485E`에 배치한다.
 5. `M485E_Main.can`의 `gM485E_PortConfigs[0].port = 8`과 `gM485E_ActivePortCount = 1`을 확인한다.
 6. CAPL을 Compile하고 Measurement를 시작한다.
