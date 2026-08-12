@@ -12,7 +12,7 @@ from docx.shared import Cm, Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "05_Test" / "External_Verification_Guide.docx"
-RELEASE_VERSION = "0.1.0"
+RELEASE_VERSION = "0.2.0"
 
 NAVY = "17365D"
 BLUE = "2F75B5"
@@ -129,7 +129,7 @@ def main():
     run.font.size = Pt(24)
     run.font.bold = True
     run.font.color.rgb = RGBColor.from_string(NAVY)
-    sub = doc.add_paragraph("CANalyzer 9.x SP8 x86 · SystemBase Multi USB 485 · 실제 Board")
+    sub = doc.add_paragraph("CANalyzer 9.x SP8 x86 · CANalyzer 18 x64 · SystemBase Multi USB 485 · 실제 Board")
     sub.paragraph_format.space_after = Pt(10)
     sub.runs[0].font.size = Pt(10)
     sub.runs[0].font.color.rgb = RGBColor.from_string(BLUE)
@@ -138,7 +138,7 @@ def main():
     table.style = "Table Grid"
     for row, (label, value) in enumerate([
         ("문서 목적", "자동 검증으로 대체할 수 없는 대상 실환경의 CAPL, USB-RS485 및 Board 시험 절차를 정의한다."),
-        ("현재 상태", f"Release {RELEASE_VERSION} Baseline. Phase 1~8 자동 검증 완료. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일 완료. CANalyzer 9.x SP8 Measurement와 장비 항목은 External Verification Pending"),
+        ("현재 상태", f"Release {RELEASE_VERSION} Baseline. Windows x86/x64 자동 Build와 ABI 검증 완료. CANalyzer 9.x SP8 및 CANalyzer 18 Measurement와 장비 항목은 External Verification Pending"),
         ("결과 기록", "Modbus485Emulator_External_Test_Result.xlsx의 Result를 Not Tested에서 갱신한다."),
         ("주의", "가상 CAN 채널만 사용하며 물리 CAN Bus Load를 합격 기준으로 사용하지 않는다."),
     ]):
@@ -149,8 +149,8 @@ def main():
 
     add_heading(doc, "1. 시험 전 준비", 1)
     add_bullets(doc, [
-        "Release/Win32 M485E.dll과 CAPL 파일, M485E.vsysvar, DeviceMap/FrameRule/참조 Register Map을 동일 Baseline에서 준비한다.",
-        "CANalyzer 9.x SP8 x86 Configuration에 활성 Port 수(1~4)만큼 가상 CAN 채널을 생성하고 Main의 PortSlot별 채널 번호와 맞춘다.",
+        "Release/Win32와 Release/x64 M485E.dll, M485E.vmodule, CAPL 파일, M485E.vsysvar, DeviceMap/FrameRule/참조 Register Map을 동일 Baseline에서 준비한다.",
+        "CANalyzer 9.x SP8 x86 또는 CANalyzer 18 x64 Configuration에 활성 Port 수(1~4)만큼 가상 CAN 채널을 생성하고 Main의 PortSlot별 채널 번호와 맞춘다.",
         "SystemBase Multi USB 485의 시험 대상 활성 Port를 Board RS-485에 연결한다. Adapter의 자동 송수신 방향 제어를 사용하며 DLL은 RTS 방향 제어를 수행하지 않는다.",
         "Board Modbus Master의 Response Timeout, 요청 주기, 실제 COM 번호와 Serial 설정을 결과 파일 Environment 시트에 기록한다.",
         "시험 시작 전 Git Commit, DLL SHA-256, CANalyzer 버전/SP, Vector Driver 버전을 기록한다.",
@@ -173,7 +173,7 @@ def main():
 
     add_heading(doc, "3. 필수 시험 순서", 1)
     rows = [
-        ("EV-001", "1/2", "CANalyzer 9.x에서 CAPL Compile 및 #pragma library 로드", "21개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
+        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 21개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
         ("EV-002", "3/8", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
         ("EV-003", "7/8", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
         ("EV-004", "5/7", "Port별 Slave에 FC03 Quantity 1/125 요청", "직접 Address의 Holding 값, CRC Low/High 정상 응답", "Serial trace"),
@@ -223,7 +223,7 @@ def main():
     run.font.color.rgb = RGBColor.from_string("6B7280")
 
     doc.core_properties.title = "Modbus485Emulator External Verification Guide"
-    doc.core_properties.subject = "Release 0.1.0 external verification procedures"
+    doc.core_properties.subject = "Release 0.2.0 external verification procedures"
     doc.core_properties.author = "Modbus485Emulator Project"
     doc.core_properties.last_modified_by = "Modbus485Emulator Project"
     doc.core_properties.comments = ""

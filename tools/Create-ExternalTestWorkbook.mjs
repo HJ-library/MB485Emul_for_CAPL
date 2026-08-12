@@ -13,7 +13,7 @@ await fs.mkdir(outputDir, { recursive: true });
 await fs.mkdir(previewDir, { recursive: true });
 
 const tests = [
-  ["EV-001", "1/2", "IF-API-001~021, COMP-001, COMP-015", "CANalyzer 9.x SP8 x86", "CAPL Compile 및 #pragma library 로드", "21개 API가 중복·누락 없이 Compile되고 Measurement가 시작됨"],
+  ["EV-001", "1/2", "IF-API-001~021, COMP-001, COMP-002, COMP-015", "CANalyzer 9.x SP8 x86 / CANalyzer 18 x64", "CAPL Compile 및 직접 DLL/.vmodule 로드", "두 환경에서 21개 API가 중복·누락 없이 Compile되고 Measurement가 시작됨"],
   ["EV-002", "3/8", "FR-CSV-001~018, FR-LIFE-010~015", "CANalyzer 9.x SP8 x86", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling", "Disconnected, ConfigurationValid=1, LastResult=0"],
   ["EV-003", "7/8/9", "FR-PORT-007~020, TBD-038", "CANalyzer + Multi USB 485", "1~4개 활성 COM Port 전체 Connect와 CAPL/CSV 활성 Port 수 확인", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback; ActivePortCount와 Device CSV 고유 Port 수 일치"],
   ["EV-004", "5/7", "FR-RTU-002, FR-RTU-017, FR-RTU-028", "Board + Serial trace", "Port별 Slave FC03 Quantity 1/125", "직접 Address Holding 값과 올바른 CRC 응답"],
@@ -38,7 +38,7 @@ const summary = workbook.worksheets.add("Summary");
 
 results.showGridLines = false;
 results.mergeCells("A1:J1");
-results.getRange("A1").values = [["Modbus485Emulator v0.1.0 External Test Results"]];
+results.getRange("A1").values = [["Modbus485Emulator v0.2.0 External Test Results"]];
 results.mergeCells("A2:J2");
 results.getRange("A2").values = [["실행하지 않은 시험은 Result = Not Tested로 유지합니다."]];
 results.getRange("A4:J4").values = [["Test ID", "Phase", "Requirement ID", "Test Environment", "Test Description", "Expected Result", "Actual Result", "Result", "Evidence", "Notes"]];
@@ -87,12 +87,12 @@ environment.mergeCells("A1:D1");
 environment.getRange("A1").values = [["Test Environment"]];
 environment.getRange("A3:D3").values = [["Category", "Item", "Value", "Evidence / Notes"]];
 const environmentRows = [
-  ["Baseline", "Release Version", "0.1.0", "Release Baseline"],
+  ["Baseline", "Release Version", "0.2.0", "Release Baseline"],
   ["Baseline", "Baseline Date", "2026-08-12", "docs/REQUIREMENTS_SPEC.md"],
   ["Baseline", "Git Commit", "", ""],
   ["Baseline", "M485E.dll SHA-256", "", ""],
   ["Baseline", "Generated Contracts", "ErrorCodes=90; PublicConstants=185", "tests/contracts/Test-M485EContractGeneration.ps1"],
-  ["CANalyzer", "Version / Service Pack", "CANalyzer 9.x SP8 x86", ""],
+  ["CANalyzer", "Version / Service Pack", "CANalyzer 9.x SP8 x86 / CANalyzer 18 x64", ""],
   ["Vector", "Driver / License", "", ""],
   ["Adapter", "Model", "SystemBase Multi USB 485", "Automatic direction control"],
   ["Serial Port 0", "COM / Baud / Data / Parity / Stop", "", ""],
@@ -158,7 +158,7 @@ if (resultRows.length !== 16 || resultRows.some((row) => row[7] !== "Not Tested"
 if (tests.find((row) => row[0] === "EV-002")?.[4] !== "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling") {
   throw new Error("EV-002 current configuration contract mismatch");
 }
-if (environmentRows[0][2] !== "0.1.0" || environmentRows[1][2] !== "2026-08-12") {
+if (environmentRows[0][2] !== "0.2.0" || environmentRows[1][2] !== "2026-08-12") {
   throw new Error("External verification release baseline mismatch");
 }
 if (!environmentRows.some((row) => row[1] === "Generated Contracts" && row[2] === "ErrorCodes=90; PublicConstants=185")) {

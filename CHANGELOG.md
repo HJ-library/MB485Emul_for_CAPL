@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0] - 2026-08-12
+
+### Added
+
+- CANalyzer 18용 Windows x64 CAPL DLL과 x64 ABI 자동 검증
+- Windows x86/x64 바이너리를 함께 배포하는 `M485E.vmodule` 패키지
+- Visual Studio 및 CMake의 Debug/Release x64 구성
+
+### Changed
+
+- CANalyzer 13 이상은 `.vmodule`에서 실행 아키텍처에 맞는 DLL을 자동 선택한다.
+- CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드한다.
+- 배포 산출물을 `dist/Windows-x86`과 `dist/Windows-x64`로 분리한다.
+
+### Compatibility
+
+- 기존 21개 CAPL-visible API, CSV 형식과 Runtime 동작은 변경하지 않는다.
+- CANalyzer 9.x용 x86 DLL 지원을 계속 유지한다.
+
 이 문서는 `Modbus485Emulator`의 사용자에게 영향을 주는 릴리스 변경을 기록한다.
 
 ## [0.1.0] - 2026-08-12

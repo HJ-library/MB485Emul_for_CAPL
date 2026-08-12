@@ -1,17 +1,38 @@
 # Modbus485Emulator
 
-현재 릴리스는 **v0.1.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+## v0.2.0 Windows x86/x64 지원
 
-CANalyzer CAPL과 연동하는 Win32/x86 Modbus RTU Slave Emulator입니다. C++ Runtime과 CAPL Core/Monitoring/UI Adapter, 자동 검증 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다.
+- CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드합니다.
+- CANalyzer 13 이상(CANalyzer 18 포함)은 `M485E.vmodule`에서 실행 환경에 맞는 x86/x64 DLL을 선택합니다.
+- 두 아키텍처는 같은 21개 CAPL-visible API, CSV 형식과 Runtime 동작을 유지합니다.
+- 정식 배포 파일은 `dist/M485E.vmodule`, `dist/Windows-x86/M485E.dll`, `dist/Windows-x64/M485E.dll`입니다.
+
+```powershell
+$vectorIncludes = 'C:\Users\Public\Documents\Vector\CANalyzer\Sample Configurations 13.0.172\Programming\CAPLdll\Includes'
+$msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild\Current\Bin\MSBuild.exe'
+
+& $msbuild .\Modbus485Emulator.sln /m /t:Rebuild `
+  /p:Configuration=Release /p:Platform=Win32 `
+  "/p:VectorCaplDllIncludeDir=$vectorIncludes"
+& $msbuild .\Modbus485Emulator.sln /m /t:Rebuild `
+  /p:Configuration=Release /p:Platform=x64 `
+  "/p:VectorCaplDllIncludeDir=$vectorIncludes"
+```
+
+양쪽 Release 빌드 후 `Prepare-M485EPackage.ps1`을 실행하면 CAPL Config에 `.vmodule`과 두 DLL을 함께 배치합니다.
+
+현재 릴리스는 **v0.2.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+
+CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니다. C++ Runtime과 CAPL Core/Monitoring/UI Adapter, 자동 검증 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 및 CANalyzer 18 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다.
 
 프로젝트가 어떻게 동작하는지 먼저 보려면 [Modbus485Emulator 한눈에 보기](docs/PROJECT_OVERVIEW.md)를 참조하세요.
 처음 적용할 때는 [기본 예제 시작 가이드](examples/M485E_Test/START_HERE.md)를 위에서부터 따라가세요.
 
 ## Phase 1 범위
 
-- Win32/x86 `M485E.dll`
+- Windows x86/x64 `M485E.dll`과 아키텍처 선택용 `M485E.vmodule`
 - Vector `CAPL_DLL_INFO4` / `caplDllTable4`
-- x86 `__stdcall` 호출 규약
+- x86 `__stdcall` 및 x64 Windows 호출 규약
 - 요구사양서 Appendix A의 저수준 API 21개 ABI 등록
 - `registerCAPLDLL()` Context Handle 기반 최소 Initialize/Finalize 수명주기
 - 생산 API의 scalar/배열/문자열 경계와 caller-owned 출력 보호 Probe
@@ -58,7 +79,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 ## 필수 환경
 
 - Visual Studio Build Tools(Desktop development with C++)
-- Win32/x86 Toolchain
+- Windows x86/x64 Toolchain
 - Vector CANalyzer 설치에 포함된 CAPL DLL Sample의 `Includes` 디렉터리
   - 디렉터리 안에 `cdll.h`가 있어야 합니다.
   - Vector 파일은 저장소에 복사하지 않고 Build Property로 주입합니다.
@@ -74,12 +95,17 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 & $msbuild .\Modbus485Emulator.sln /m /t:Rebuild `
   /p:Configuration=Release /p:Platform=Win32 `
   "/p:VectorCaplDllIncludeDir=$vectorIncludes"
+& $msbuild .\Modbus485Emulator.sln /m /t:Rebuild `
+  /p:Configuration=Release /p:Platform=x64 `
+  "/p:VectorCaplDllIncludeDir=$vectorIncludes"
 ```
 
 산출물:
 
-- `dist/M485E.dll` (Release, CANalyzer 배치용)
-- `dist/M485E.Debug.dll` (Debug, 개발 확인용)
+- `dist/M485E.vmodule` (CANalyzer 13 이상 아키텍처 선택 Manifest)
+- `dist/Windows-x86/M485E.dll` (Release x86)
+- `dist/Windows-x64/M485E.dll` (Release x64)
+- `dist/Windows-<arch>/M485E.Debug.dll` (Debug, 개발 확인용이며 배포 제외)
 - `out/Win32/<Configuration>/M485E.dll` (빌드 상세 산출물)
 - `out/Win32/Release/M485E.CaplAbiFixture.dll` (Phase 1 시험 전용, 배포 대상 아님)
 - `out/Win32/Release/M485E.AbiProbe.exe`
@@ -91,7 +117,7 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 ```powershell
 .\out\Win32\Release\M485E.AbiProbe.exe `
-  .\dist\M485E.dll `
+  .\dist\Windows-x86\M485E.dll `
   .\out\Win32\Release\M485E.CaplAbiFixture.dll
 ```
 
@@ -110,7 +136,7 @@ Probe는 다음을 검사합니다.
 
 [`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 생산 Release DLL과 시험 전용 Fixture를 `#pragma library`로 각각 로드합니다. 생산 API 21개의 반환 계약·Buffer 보호를 확인하고 Fixture로 배열과 `F[1]` 성공 왕복을 검사합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
 
-1. Release/Win32로 빌드합니다.
+1. CANalyzer 9.x 시험은 Release/Win32, CANalyzer 18 시험은 Release/x64로 빌드합니다.
 2. CAPL Probe 파일을 CANalyzer Configuration의 Program Node에 연결합니다.
 3. CAPL Compile이 성공하는지 확인합니다.
 4. Measurement를 시작하고 Write Window에 `M485E Phase 1 ABI probe PASS`가 출력되는지 확인합니다.
@@ -121,25 +147,31 @@ Signal Read의 저수준 출력은 CAPL DLL Table에 1요소 `F[]`로 노출됩�
 
 ## CMake
 
-CMake를 사용할 때도 반드시 Win32 Generator와 Vector Include 경로를 지정합니다.
+CMake를 사용할 때는 시험할 아키텍처와 Vector Include 경로를 지정합니다.
 
 ```powershell
 cmake -S . -B build-cmake -A Win32 `
   -DVECTOR_CAPL_DLL_INCLUDE_DIR="$vectorIncludes"
 cmake --build build-cmake --config Release
 ctest --test-dir build-cmake -C Release --output-on-failure
+
+cmake -S . -B build-cmake-x64 -A x64 `
+  -DVECTOR_CAPL_DLL_INCLUDE_DIR="$vectorIncludes"
+cmake --build build-cmake-x64 --config Release
+ctest --test-dir build-cmake-x64 -C Release --output-on-failure
 ```
 
 Visual Studio/MSBuild와 CMake 중 어느 방식으로 빌드해도 생산 DLL은 저장소 루트의
-`dist`로 자동 복사됩니다. `dist`에는 DLL만 배치하며 PDB, LIB, EXE 등 상세 산출물은
-기존 `out` 또는 CMake 빌드 디렉터리에 남습니다. Release는 `M485E.dll`, Debug는
-Release 파일을 덮어쓰지 않도록 `M485E.Debug.dll`이라는 이름을 사용합니다.
+`dist/Windows-x86` 또는 `dist/Windows-x64`로 자동 복사됩니다. Release 빌드는
+`M485E.vmodule`도 갱신하며 PDB, LIB, EXE 등 상세 산출물은 기존 `out` 또는 CMake 빌드
+디렉터리에 남습니다. Debug DLL은 Release를 덮어쓰지 않도록 `M485E.Debug.dll`을 사용하며
+정식 배포에는 포함하지 않습니다.
 
 CTest는 ABI, 계약 생성, 공개 계약, Core Unit/Boundary, DLL Integration 및 CAPL 소스 계약 검사를 실행합니다. CANalyzer 또는 실제 RS-485 장비를 사용하지 않으므로 해당 결과를 외부 검증 PASS로 해석하지 않습니다.
 
 ## CANalyzer Config 패키지 준비
 
-Release/Win32 빌드 후 다음 명령으로 DLL과 생성된 CAPL 계약을 이동 가능한 `Config` 구조에 배치합니다.
+Release/Win32와 Release/x64 빌드 후 다음 명령으로 두 DLL, `.vmodule`과 생성된 CAPL 계약을 이동 가능한 `Config` 구조에 배치합니다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
