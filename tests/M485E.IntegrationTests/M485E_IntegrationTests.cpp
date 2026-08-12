@@ -120,7 +120,8 @@ int main(int argc, char** argv)
     std::array<std::int32_t, M485E_LIFECYCLE_STATUS_COUNT> lifecycle{};
     for (int attempt = 0; attempt < 500; ++attempt)
     {
-      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+      Require(getStatus(handle, static_cast<std::uint32_t>(lifecycle.size()),
+                        lifecycle.data()) == M485E_OK,
               "GetLifecycleStatus failed");
       if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -130,11 +131,13 @@ int main(int argc, char** argv)
             "asynchronous Refresh failed");
 
     std::array<std::uint16_t, 8> words{};
-    Require(readRegisters(handle, 0, 10000, 4, words.size(), words.data()) == M485E_OK &&
+    Require(readRegisters(handle, 0, 10000, 4,
+                          static_cast<std::uint32_t>(words.size()), words.data()) == M485E_OK &&
                 words[0] == 0x4148U,
             "DLL Register Read failed");
     const std::array<std::uint16_t, 2> replacement{0x4000U, 0x0000U};
-    Require(writeRegisters(handle, 0, 10000, 2, replacement.size(), replacement.data()) ==
+    Require(writeRegisters(handle, 0, 10000, 2,
+                           static_cast<std::uint32_t>(replacement.size()), replacement.data()) ==
                 M485E_OK,
             "DLL Register Write failed");
     double physical = 0.0;
@@ -162,7 +165,8 @@ int main(int argc, char** argv)
     Require(connect(handle) == M485E_OK, "asynchronous Connect was not accepted");
     for (int attempt = 0; attempt < 500; ++attempt)
     {
-      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+      Require(getStatus(handle, static_cast<std::uint32_t>(lifecycle.size()),
+                        lifecycle.data()) == M485E_OK,
               "Connect status polling failed");
       if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -182,7 +186,8 @@ int main(int argc, char** argv)
     Require(refresh(handle) == M485E_OK, "one-Port Refresh was not accepted");
     for (int attempt = 0; attempt < 500; ++attempt)
     {
-      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+      Require(getStatus(handle, static_cast<std::uint32_t>(lifecycle.size()),
+                        lifecycle.data()) == M485E_OK,
               "one-Port Refresh status polling failed");
       if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -193,7 +198,8 @@ int main(int argc, char** argv)
             "one-Port Connect was rejected by an inactive stale PortSlot");
     for (int attempt = 0; attempt < 500; ++attempt)
     {
-      Require(getStatus(handle, lifecycle.size(), lifecycle.data()) == M485E_OK,
+      Require(getStatus(handle, static_cast<std::uint32_t>(lifecycle.size()),
+                        lifecycle.data()) == M485E_OK,
               "one-Port Connect status polling failed");
       if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
       std::this_thread::sleep_for(std::chrono::milliseconds(2));

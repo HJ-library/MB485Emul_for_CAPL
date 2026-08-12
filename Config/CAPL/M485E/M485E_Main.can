@@ -3,7 +3,11 @@ includes
 {
      // DLL은 Main.can 기준 상위 CAPL/Dll 폴더에서 로드한다.
      // generated 파일은 DLL ABI 상수이고 나머지 cin 파일은 역할별 CAPL 모듈이다.
-     #pragma library("..\\Dll\\M485E.dll")
+     #if TOOL_MAJOR_VERSION >= 13
+          #pragma library("..\\Dll\\M485E.vmodule")
+     #else
+          #pragma library("..\\Dll\\Windows-x86\\M485E.dll")
+     #endif
      #include "M485E_Contracts.generated.cin"
      #include "M485E_Core.cin"
      #include "M485E_Monitoring.cin"

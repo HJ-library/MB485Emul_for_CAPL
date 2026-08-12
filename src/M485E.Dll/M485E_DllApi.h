@@ -2,8 +2,8 @@
 
 #include <cstdint>
 
-#if !defined(_WIN32) || defined(_WIN64)
-#error M485E supports Win32/x86 only.
+#if !defined(_WIN32)
+#error M485E supports Windows x86 and x64 only.
 #endif
 
 #define M485E_API extern "C" __declspec(dllexport) std::int32_t __stdcall

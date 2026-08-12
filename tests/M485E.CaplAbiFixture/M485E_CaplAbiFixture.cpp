@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <cstring>
 
-#if !defined(_WIN32) || defined(_WIN64)
-#error M485E CAPL ABI Fixture supports Win32/x86 only.
+#if !defined(_WIN32)
+#error M485E CAPL ABI Fixture supports Windows x86 and x64 only.
 #endif
 
 namespace

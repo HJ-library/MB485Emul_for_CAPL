@@ -18,6 +18,7 @@ $uiPath = Join-Path $root 'Config\CAPL\M485E\M485E_UI.cin'
 $mainPath = Join-Path $root 'Config\CAPL\M485E\M485E_Main.can'
 $phase9Path = Join-Path $root 'tests\capl\M485E_Phase9_CoreMonitoringProbe.can'
 $systemVariablesPath = Join-Path $root 'Config\System Variables\M485E.vsysvar'
+$modulePath = Join-Path $root 'packaging\M485E.vmodule'
 
 $core = Get-Content -LiteralPath $corePath -Raw
 $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
@@ -27,6 +28,7 @@ $control = Get-Content -LiteralPath $controlPath -Raw
 $ui = Get-Content -LiteralPath $uiPath -Raw
 $main = Get-Content -LiteralPath $mainPath -Raw
 $phase9 = Get-Content -LiteralPath $phase9Path -Raw
+$module = Get-Content -LiteralPath $modulePath -Raw
 
 # CAPL 모듈은 Core를 단일 DLL 경계로 사용한다. 이 검사는 기능 이름의 존재 여부뿐 아니라
 # 의존 방향까지 고정하여 UI/Monitoring의 편의 코드가 Core 책임을 침범하는 회귀를 막는다.
@@ -79,8 +81,20 @@ Require-Match $core 'comPortNumber\s*<\s*1\s*\|\|\s*comPortNumber\s*>\s*999' `
 Require-Match $core 'snprintf\s*\(port,\s*elcount\(port\),\s*"COM%d",\s*comPortNumber\)' `
     'CAPL Core must format the numeric COM port for the string DLL ABI.'
 Require-Match $main 'struct\s+M485E_PortConfig' 'Main must define a private Port configuration structure.'
-Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\M485E\.dll"\)' `
-    'Main DLL path must match ProjectConfig/CAPL/Dll relative layout.'
+Require-Match $main 'TOOL_MAJOR_VERSION\s*>=\s*13' `
+    'Main must select the architecture module for CANalyzer 13 and later.'
+Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\M485E\.vmodule"\)' `
+    'Main must load M485E.vmodule in modern CANalyzer.'
+Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\Windows-x86\\\\M485E\.dll"\)' `
+    'Main must keep the direct Windows-x86 DLL path for CANalyzer 9.x.'
+Require-Match $module '<Version>0\.2\.0</Version>' `
+    'The architecture module version must match Release 0.2.0.'
+Require-Match $module '<SupportedArchitecture\s+arch="Windows-x64 Windows-x86"\s*/>' `
+    'The architecture module must advertise Windows x64 and x86.'
+Require-Match $module '<LibraryPath\s+arch="Windows-x64">\./Windows-x64/M485E\.dll</LibraryPath>' `
+    'The architecture module must map the Windows x64 DLL.'
+Require-Match $module '<LibraryPath\s+arch="Windows-x86">\./Windows-x86/M485E\.dll</LibraryPath>' `
+    'The architecture module must map the Windows x86 DLL.'
 Require-Match $main 'gM485E_DeviceMapPath\[128\]\s*=\s*"\.\\\\Maps\\\\M485E\\\\M485E_Device\.csv"' `
     'Main Device path must be relative to the ProjectConfig CANalyzer configuration.'
 Require-Match $main 'gM485E_FrameRulePath\[128\]\s*=\s*"\.\\\\Maps\\\\M485E\\\\M485E_FrameRule\.csv"' `

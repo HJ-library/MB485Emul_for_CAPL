@@ -17,5 +17,10 @@ out/
 *.cbf
 __pycache__/
 *.py[cod]
+/Config/CAPL/DLL/
 dist/*
-!dist/M485E.dll
+!dist/M485E.vmodule
+!dist/Windows-x86/
+!dist/Windows-x86/M485E.dll
+!dist/Windows-x64/
+!dist/Windows-x64/M485E.dll

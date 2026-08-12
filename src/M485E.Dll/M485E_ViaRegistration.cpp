@@ -7,8 +7,8 @@
  *        registerCAPLDLL().
  * @note M485E does not retain the service pointer because it never calls back
  *       into CAPL. The CAPL handle is supplied separately to every M485E API.
- * @warning The undecorated x86 export name is provided by M485E.def as required
- *          by the Vector CAPL DLL loader.
+ * @note The x86 build uses M485E.def to expose the undecorated loader name.
+ *       Windows x64 exports the undecorated name directly.
  */
 VIACLIENT(void) VIARegisterCDLL(VIACapl* service)
 {
