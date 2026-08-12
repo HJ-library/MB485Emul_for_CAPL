@@ -12,12 +12,13 @@ RuntimeConnection::RuntimeConnection(
     std::array<ConnectionPortConfig, M485E_PORT_SLOT_COUNT> configs,
     const std::uint8_t activePortCount, core::RuntimeModel& runtime,
     core::SnapshotQueueService& snapshots, core::ErrorQueue& errors,
-    StateCallback stateCallback)
+    core::RtuLogQueue& rtuLog, StateCallback stateCallback)
     : configs_(std::move(configs)),
       activePortCount_(activePortCount),
       runtime_(runtime),
       snapshots_(snapshots),
       errors_(errors),
+      rtuLog_(rtuLog),
       stateCallback_(std::move(stateCallback))
 {
 }
@@ -48,7 +49,7 @@ std::int32_t RuntimeConnection::OpenAll(std::uint8_t& failedPortSlot,
     {
       workers_[slot] = std::make_unique<core::PortWorker>(
           static_cast<std::uint8_t>(slot), core::CalculateRtuTiming(configs_[slot].settings),
-          *transports_[slot], runtime_, snapshots_, errors_,
+          *transports_[slot], runtime_, snapshots_, errors_, rtuLog_,
           [this](const std::uint8_t failedSlot, const std::int32_t code,
                  const std::uint32_t error) { OnFatal(failedSlot, code, error); });
       const std::int32_t status = workers_[slot]->Start();

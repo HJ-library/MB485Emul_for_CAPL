@@ -1,0 +1,242 @@
+/*@!Encoding:949*/
+
+// RtuLog는 DLL의 bounded Queue에서 CSV 행을 꺼내 Configuration 기준 Logs 폴더에 기록한다.
+// Serial Worker는 파일 I/O를 수행하지 않으므로 로그 디스크 지연이 Modbus 응답을 막지 않는다.
+
+variables
+{
+     msTimer tM485E_RtuLogDrain;
+     dword gM485E_RtuLogFileHandle;
+     long gM485E_RtuLogStats[9];
+     char gM485E_RtuLogLine[1600];
+     char gM485E_RtuLogFileName[128];
+     long gM485E_RtuLogDraining;
+}
+
+/*
+ * 함수명: M485E_RtuLog_BuildFileName
+ * 기능: 현재 로컬 시각으로 파일명을 만들고 같은 초의 중복 이름에는 001~999 접미사를 붙인다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 사용 가능한 파일명을 찾지 못한 오류 코드
+ */
+long M485E_RtuLog_BuildFileName()
+{
+     long localTime[9];
+     long suffix;
+     dword readHandle;
+     char relativePath[192];
+
+     getLocalTime(localTime);
+     for (suffix = 0; suffix <= 999; suffix++)
+     {
+          if (suffix == 0)
+               snprintf(gM485E_RtuLogFileName, elcount(gM485E_RtuLogFileName),
+                    "M485E_RTU_%04d%02d%02d_%02d%02d%02d.csv",
+                    localTime[5] + 1900, localTime[4] + 1, localTime[3],
+                    localTime[2], localTime[1], localTime[0]);
+          else
+               snprintf(gM485E_RtuLogFileName, elcount(gM485E_RtuLogFileName),
+                    "M485E_RTU_%04d%02d%02d_%02d%02d%02d_%03d.csv",
+                    localTime[5] + 1900, localTime[4] + 1, localTime[3],
+                    localTime[2], localTime[1], localTime[0], suffix);
+          snprintf(relativePath, elcount(relativePath), ".\\Logs\\M485E\\%s",
+               gM485E_RtuLogFileName);
+          readHandle = openFileRead(relativePath, 0);
+          if (readHandle == 0) return M485E_OK;
+          fileClose(readHandle);
+     }
+     return M485E_ERR_RTU_LOG_FILE_OPEN;
+}
+
+/*
+ * 함수명: M485E_RtuLog_OpenFile
+ * 기능: Logs/M485E 아래 새 CSV 파일을 열고 고정 Header를 기록한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 파일 생성/쓰기 오류 코드
+ */
+long M485E_RtuLog_OpenFile()
+{
+     char header[192];
+     long result;
+
+     result = M485E_RtuLog_BuildFileName();
+     if (result != M485E_OK) return result;
+     setWritePath(".\\Logs\\M485E");
+     gM485E_RtuLogFileHandle = openFileWrite(gM485E_RtuLogFileName, 0);
+     if (gM485E_RtuLogFileHandle == 0) return M485E_ERR_RTU_LOG_FILE_OPEN;
+     snprintf(header, elcount(header),
+          "Timestamp,Sequence,Record_Type,Port,Slave_ID,Index,Device_Name,Function_Code,Address,Quantity,Result,Data\n");
+     if (filePutString(header, strlen(header), gM485E_RtuLogFileHandle) == 0)
+     {
+          fileClose(gM485E_RtuLogFileHandle);
+          gM485E_RtuLogFileHandle = 0;
+          return M485E_ERR_RTU_LOG_FILE_WRITE;
+     }
+     sysSetVariableString(sysvar::M485E::RtuLog::CurrentFileName,
+          gM485E_RtuLogFileName);
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_RtuLog_CloseFile
+ * 기능: 열린 CSV 파일을 닫고 Active LED를 끈다.
+ * 파라미터: 없음
+ */
+void M485E_RtuLog_CloseFile()
+{
+     if (gM485E_RtuLogFileHandle != 0)
+          fileClose(gM485E_RtuLogFileHandle);
+     gM485E_RtuLogFileHandle = 0;
+     gM485E_RtuLogDraining = 0;
+     @sysvar::M485E::RtuLog::ActiveLed = 0;
+}
+
+/*
+ * 함수명: M485E_RtuLog_DrainOnce
+ * 기능: 한 Tick에 최대 32개 CSV 행을 기록하고 Queue와 in-flight가 모두 비면 파일을 닫는다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 Queue/파일 쓰기 오류 코드
+ */
+long M485E_RtuLog_DrainOnce()
+{
+     long count;
+     long result;
+
+     if (gM485E_RtuLogFileHandle == 0) return M485E_OK;
+     for (count = 0; count < 32; count++)
+     {
+          result = M485E_Core_TryDequeueRtuLogLine(gM485E_RtuLogLine);
+          if (result == M485E_STATUS_NO_DATA) break;
+          if (result != M485E_OK) return result;
+          strncat(gM485E_RtuLogLine, "\n", elcount(gM485E_RtuLogLine));
+          if (filePutString(gM485E_RtuLogLine, strlen(gM485E_RtuLogLine),
+               gM485E_RtuLogFileHandle) == 0)
+               return M485E_ERR_RTU_LOG_FILE_WRITE;
+     }
+     result = M485E_Core_GetRtuLogStats(gM485E_RtuLogStats);
+     if (result != M485E_OK) return result;
+     @sysvar::M485E::RtuLog::DroppedCount =
+          gM485E_RtuLogStats[M485E_RLS_DROPPED_COUNT];
+     if (gM485E_RtuLogDraining != 0 &&
+          gM485E_RtuLogStats[M485E_RLS_PENDING_LINES] == 0 &&
+          gM485E_RtuLogStats[M485E_RLS_IN_FLIGHT] == 0)
+          M485E_RtuLog_CloseFile();
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_RtuLog_Enable
+ * 기능: Sequence 1의 새 DLL capture session과 새 CSV 파일을 함께 시작한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 DLL/파일 오류 코드
+ */
+long M485E_RtuLog_Enable()
+{
+     long result;
+     if (gM485E_RtuLogFileHandle != 0) return M485E_OK;
+     result = M485E_Core_GetRtuLogStats(gM485E_RtuLogStats);
+     if (result != M485E_OK) return result;
+     if (gM485E_RtuLogStats[M485E_RLS_CAPTURE_ENABLED] != 0 ||
+          gM485E_RtuLogStats[M485E_RLS_PENDING_LINES] != 0 ||
+          gM485E_RtuLogStats[M485E_RLS_IN_FLIGHT] != 0)
+          return M485E_ERR_OPERATION_BUSY;
+     result = M485E_RtuLog_OpenFile();
+     if (result != M485E_OK) return result;
+     result = M485E_Core_SetRtuLogEnabled(1);
+     if (result != M485E_OK)
+     {
+          M485E_RtuLog_CloseFile();
+          return result;
+     }
+     gM485E_RtuLogDraining = 0;
+     @sysvar::M485E::RtuLog::DroppedCount = 0;
+     @sysvar::M485E::RtuLog::ActiveLed = 1;
+     setTimer(tM485E_RtuLogDrain, 10);
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_RtuLog_Disable
+ * 기능: 새 capture를 막고 이미 완료되었거나 처리 중인 로그를 모두 기록한 뒤 닫도록 전환한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 DLL 상태 오류 코드
+ */
+long M485E_RtuLog_Disable()
+{
+     long result;
+     if (gM485E_RtuLogFileHandle == 0) return M485E_OK;
+     result = M485E_Core_SetRtuLogEnabled(0);
+     if (result != M485E_OK) return result;
+     gM485E_RtuLogDraining = 1;
+     setTimer(tM485E_RtuLogDrain, 1);
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_RtuLog_Start
+ * 기능: 새 Measurement에서 RTU Log Panel 상태를 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_RtuLog_Start()
+{
+     gM485E_RtuLogFileHandle = 0;
+     gM485E_RtuLogDraining = 0;
+     @sysvar::M485E::RtuLog::LogSwitch = 0;
+     @sysvar::M485E::RtuLog::ActiveLed = 0;
+     @sysvar::M485E::RtuLog::DroppedCount = 0;
+     @sysvar::M485E::RtuLog::ResultCode = M485E_OK;
+}
+
+/*
+ * 함수명: M485E_RtuLog_Shutdown
+ * 기능: Measurement 종료 전에 capture를 중지하고 남은 행을 제한된 횟수로 동기 배출한 뒤 파일을 닫는다.
+ * 파라미터: 없음
+ */
+void M485E_RtuLog_Shutdown()
+{
+     long attempt;
+     long result;
+     cancelTimer(tM485E_RtuLogDrain);
+     if (gM485E_RtuLogFileHandle == 0) return;
+     result = M485E_Core_SetRtuLogEnabled(0);
+     if (result == M485E_OK)
+          result = M485E_Core_WaitRtuLogIdle(M485E_RTU_LOG_IDLE_TIMEOUT_MS);
+     if (result != M485E_OK)
+     {
+          @sysvar::M485E::RtuLog::ResultCode = result;
+          M485E_Core_ReportSyncFailure("RtuLogShutdown", result);
+     }
+     gM485E_RtuLogDraining = 1;
+     for (attempt = 0; attempt < 64 && gM485E_RtuLogFileHandle != 0; attempt++)
+          if (M485E_RtuLog_DrainOnce() < M485E_OK) break;
+     M485E_RtuLog_CloseFile();
+}
+
+// 이벤트명: RtuLog::LogSwitch 변경
+// 기능: ON은 매번 새 CSV를 만들고 OFF는 Queue 배출 후 파일을 닫는다.
+on sysvar_update sysvar::M485E::RtuLog::LogSwitch
+{
+     long result;
+     if (@this != 0) result = M485E_RtuLog_Enable();
+     else result = M485E_RtuLog_Disable();
+     @sysvar::M485E::RtuLog::ResultCode = result;
+     M485E_Core_ReportSyncFailure("RtuLog", result);
+     if (result != M485E_OK && @this != 0) @this = 0;
+}
+
+// 타이머명: tM485E_RtuLogDrain
+// 기능: DLL Queue를 10ms마다 CSV로 배출한다.
+on timer tM485E_RtuLogDrain
+{
+     long result;
+     result = M485E_RtuLog_DrainOnce();
+     if (result != M485E_OK)
+     {
+          @sysvar::M485E::RtuLog::ResultCode = result;
+          M485E_Core_SetRtuLogEnabled(0);
+          @sysvar::M485E::RtuLog::LogSwitch = 0;
+          M485E_RtuLog_CloseFile();
+          return;
+     }
+     if (gM485E_RtuLogFileHandle != 0) setTimer(tM485E_RtuLogDrain, 10);
+}

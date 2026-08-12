@@ -39,6 +39,24 @@ std::shared_ptr<const ActiveConfiguration> RuntimeModel::Configuration() const n
   return configuration_;
 }
 
+std::int32_t RuntimeModel::SetCommunicationEnabled(const std::uint8_t index,
+                                                   const bool enabled) noexcept
+{
+  if (!devices_[index]) return M485E_ERR_DEVICE_NOT_FOUND;
+  devices_[index]->communicationEnabled.store(enabled);
+  return M485E_OK;
+}
+
+bool RuntimeModel::IsCommunicationEnabled(const std::uint8_t index) const noexcept
+{
+  return devices_[index] && devices_[index]->communicationEnabled.load();
+}
+
+bool RuntimeModel::IsConfigured(const std::uint8_t index) const noexcept
+{
+  return devices_[index] != nullptr;
+}
+
 std::int32_t RuntimeModel::ValidateRange(const std::uint8_t index,
                                          const std::uint16_t address,
                                          const std::uint16_t quantity,
@@ -224,8 +242,15 @@ BroadcastRegisterWriteResult RuntimeModel::WriteBroadcastRegisters(
   {
     const std::int16_t position = configuration_->deviceBySlave[portSlot][slaveId];
     if (position >= 0)
+    {
+      const std::uint8_t index =
+          configuration_->devices[static_cast<std::size_t>(position)].definition.index;
+      // A disabled Device simulates an absent Slave. Broadcast writes therefore
+      // exclude it instead of mutating memory that an addressed request cannot reach.
+      if (!IsCommunicationEnabled(index)) continue;
       targetIndices.push_back(
-          configuration_->devices[static_cast<std::size_t>(position)].definition.index);
+          index);
+    }
   }
   std::sort(targetIndices.begin(), targetIndices.end());
   if (targetIndices.empty()) return {M485E_ERR_DEVICE_NOT_FOUND, {}};

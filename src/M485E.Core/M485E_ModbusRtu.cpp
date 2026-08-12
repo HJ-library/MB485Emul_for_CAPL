@@ -87,9 +87,9 @@ RtuResult ModbusRtuEngine::Exception(const std::uint8_t deviceIndex,
                                      const std::uint8_t functionCode,
                                      const std::uint8_t exceptionCode)
 {
-  (void)deviceIndex;
   RtuResult result;
   result.disposition = RtuDisposition::Response;
+  result.deviceIndex = deviceIndex;
   result.response = {slaveId, static_cast<std::uint8_t>(functionCode | 0x80U), exceptionCode};
   ModbusCrc16::Append(result.response);
   return result;
@@ -101,28 +101,57 @@ RtuResult ModbusRtuEngine::Process(const std::uint8_t portSlot,
   try
   {
     if (request.size() < 4U || request.size() > 256U || !ModbusCrc16::IsValid(request))
-      return {RtuDisposition::Discard, {}, M485E_ERR_RTU_FRAME_DISCARDED, {}};
+    {
+      RtuResult result{RtuDisposition::Discard, {}, M485E_ERR_RTU_FRAME_DISCARDED, {}};
+      result.noResponseReason = RtuNoResponseReason::InvalidFrame;
+      return result;
+    }
     const std::uint8_t slaveId = request[0];
     const auto configuration = runtime_.Configuration();
     // Invalid or unconfigured slave addresses are ignored silently. Responding would
     // create bus contention with the slave that actually owns the request.
     if (slaveId > 247U || portSlot >= configuration->activePortCount)
-      return {RtuDisposition::Ignore, {}, M485E_OK, {}};
+    {
+      RtuResult result{RtuDisposition::Ignore, {}, M485E_OK, {}};
+      result.noResponseReason = RtuNoResponseReason::UnknownSlave;
+      return result;
+    }
     const std::uint8_t functionCode = request[1];
     // Broadcast is meaningful only on the physical Port that received it. Reads and
     // unsupported Functions remain silent; FC10 applies atomically to every Slave.
     if (slaveId == 0U)
-      return functionCode == 0x10U
-                 ? ProcessBroadcastWrite(portSlot, request)
-                 : RtuResult{RtuDisposition::Ignore, {}, M485E_OK, {}};
+    {
+      RtuResult result = functionCode == 0x10U
+                             ? ProcessBroadcastWrite(portSlot, request)
+                             : RtuResult{RtuDisposition::Ignore, {}, M485E_OK, {}};
+      result.noResponseReason = RtuNoResponseReason::BroadcastNoResponse;
+      return result;
+    }
     const std::int16_t devicePosition = configuration->deviceBySlave[portSlot][slaveId];
-    if (devicePosition < 0) return {RtuDisposition::Ignore, {}, M485E_OK, {}};
+    if (devicePosition < 0)
+    {
+      RtuResult result{RtuDisposition::Ignore, {}, M485E_OK, {}};
+      result.noResponseReason = RtuNoResponseReason::UnknownSlave;
+      return result;
+    }
     const std::uint8_t deviceIndex =
         configuration->devices[static_cast<std::size_t>(devicePosition)].definition.index;
+    if (!runtime_.IsCommunicationEnabled(deviceIndex))
+    {
+      RtuResult result{RtuDisposition::Ignore, {}, M485E_OK, {}};
+      result.noResponseReason = RtuNoResponseReason::DeviceDisabled;
+      result.deviceIndex = deviceIndex;
+      return result;
+    }
+    RtuResult result;
     if (functionCode == 0x03U || functionCode == 0x04U)
-      return ProcessRead(deviceIndex, slaveId, functionCode, request);
-    if (functionCode == 0x10U) return ProcessWrite(deviceIndex, slaveId, request);
-    return Exception(deviceIndex, slaveId, functionCode, kIllegalFunction);
+      result = ProcessRead(deviceIndex, slaveId, functionCode, request);
+    else if (functionCode == 0x10U)
+      result = ProcessWrite(deviceIndex, slaveId, request);
+    else
+      result = Exception(deviceIndex, slaveId, functionCode, kIllegalFunction);
+    result.deviceIndex = deviceIndex;
+    return result;
   }
   catch (...)
   {
@@ -202,6 +231,7 @@ RtuResult ModbusRtuEngine::ProcessBroadcastWrite(
 {
   RtuResult result;
   result.disposition = RtuDisposition::Ignore;
+  result.noResponseReason = RtuNoResponseReason::BroadcastNoResponse;
   std::uint16_t address = 0;
   std::vector<std::uint16_t> values;
   if (DecodeWriteRequest(request, address, values) != 0U) return result;

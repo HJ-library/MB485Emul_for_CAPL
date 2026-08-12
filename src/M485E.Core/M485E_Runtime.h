@@ -3,6 +3,7 @@
 #include "M485E_Configuration.h"
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -83,6 +84,12 @@ class RuntimeModel final
   std::int32_t ReadRule(std::uint8_t index, std::uint8_t ruleId,
                         RuleDefinition& rule, DeviceDefinition& device,
                         std::vector<std::uint16_t>& values) const;
+  /** @brief Enables or suppresses external RTU traffic for one configured Device. */
+  std::int32_t SetCommunicationEnabled(std::uint8_t index, bool enabled) noexcept;
+  /** @brief Reports whether a configured Device currently accepts external RTU traffic. */
+  bool IsCommunicationEnabled(std::uint8_t index) const noexcept;
+  /** @brief Reports whether an Index exists in the active configuration. */
+  bool IsConfigured(std::uint8_t index) const noexcept;
 
  private:
   struct DeviceRuntime
@@ -91,6 +98,7 @@ class RuntimeModel final
     RegisterImage current;
     std::unordered_map<std::string, std::size_t> signalByName;
     std::array<std::int16_t, 256> ruleById{};
+    std::atomic<bool> communicationEnabled{true};
 
     DeviceRuntime();
   };

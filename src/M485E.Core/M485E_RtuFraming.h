@@ -36,6 +36,10 @@ RtuTiming CalculateRtuTiming(const SerialSettings& settings) noexcept;
 struct RtuParseBatch
 {
   std::vector<std::vector<std::uint8_t>> frames;
+  // CRC resynchronization may prove that a preceding byte range cannot be a
+  // valid ADU. Preserve bounded discarded ranges so optional RTU logging can
+  // record the received bytes without making Serial workers perform file I/O.
+  std::vector<std::vector<std::uint8_t>> discardedData;
   std::uint32_t discardedSegments = 0;
 };
 

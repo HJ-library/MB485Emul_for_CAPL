@@ -1,7 +1,11 @@
 /*@!Encoding:949*/
 includes
 {
-  #pragma library("..\\..\\dist\\M485E.dll")
+  #if TOOL_MAJOR_VERSION >= 13
+    #pragma library("..\\..\\dist\\M485E.vmodule")
+  #else
+    #pragma library("..\\..\\dist\\Windows-x86\\M485E.dll")
+  #endif
   #include "..\\..\\generated\\capl\\M485E_Contracts.generated.cin"
   #include "..\\..\\Config\\CAPL\\M485E\\M485E_Core.cin"
   #include "..\\..\\Config\\CAPL\\M485E\\M485E_Monitoring.cin"

@@ -128,7 +128,10 @@ try {
     $extendedCpp = Join-Path $tempRoot 'Extended.h'
     Invoke-Generator 'Generate' $extendedErrors $constants $extendedCpp `
         (Join-Path $tempRoot 'Extended.cin') $true
-    if (-not ([IO.File]::ReadAllText($extendedCpp).Contains('M485E_ERROR_CODE_COUNT = 91'))) {
+    $expectedExtendedCount = $errorRows.Count + 1
+    if (-not ([IO.File]::ReadAllText($extendedCpp).Contains(
+        "M485E_ERROR_CODE_COUNT = $expectedExtendedCount"
+    ))) {
         throw "A valid appended error code was not generated."
     }
 

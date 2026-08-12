@@ -1,6 +1,6 @@
 # Modbus485Emulator 한눈에 보기
 
-> Release baseline: v0.2.0 (2026-08-12)
+> Release baseline: v0.3.0 (2026-08-12)
 
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
 그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 Windows x86/x64 CAPL DLL이다.
@@ -19,11 +19,13 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | Board | Modbus RTU Master로 FC03·FC04 Read와 FC10 Write 요청 전송 |
 | SystemBase Multi USB-485 | 자동 방향 제어 방식으로 PC와 Board의 RS-485 연결 |
 | `M485E.dll` | CSV 검증, 장치/Register 상태, RTU Slave, Queue와 연결 수명주기 처리 |
-| CAPL Core | 21개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
+| CAPL Core | 27개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
 | CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
 | CAPL ReadOption | 프로젝트 FrameRule의 `slot ↔ Index + Rule_ID` 고정 목록을 한곳에서 관리 |
 | CAPL Connection | ConnectSwitch, 500ms 자동 연결 Timer와 Connect/Disconnect 요청을 관리 |
 | CAPL Control | Refresh와 100ms Lifecycle 상태를 LED·문자열 System Variable로 변환 |
+| CAPL DeviceCommunication | Index별 외부 RTU 응답 On/Off와 Available LED를 100ms마다 동기화 |
+| CAPL RtuLog | bounded DLL Queue를 배출해 요청·응답 CSV 파일을 기록하고 Log LED를 관리 |
 | CAPL UI | Manual Write, Signal과 Monitoring System Variable 요청을 캡처해 공개 진입점에 전달 |
 | CAPL Main | 프로젝트 경로·Port 초기 설정과 Measurement 시작·종료 순서를 관리 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
@@ -102,12 +104,32 @@ Core가 Write Window 메시지로 정리한다.
 6. FC10에서 값이 실제로 바뀌면 변경 범위와 겹치는 모든 Rule의 Change Snapshot을 Port Queue에 넣는다.
 
 미등록 Slave에는 응답하지 않는다. Slave ID 0의 FC10 Broadcast는 수신 Port에 구성된 모든
-Device를 전체 검증 후 원자 적용하고 응답은 보내지 않으며, Broadcast FC03/FC04는 무응답·무적용이다.
+통신 활성 Device를 전체 검증 후 원자 적용하고 응답은 보내지 않으며, Broadcast FC03/FC04는 무응답·무적용이다.
 Register Address 0은 Slave ID 0과 별개의 정상 주소다. 등록 Slave의 미지원 Function이나
 잘못된 Address·Quantity는 Modbus Exception으로 응답한다. 한 Port의 처리 지연이 다른
 Port를 막지 않도록 Port별 Worker와 Framing 상태를 분리한다.
 
-## 5. CAPL과 Panel이 값을 조작할 때
+`DeviceCommunication::Enabled[Index]`를 0으로 바꾸면 해당 Device만 외부 Master에게 없는
+Slave처럼 동작한다. 같은 Port의 다른 Slave와 COM 연결은 유지되며 Direct Register/Signal
+제어와 가상 CAN Monitoring도 계속 동작한다. `AvailableLed[Index]`는 실제 Connected 상태와
+Enabled 상태가 모두 만족될 때만 1이다.
+
+## 5. RTU 요청·응답 CSV 로그
+
+`RtuLog::LogSwitch`를 켜면 새 `Logs/M485E/M485E_RTU_YYYYMMDD_HHMMSS.csv`를 만들고
+Master 요청과 Emulator 결과를 Transaction별 두 행으로 기록한다. DLL Worker는 파일에 직접
+쓰지 않고 256개 Transaction bounded Queue에 게시하므로 디스크 지연이 RTU 응답을 막지 않는다.
+
+- `REQ`: 수신 요청 전체 ADU와 Port, Slave, Index, DeviceName, FC, Address, Quantity
+- `RES`: 실제 송신에 성공한 정상/Exception 응답 전체 ADU
+- `NO_RES`: DeviceDisabled, BroadcastNoResponse, UnknownSlave, CrcError, InvalidFrame 또는 ResponseSendFailed
+- 같은 Transaction의 REQ와 결과는 같은 Sequence를 사용하고 각 파일에서 1부터 시작
+- OFF 시 신규 capture를 중지하고 남은 쌍을 모두 기록한 후 닫으며 `ActiveLed`를 끔
+
+별도의 CAN ID는 만들지 않는다. 가상 CAN Monitoring은 Register 상태 관찰용이고 RTU CSV는
+실제 Master 요청/응답 추적용이라 서로 독립적으로 켜고 끌 수 있다.
+
+## 6. CAPL과 Panel이 값을 조작할 때
 
 ![Register 데이터 흐름](assets/register_data_flow.png)
 
@@ -138,7 +160,7 @@ Signal Type은 `Signed`, `Unsigned`, `IEEE Float`, `IEEE Double`을 지원한다
 Direct Write와 Signal Write로 값이 바뀌면 `SourceType=0x02`, Reset이면 `0x03`, Board의
 FC10 Write이면 `0x01` Change Snapshot이 만들어진다.
 
-## 6. 가상 CAN Monitoring
+## 7. 가상 CAN Monitoring
 
 Monitoring은 DLL이 스스로 주기 송신하지 않는다. CAPL이 활성화된 `ReadOption`을 관리하고
 DLL에서 Rule Snapshot을 읽어 CAN Message를 생성한다.
@@ -181,7 +203,7 @@ Slot은 0부터 빈칸 없이 증가해야 하고 같은 `Index + Rule_ID`의 �
 Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별 Cursor를 별도로
 유지하므로 한 Port에 Rule이 집중되어도 다른 Port의 Rule이 영구적으로 밀리지 않는다.
 
-## 7. 연결 끊김과 오류 복구
+## 8. 연결 끊김과 오류 복구
 
 ![수명주기 상태](assets/lifecycle_state.png)
 
@@ -200,7 +222,7 @@ Error FIFO에 기록한다. Queue가 가득 차면 oldest-drop 정책과 Drop Co
 Latch가 처음 1로 전환될 때만 Pending·Capacity·High-water Mark·DropCount·Latch를 Write
 Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않으면서 진단 손실은 확인할 수 있다.
 
-## 8. 코드와 파일 위치
+## 9. 코드와 파일 위치
 
 | 위치 | 내용 |
 |---|---|
@@ -218,23 +240,24 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 | `dist/Windows-x86/M485E.dll` | CANalyzer 9.x에 배치할 Release/x86 DLL |
 | `dist/Windows-x64/M485E.dll` | CANalyzer 18에 배치할 Release/x64 DLL |
 
-## 9. 처음 실행하는 순서
+## 10. 처음 실행하는 순서
 
 1. Solution을 `Release/Win32`와 `Release/x64`로 빌드하여 두 DLL과 `M485E.vmodule`을 만든다.
 2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 Manifest와 DLL을 `Config/CAPL/Dll`에 배치한다.
 3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
 4. Program Node에 `M485E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.
-6. Measurement를 시작하면 ConnectSwitch가 자동으로 ON 된다. `ConfigurationValid=1`, `State=Connected`를 확인한다.
+6. Measurement를 시작하면 ConnectSwitch가 자동으로 ON 된다. `ConfigurationValid=1`, `ConnectedLed=1`, `State=Connected`를 확인한다.
 7. 필요하면 ConnectSwitch를 OFF로 내려 Manual Register Write와 Signal Read/Write를 확인한다.
 8. 자동 Connect가 실패했다면 USB-RS485와 Board 연결을 확인하고 `ConnectSwitch`를 다시 켠다.
-9. FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
+9. DeviceCommunication Enabled/Available LED, FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
+10. RtuLog LogSwitch를 ON하고 Master 요청 후 `Logs/M485E`의 REQ/RES 또는 REQ/NO_RES 쌍을 확인한다.
 
 대상 환경에서 수행할 상세 순서는
 [`examples/M485E_Test/VALIDATION_CHECKLIST.md`](../examples/M485E_Test/VALIDATION_CHECKLIST.md)를
 따르고 결과는 `docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx`에 기록한다.
 
-## 10. 현재 완료 상태와 남은 검증
+## 11. 현재 완료 상태와 남은 검증
 
 자동 Build, ABI Probe, Core Unit Test, DLL Integration Test와 CAPL 소스 계약 검사는
 완료되어 있다. 다음은 실제 대상 환경에서 확인해야 한다.

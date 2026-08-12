@@ -89,3 +89,6 @@
 "-7003","M485E_ERR_INTERNAL_STATE","Critical","ERR_INTERNAL_STATE","Lifecycle 또는 Configuration 내부 상태 손상"
 "-7004","M485E_ERR_INTERNAL_QUEUE","Critical","ERR_INTERNAL_QUEUE","bounded Queue 인덱스 또는 Counter 불변식 위반"
 "-7005","M485E_ERR_INTERNAL_WORKER","Critical","ERR_INTERNAL_WORKER","복구 불가능한 내부 Worker 실패"
+"-6010","M485E_ERR_RTU_LOG_FILE_OPEN","Error","ERR_RTU_LOG_FILE_OPEN","RTU Log CSV 파일 생성 또는 열기 실패"
+"-6011","M485E_ERR_RTU_LOG_FILE_WRITE","Error","ERR_RTU_LOG_FILE_WRITE","RTU Log CSV Header 또는 Data 행 쓰기 실패"
+"-6012","M485E_ERR_RTU_LOG_IDLE_TIMEOUT","Error","ERR_RTU_LOG_IDLE_TIMEOUT","Measurement 종료 시 RTU Log in-flight Transaction 완료 대기 Timeout"

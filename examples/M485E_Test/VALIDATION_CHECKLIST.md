@@ -7,6 +7,7 @@
 - [ ] Measurement 시작 시 Context 초기화 오류 없음
 - [ ] `ConfigurationValid=1`
 - [ ] `ConnectedLed=1`
+- [ ] Connected에서 `DisconnectedLed=0`, Disconnect 완료 후 반대로 표시됨
 
 ## CSV와 Port
 
@@ -25,6 +26,8 @@
 - [ ] Slave ID 0 FC10 Broadcast는 적용되지만 응답하지 않음
 - [ ] Address 0을 별도 시험 Map에서 사용할 경우 그대로 처리됨
 - [ ] 잘못된 CRC, Function Code, Address, Quantity의 정책 확인
+- [ ] Device Index 0 Disable 시 Slave 1만 무응답이고 Slave 2는 계속 응답
+- [ ] Disabled Device는 Broadcast FC10에서 제외되고 Direct/CAN Monitoring은 유지
 
 ## 가상 CAN Monitoring
 
@@ -38,10 +41,19 @@
 ## Panel
 
 - [ ] ConnectSwitch와 ConnectedLed가 독립적으로 표시됨
-- [ ] Busy/Error/StateText 표시가 Lifecycle 상태와 일치
+- [ ] Connected/Disconnected LED와 StateText 표시가 Lifecycle 상태와 일치
 - [ ] Manual Write Quantity 1 및 122 경계 확인
 - [ ] Manual Write Quantity 123은 CAPL에서 거부됨
 - [ ] Signal Read/Write와 ResultCode 확인
+
+## RTU CSV Log
+
+- [ ] LogSwitch OFF→ON마다 `Logs/M485E`에 새 파일 생성
+- [ ] ActiveLed는 파일 open/capture/drain 동안 1, Close 후 0
+- [ ] 정상 요청은 같은 Sequence의 REQ/RES 두 행
+- [ ] Disable·Broadcast·미등록 Slave·CRC 오류는 REQ/NO_RES 두 행
+- [ ] Header 12개 칼럼과 REQ/RES 전체 Raw ADU Hex 확인
+- [ ] DroppedCount와 CurrentFileName 표시 확인
 
 ## 종료와 복구
 

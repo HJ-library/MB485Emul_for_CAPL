@@ -6,9 +6,16 @@ M485E::Connection,LastResult,M485E::Connection::LastResult,int32,,0,Numeric disp
 M485E::Connection,ConfigurationValid,M485E::Connection::ConfigurationValid,int32,,0,LED,CSV validation status
 M485E::Connection,ResultCode,M485E::Connection::ResultCode,int32,,0,Numeric display,Last command acceptance result
 M485E::Connection,ConnectedLed,M485E::Connection::ConnectedLed,int32,,0,Green LED,Actual connected state
-M485E::Connection,BusyLed,M485E::Connection::BusyLed,int32,,0,Amber LED,Lifecycle operation in progress
-M485E::Connection,ErrorLed,M485E::Connection::ErrorLed,int32,,0,Red LED,Lifecycle error state
+M485E::Connection,DisconnectedLed,M485E::Connection::DisconnectedLed,int32,,0,Gray LED,Actual disconnected state
 M485E::Connection,StateText,M485E::Connection::StateText,string,,Uninitialized,Text display,Readable lifecycle state
+M485E::DeviceCommunication,Enabled,M485E::DeviceCommunication::Enabled,int32[],256,0,Device toggles,Per-Index external RTU communication enable
+M485E::DeviceCommunication,AvailableLed,M485E::DeviceCommunication::AvailableLed,int32[],256,0,Green LED array,Per-Index RTU availability
+M485E::DeviceCommunication,ResultCode,M485E::DeviceCommunication::ResultCode,int32,,0,Numeric display,Last device communication command result
+M485E::RtuLog,LogSwitch,M485E::RtuLog::LogSwitch,int32,,0,Toggle,RTU CSV capture request
+M485E::RtuLog,ActiveLed,M485E::RtuLog::ActiveLed,int32,,0,Green LED,Log file capture or drain active
+M485E::RtuLog,ResultCode,M485E::RtuLog::ResultCode,int32,,0,Numeric display,Last RTU log result
+M485E::RtuLog,DroppedCount,M485E::RtuLog::DroppedCount,int32,,0,Numeric display,Dropped RTU transaction count
+M485E::RtuLog,CurrentFileName,M485E::RtuLog::CurrentFileName,string,,,Text display,Last RTU CSV file name
 M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,0,Toggle,Monitoring master switch
 M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,0,Rule checkboxes,Periodic Rule selection
 M485E::Monitoring,ResultCode,M485E::Monitoring::ResultCode,int32,,0,Numeric display,Last monitoring result

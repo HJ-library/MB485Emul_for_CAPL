@@ -13,13 +13,14 @@ namespace m485e::core
 PortWorker::PortWorker(const std::uint8_t portSlot, const RtuTiming timing,
                        ISerialTransport& transport, RuntimeModel& runtime,
                        SnapshotQueueService& snapshots, ErrorQueue& errors,
-                       FatalCallback fatalCallback)
+                       RtuLogQueue& rtuLog, FatalCallback fatalCallback)
     : portSlot_(portSlot),
       timing_(timing),
       transport_(transport),
       runtime_(runtime),
       snapshots_(snapshots),
       errors_(errors),
+      rtuLog_(rtuLog),
       fatalCallback_(std::move(fatalCallback))
 {
 }
@@ -99,6 +100,7 @@ bool PortWorker::WriteResponse(const std::vector<std::uint8_t>& response) noexce
 
 bool PortWorker::ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept
 {
+  RtuLogToken logToken = rtuLog_.Begin(portSlot_, frame);
   ModbusRtuEngine engine(runtime_);
   RtuResult result = engine.Process(portSlot_, frame);
   if (result.diagnosticStatus != M485E_OK)
@@ -111,13 +113,29 @@ bool PortWorker::ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept
     snapshots_.RecordChange(deviceWrite.deviceIndex, WriteSource::Rtu,
                             deviceWrite.write);
   }
-  if (result.disposition != RtuDisposition::Response) return true;
+  if (result.disposition != RtuDisposition::Response)
+  {
+    rtuLog_.Complete(std::move(logToken), nullptr, result.noResponseReason);
+    return true;
+  }
   // Read completion is later than the physical final byte, so waiting one t3.5
   // from this conservative point guarantees the response does not collapse the
   // required inter-frame silence. This delay never decides receive boundaries.
   std::this_thread::sleep_for(std::chrono::microseconds(timing_.t3_5Us));
-  if (stopRequested_.load()) return true;
-  return WriteResponse(result.response);
+  if (stopRequested_.load())
+  {
+    rtuLog_.Complete(std::move(logToken), nullptr,
+                     RtuNoResponseReason::ResponseSendFailed);
+    return true;
+  }
+  if (!WriteResponse(result.response))
+  {
+    rtuLog_.Complete(std::move(logToken), nullptr,
+                     RtuNoResponseReason::ResponseSendFailed);
+    return false;
+  }
+  rtuLog_.Complete(std::move(logToken), &result.response, RtuNoResponseReason::None);
+  return true;
 }
 
 bool PortWorker::IsAddressedFrame(const std::vector<std::uint8_t>& frame) const noexcept
@@ -129,7 +147,9 @@ bool PortWorker::IsAddressedFrame(const std::vector<std::uint8_t>& frame) const 
   if (slaveId > 247U) return false;
   const auto configuration = runtime_.Configuration();
   if (portSlot_ >= configuration->activePortCount) return false;
-  return slaveId == 0U || configuration->deviceBySlave[portSlot_][slaveId] >= 0;
+  // Valid requests for unconfigured Slave IDs are also processed so optional RTU
+  // logging can record an explicit NO_RES/UnknownSlave outcome.
+  return true;
 }
 
 void PortWorker::Run() noexcept
@@ -144,6 +164,14 @@ void PortWorker::Run() noexcept
     const std::uint32_t readWaitMs =
         std::max<std::uint32_t>(20U, (timing_.t3_5Us + 999U) / 1000U);
     const auto processBatch = [this](RtuParseBatch batch) {
+      for (const auto& discardedData : batch.discardedData)
+      {
+        if (discardedData.size() >= 2U)
+        {
+          RtuLogToken logToken = rtuLog_.Begin(portSlot_, discardedData);
+          rtuLog_.Complete(std::move(logToken), nullptr, RtuNoResponseReason::CrcError);
+        }
+      }
       for (std::uint32_t discarded = 0; discarded < batch.discardedSegments; ++discarded)
         Report(M485E_ERR_RTU_FRAME_DISCARDED, M485E_STAGE_PARSE, 0,
                "Malformed RTU stream segment was discarded during CRC resynchronization.");

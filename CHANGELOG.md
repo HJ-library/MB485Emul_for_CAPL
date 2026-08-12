@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.0] - 2026-08-13
+
+### Added
+
+- Device Index별 외부 Modbus RTU 통신 On/Off와 256개 상태 조회 API
+- Device별 `Enabled[]`, `AvailableLed[]` System Variable 및 100ms CAPL 상태 동기화
+- Master 요청과 Emulator 응답·무응답을 REQ/RES/NO_RES로 기록하는 RTU CSV 로그
+- Transaction 256개 bounded Queue, 쌍 보존 oldest-drop, Sequence 및 Drop 통계
+- Connection의 실제 Connected/Disconnected 상태를 구분하는 두 LED
+- 로그 파일 Open 선행과 처리 중 Transaction의 최대 2초 종료 대기로 RTU 로그 수명주기를 보호하는 API
+
+### Changed
+
+- CAPL-visible API를 21개에서 27개로 확장하고 기존 21개 Entry의 이름·순서를 유지한다.
+- Connection Panel의 Busy/Error LED를 제거하고 실제 연결/해제 상태 LED로 단순화한다.
+- ErrorCodes를 93개, PublicConstants를 210개로 확장한다.
+
+### Fixed
+
+- RTU 로그 파일 Open 실패 직전에 수신된 요청이 Queue를 점유해 다음 Log ON을 막는 문제를 제거했다.
+- Measurement 종료 중 처리 중인 RTU Transaction이 완료되기 전에 로그 파일이 닫힐 수 있는 문제를 제거했다.
+
+### Compatibility
+
+- Device 통신을 끄더라도 Direct Register/Signal 제어와 가상 CAN Monitoring은 유지한다.
+- Broadcast FC10은 비활성 Device를 제외하고 같은 Port의 활성 Device에만 적용한다.
+- Windows x86/x64 DLL과 CANalyzer 9.x/18 패키지 구조를 유지한다.
+
 ## [0.2.0] - 2026-08-12
 
 ### Added

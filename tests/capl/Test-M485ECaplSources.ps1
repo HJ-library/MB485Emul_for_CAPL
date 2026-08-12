@@ -14,21 +14,33 @@ $monitoringPath = Join-Path $root 'Config\CAPL\M485E\M485E_Monitoring.cin'
 $readOptionPath = Join-Path $root 'Config\CAPL\M485E\M485E_ReadOption.cin'
 $connectionPath = Join-Path $root 'Config\CAPL\M485E\M485E_Connection.cin'
 $controlPath = Join-Path $root 'Config\CAPL\M485E\M485E_Control.cin'
+$deviceCommunicationPath = Join-Path $root 'Config\CAPL\M485E\M485E_DeviceCommunication.cin'
+$rtuLogPath = Join-Path $root 'Config\CAPL\M485E\M485E_RtuLog.cin'
 $uiPath = Join-Path $root 'Config\CAPL\M485E\M485E_UI.cin'
 $mainPath = Join-Path $root 'Config\CAPL\M485E\M485E_Main.can'
 $phase9Path = Join-Path $root 'tests\capl\M485E_Phase9_CoreMonitoringProbe.can'
 $systemVariablesPath = Join-Path $root 'Config\System Variables\M485E.vsysvar'
 $modulePath = Join-Path $root 'packaging\M485E.vmodule'
+$generatedCaplPath = Join-Path $root 'generated\capl\M485E_Contracts.generated.cin'
+$configCaplContractPath = Join-Path $root 'Config\CAPL\M485E\M485E_Contracts.generated.cin'
 
 $core = Get-Content -LiteralPath $corePath -Raw
 $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
 $readOption = Get-Content -LiteralPath $readOptionPath -Raw
 $connection = Get-Content -LiteralPath $connectionPath -Raw
 $control = Get-Content -LiteralPath $controlPath -Raw
+$deviceCommunication = Get-Content -LiteralPath $deviceCommunicationPath -Raw
+$rtuLog = Get-Content -LiteralPath $rtuLogPath -Raw
 $ui = Get-Content -LiteralPath $uiPath -Raw
 $main = Get-Content -LiteralPath $mainPath -Raw
 $phase9 = Get-Content -LiteralPath $phase9Path -Raw
 $module = Get-Content -LiteralPath $modulePath -Raw
+$generatedCapl = (Get-Content -LiteralPath $generatedCaplPath -Raw).Replace("`r`n", "`n")
+$configCaplContract = (Get-Content -LiteralPath $configCaplContractPath -Raw).Replace("`r`n", "`n")
+
+if ($generatedCapl -cne $configCaplContract) {
+    throw 'The CAPL contract copy used by M485E_Main.can is stale.'
+}
 
 # CAPL 모듈은 Core를 단일 DLL 경계로 사용한다. 이 검사는 기능 이름의 존재 여부뿐 아니라
 # 의존 방향까지 고정하여 UI/Monitoring의 편의 코드가 Core 책임을 침범하는 회귀를 막는다.
@@ -39,8 +51,10 @@ if ($monitoring -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
     throw 'CAPL Monitoring must not call M485E_Dll_* directly; use a Core wrapper.'
 }
 if ($connection -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(' -or
-    $control -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
-    throw 'CAPL Connection and Control must call lifecycle APIs through Core wrappers.'
+    $control -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(' -or
+    $deviceCommunication -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(' -or
+    $rtuLog -match '\bM485E_Dll_[A-Za-z0-9_]+\s*\(') {
+    throw 'CAPL adapters must call DLL APIs through Core wrappers.'
 }
 if ($ui -match '\b(?:gM485E_Context(?:Handle|Registered|Initialized)|registerCAPLDLL)\b' -or
     $monitoring -match '\b(?:gM485E_Context(?:Handle|Registered|Initialized)|registerCAPLDLL)\b') {
@@ -68,7 +82,7 @@ if ($ui -match '\boutput\s*\(') {
 
 $apiNames = [regex]::Matches($apiHeader, 'M485E_API\s+(M485E_Dll_[A-Za-z0-9_]+)\s*\(') |
     ForEach-Object { $_.Groups[1].Value }
-if ($apiNames.Count -ne 21) { throw "Expected 21 public APIs, found $($apiNames.Count)." }
+if ($apiNames.Count -ne 27) { throw "Expected 27 public APIs, found $($apiNames.Count)." }
 foreach ($apiName in $apiNames) {
     Require-Match $core ([regex]::Escape($apiName) + '\s*\(') "CAPL Core does not wrap $apiName."
 }
@@ -87,8 +101,8 @@ Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\M485E\.vmodule"\)' `
     'Main must load M485E.vmodule in modern CANalyzer.'
 Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\Windows-x86\\\\M485E\.dll"\)' `
     'Main must keep the direct Windows-x86 DLL path for CANalyzer 9.x.'
-Require-Match $module '<Version>0\.2\.0</Version>' `
-    'The architecture module version must match Release 0.2.0.'
+Require-Match $module '<Version>0\.3\.0</Version>' `
+    'The architecture module version must match Release 0.3.0.'
 Require-Match $module '<SupportedArchitecture\s+arch="Windows-x64 Windows-x86"\s*/>' `
     'The architecture module must advertise Windows x64 and x86.'
 Require-Match $module '<LibraryPath\s+arch="Windows-x64">\./Windows-x64/M485E\.dll</LibraryPath>' `
@@ -298,7 +312,7 @@ foreach ($statusName in @('State', 'LastResult', 'ConfigurationValid')) {
         throw "Connection::$statusName must be writable by the CAPL lifecycle adapter."
     }
 }
-$connectionIndicatorNames = @('ConnectedLed', 'BusyLed', 'ErrorLed')
+$connectionIndicatorNames = @('ConnectedLed', 'DisconnectedLed')
 foreach ($indicatorName in $connectionIndicatorNames) {
     $indicatorVariable = $connectionNamespace.SelectSingleNode("variable[@name='$indicatorName']")
     if ($null -eq $indicatorVariable -or
@@ -322,10 +336,12 @@ Require-Match $control 'void\s+M485E_Control_UpdateConnectionIndicators\s*\(\s*l
     'Connection indicator derivation helper is missing.'
 Require-Match $control 'Connection::ConnectedLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_CONNECTED' `
     'Connected LED must reflect only the Connected lifecycle state.'
-Require-Match $control 'Connection::BusyLed\s*=\s*[\s\S]*?M485E_STATE_REFRESHING[\s\S]*?M485E_STATE_CONNECTING[\s\S]*?M485E_STATE_DISCONNECTING' `
-    'Busy LED must cover Refreshing, Connecting, and Disconnecting states.'
-Require-Match $control 'Connection::ErrorLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_ERROR' `
-    'Error LED must reflect only the Error lifecycle state.'
+Require-Match $control 'Connection::DisconnectedLed\s*=\s*[\r\n\s]*currentState\s*==\s*M485E_STATE_DISCONNECTED' `
+    'Disconnected LED must reflect only the Disconnected lifecycle state.'
+if ($null -ne $connectionNamespace.SelectSingleNode("variable[@name='BusyLed']") -or
+    $null -ne $connectionNamespace.SelectSingleNode("variable[@name='ErrorLed']")) {
+    throw 'Removed BusyLed and ErrorLed variables must not be restored.'
+}
 Require-Match $control 'M485E_Control_UpdateConnectionIndicators\s*\(\s*currentState\s*\)' `
     'The 100 ms lifecycle poll must update the Panel connection indicators.'
 Require-Match $control 'void\s+M485E_Control_ResetDisplay\s*\(' `
@@ -366,6 +382,41 @@ if ($null -eq $manualWriteData -or $manualWriteData.arrayLength -ne '122') {
     throw 'ManualWrite::Data must provide exactly 122 Panel elements.'
 }
 
+$deviceNamespace = $systemVariables.SelectSingleNode(
+    '//namespace[@name="M485E"]/namespace[@name="DeviceCommunication"]')
+if ($null -eq $deviceNamespace -or
+    $deviceNamespace.SelectSingleNode("variable[@name='Enabled']").arrayLength -ne '256' -or
+    $deviceNamespace.SelectSingleNode("variable[@name='AvailableLed']").arrayLength -ne '256') {
+    throw 'DeviceCommunication Enabled and AvailableLed must be 256-element arrays.'
+}
+$rtuLogNamespace = $systemVariables.SelectSingleNode(
+    '//namespace[@name="M485E"]/namespace[@name="RtuLog"]')
+foreach ($name in @('LogSwitch', 'ActiveLed', 'ResultCode', 'DroppedCount', 'CurrentFileName')) {
+    if ($null -eq $rtuLogNamespace -or $null -eq $rtuLogNamespace.SelectSingleNode("variable[@name='$name']")) {
+        throw "RtuLog::$name is missing."
+    }
+}
+Require-Match $deviceCommunication 'M485E_Core_SetDeviceCommunicationEnabled\s*\(' `
+    'DeviceCommunication must apply per-Index commands through Core.'
+Require-Match $deviceCommunication 'M485E_DEVICE_STATE_AVAILABLE\s*\?\s*1\s*:\s*0' `
+    'AvailableLed must use 1 only for the Available state.'
+Require-Match $control 'M485E_DeviceCommunication_Poll\s*\(' `
+    'The 100 ms lifecycle timer must poll Device communication states.'
+Require-Match $rtuLog 'M485E_RTU_%04d%02d%02d_%02d%02d%02d' `
+    'RTU Log must use the timestamped file naming contract.'
+Require-Match $rtuLog 'Timestamp,Sequence,Record_Type,Port,Slave_ID,Index,Device_Name,Function_Code,Address,Quantity,Result,Data' `
+    'RTU Log CSV header is incomplete.'
+Require-Match $rtuLog 'M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*M485E_RtuLogDraining\s*=\s*1' `
+    'RTU Log OFF must stop capture and drain before close.'
+Require-Match $rtuLog 'M485E_RtuLog_OpenFile\s*\(\s*\)[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*1\s*\)' `
+    'RTU Log must open the CSV before enabling DLL capture.'
+Require-Match $rtuLog 'M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*?M485E_Core_WaitRtuLogIdle\s*\([\s\S]*?M485E_RtuLog_DrainOnce\s*\(' `
+    'RTU Log shutdown must stop capture, wait for in-flight transactions, and then drain.'
+Require-Match $rtuLog 'long\s+M485E_RtuLog_Disable\s*\(\s*\)[\s\S]*?gM485E_RtuLogFileHandle\s*==\s*0\s*\)\s*return\s+M485E_OK;[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)' `
+    'An already inactive RTU Log OFF command must not call the DLL before CSV refresh.'
+Require-Match $rtuLog 'on\s+timer\s+tM485E_RtuLogDrain[\s\S]*?result\s*!=\s*M485E_OK[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*?M485E_RtuLog_CloseFile\s*\(' `
+    'A CSV drain failure must stop DLL capture before closing the file.'
+
 $requiredFiles = @(
     'tests\capl\M485E_Phase1_AbiProbe.can',
     'tests\capl\M485E_Phase2_ContractsProbe.can',
@@ -374,6 +425,8 @@ $requiredFiles = @(
     'Config\CAPL\M485E\M485E_ReadOption.cin',
     'Config\CAPL\M485E\M485E_Connection.cin',
     'Config\CAPL\M485E\M485E_Control.cin',
+    'Config\CAPL\M485E\M485E_DeviceCommunication.cin',
+    'Config\CAPL\M485E\M485E_RtuLog.cin',
     'Config\Maps\M485E\M485E_Device.csv',
     'Config\Maps\M485E\M485E_FrameRule.csv'
 )
@@ -405,4 +458,4 @@ foreach ($device in $devices) {
     }
 }
 
-Write-Output 'M485E CAPL source contract checks PASS: 21 wrappers, module boundaries, monitoring policy, UI adapter, XML, and probe inputs.'
+Write-Output 'M485E CAPL source contract checks PASS: 27 wrappers, module boundaries, device control, RTU logging, monitoring policy, UI adapter, XML, and probe inputs.'

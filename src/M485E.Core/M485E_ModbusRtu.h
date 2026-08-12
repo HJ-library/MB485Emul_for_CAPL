@@ -26,12 +26,25 @@ enum class RtuDisposition
   Discard,
 };
 
+enum class RtuNoResponseReason
+{
+  None,
+  DeviceDisabled,
+  BroadcastNoResponse,
+  UnknownSlave,
+  CrcError,
+  InvalidFrame,
+  ResponseSendFailed,
+};
+
 struct RtuResult
 {
   RtuDisposition disposition = RtuDisposition::Discard;
   std::vector<std::uint8_t> response;
   std::int32_t diagnosticStatus = 0;
   std::vector<DeviceRegisterWriteResult> deviceWrites;
+  RtuNoResponseReason noResponseReason = RtuNoResponseReason::None;
+  std::int16_t deviceIndex = -1;
 };
 
 class ModbusRtuEngine final

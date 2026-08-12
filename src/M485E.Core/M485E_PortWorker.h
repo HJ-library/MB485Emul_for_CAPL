@@ -3,6 +3,7 @@
 #include "M485E_ModbusRtu.h"
 #include "M485E_Queues.h"
 #include "M485E_RtuFraming.h"
+#include "M485E_RtuLog.h"
 
 #include <atomic>
 #include <cstddef>
@@ -57,7 +58,7 @@ class PortWorker final
 
   PortWorker(std::uint8_t portSlot, RtuTiming timing, ISerialTransport& transport,
              RuntimeModel& runtime, SnapshotQueueService& snapshots, ErrorQueue& errors,
-             FatalCallback fatalCallback);
+             RtuLogQueue& rtuLog, FatalCallback fatalCallback);
   ~PortWorker();
   PortWorker(const PortWorker&) = delete;
   PortWorker& operator=(const PortWorker&) = delete;
@@ -81,6 +82,7 @@ class PortWorker final
   RuntimeModel& runtime_;
   SnapshotQueueService& snapshots_;
   ErrorQueue& errors_;
+  RtuLogQueue& rtuLog_;
   FatalCallback fatalCallback_;
   std::atomic<bool> stopRequested_{false};
   std::atomic<bool> running_{false};

@@ -132,7 +132,11 @@ std::optional<FrameCandidate> FindNextFrame(
 void ExtractCandidate(std::vector<std::uint8_t>& buffer, const FrameCandidate& candidate,
                       RtuParseBatch& batch)
 {
-  if (candidate.offset != 0U) ++batch.discardedSegments;
+  if (candidate.offset != 0U)
+  {
+    ++batch.discardedSegments;
+    batch.discardedData.emplace_back(buffer.begin(), buffer.begin() + candidate.offset);
+  }
   batch.frames.emplace_back(buffer.begin() + candidate.offset,
                             buffer.begin() + candidate.offset + candidate.length);
   buffer.erase(buffer.begin(), buffer.begin() + candidate.offset + candidate.length);

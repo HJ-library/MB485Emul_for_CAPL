@@ -84,6 +84,10 @@ int main(int argc, char** argv)
                                               const char*, double*);
   using WriteSignal = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t,
                                                const char*, double);
+  using Toggle = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t);
+  using DeviceToggle =
+      std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t);
+  using LogLine = std::int32_t(__stdcall*)(std::uint32_t, std::uint32_t, char*);
   try
   {
     Require(argc == 2, "usage: M485E.IntegrationTests M485E.dll");
@@ -106,6 +110,15 @@ int main(int argc, char** argv)
     const auto writeRegisters = Load<WriteRegisters>(table, "M485E_Dll_WriteRegisters");
     const auto readSignal = Load<ReadSignal>(table, "M485E_Dll_ReadSignal");
     const auto writeSignal = Load<WriteSignal>(table, "M485E_Dll_WriteSignal");
+    const auto setDeviceCommunication =
+        Load<DeviceToggle>(table, "M485E_Dll_SetDeviceCommunicationEnabled");
+    const auto getDeviceStates =
+        Load<Status>(table, "M485E_Dll_GetDeviceCommunicationStates");
+    const auto setRtuLog = Load<Toggle>(table, "M485E_Dll_SetRtuLogEnabled");
+    const auto dequeueRtuLog =
+        Load<LogLine>(table, "M485E_Dll_TryDequeueRtuLogLine");
+    const auto getRtuLogStats = Load<Status>(table, "M485E_Dll_GetRtuLogStats");
+    const auto waitRtuLogIdle = Load<Toggle>(table, "M485E_Dll_WaitRtuLogIdle");
     Fixture fixture;
     constexpr std::uint32_t handle = 0x484F4D45U;
     Require(initialize(handle) == M485E_OK, "Initialize failed");
@@ -129,6 +142,34 @@ int main(int argc, char** argv)
     Require(lifecycle[M485E_LS_LAST_RESULT] == M485E_OK &&
                 lifecycle[M485E_LS_CONFIGURATION_VALID] == 1,
             "asynchronous Refresh failed");
+
+    std::array<std::int32_t, M485E_MAX_DEVICES> deviceStates{};
+    Require(getDeviceStates(handle, static_cast<std::uint32_t>(deviceStates.size()),
+                            deviceStates.data()) == M485E_OK &&
+                deviceStates[0] == M485E_DEVICE_STATE_DISCONNECTED &&
+                deviceStates[1] == M485E_DEVICE_STATE_DISCONNECTED &&
+                deviceStates[2] == M485E_DEVICE_STATE_UNCONFIGURED,
+            "initial Device communication states are incorrect");
+    Require(setDeviceCommunication(handle, 0, 0) == M485E_OK &&
+                getDeviceStates(handle, static_cast<std::uint32_t>(deviceStates.size()),
+                                deviceStates.data()) == M485E_OK &&
+                deviceStates[0] == M485E_DEVICE_STATE_DISABLED &&
+                setDeviceCommunication(handle, 0, 1) == M485E_OK,
+            "Index Device communication toggle failed");
+    std::array<std::int32_t, M485E_RTU_LOG_STATS_COUNT> rtuLogStats{};
+    std::array<char, M485E_MAX_RTU_LOG_LINE_LENGTH + 1> rtuLogLine{};
+    Require(setRtuLog(handle, 1) == M485E_OK &&
+                getRtuLogStats(handle, static_cast<std::uint32_t>(rtuLogStats.size()),
+                               rtuLogStats.data()) == M485E_OK &&
+                rtuLogStats[M485E_RLS_CAPTURE_ENABLED] == 1 &&
+                dequeueRtuLog(handle, static_cast<std::uint32_t>(rtuLogLine.size()),
+                              rtuLogLine.data()) == M485E_STATUS_NO_DATA &&
+                setRtuLog(handle, 0) == M485E_OK &&
+                waitRtuLogIdle(handle, -1) == M485E_ERR_INVALID_ARGUMENT &&
+                waitRtuLogIdle(handle, M485E_MAX_RTU_LOG_IDLE_TIMEOUT_MS + 1) ==
+                    M485E_ERR_INVALID_ARGUMENT &&
+                waitRtuLogIdle(handle, 0) == M485E_OK,
+            "RTU Log public API state or empty queue contract failed");
 
     std::array<std::uint16_t, 8> words{};
     Require(readRegisters(handle, 0, 10000, 4,
