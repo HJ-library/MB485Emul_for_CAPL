@@ -21,6 +21,8 @@ $mainPath = Join-Path $root 'Config\CAPL\M485E\M485E_Main.can'
 $phase9Path = Join-Path $root 'tests\capl\M485E_Phase9_CoreMonitoringProbe.can'
 $systemVariablesPath = Join-Path $root 'Config\System Variables\M485E.vsysvar'
 $modulePath = Join-Path $root 'packaging\M485E.vmodule'
+$generatedCaplPath = Join-Path $root 'generated\capl\M485E_Contracts.generated.cin'
+$configCaplContractPath = Join-Path $root 'Config\CAPL\M485E\M485E_Contracts.generated.cin'
 
 $core = Get-Content -LiteralPath $corePath -Raw
 $monitoring = Get-Content -LiteralPath $monitoringPath -Raw
@@ -33,6 +35,12 @@ $ui = Get-Content -LiteralPath $uiPath -Raw
 $main = Get-Content -LiteralPath $mainPath -Raw
 $phase9 = Get-Content -LiteralPath $phase9Path -Raw
 $module = Get-Content -LiteralPath $modulePath -Raw
+$generatedCapl = (Get-Content -LiteralPath $generatedCaplPath -Raw).Replace("`r`n", "`n")
+$configCaplContract = (Get-Content -LiteralPath $configCaplContractPath -Raw).Replace("`r`n", "`n")
+
+if ($generatedCapl -cne $configCaplContract) {
+    throw 'The CAPL contract copy used by M485E_Main.can is stale.'
+}
 
 # CAPL 모듈은 Core를 단일 DLL 경계로 사용한다. 이 검사는 기능 이름의 존재 여부뿐 아니라
 # 의존 방향까지 고정하여 UI/Monitoring의 편의 코드가 Core 책임을 침범하는 회귀를 막는다.
