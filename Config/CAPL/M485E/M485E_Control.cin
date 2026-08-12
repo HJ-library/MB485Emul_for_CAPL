@@ -22,12 +22,8 @@ void M485E_Control_UpdateConnectionIndicators(long currentState)
 {
      @sysvar::M485E::Connection::ConnectedLed =
           currentState == M485E_STATE_CONNECTED;
-     @sysvar::M485E::Connection::BusyLed =
-          currentState == M485E_STATE_REFRESHING ||
-          currentState == M485E_STATE_CONNECTING ||
-          currentState == M485E_STATE_DISCONNECTING;
-     @sysvar::M485E::Connection::ErrorLed =
-          currentState == M485E_STATE_ERROR;
+     @sysvar::M485E::Connection::DisconnectedLed =
+          currentState == M485E_STATE_DISCONNECTED;
 
      switch (currentState)
      {
@@ -221,6 +217,7 @@ on timer tM485E_LifecycleStatus
                @sysvar::M485E::Monitoring::ResultCode = monitoringResult;
                M485E_Core_ReportSyncFailure("MonitoringStart", monitoringResult);
           }
+          M485E_DeviceCommunication_Poll(gM485E_ControlLifecycleStatus);
           gM485E_ControlLastLifecycleState = currentState;
      }
      M485E_Core_PollOneErrorEvent();

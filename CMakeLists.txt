@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Modbus485Emulator VERSION 0.2.0 LANGUAGES CXX)
+project(Modbus485Emulator VERSION 0.3.0 LANGUAGES CXX)
 
 if(NOT WIN32)
   message(FATAL_ERROR "Modbus485Emulator supports Windows x86 and x64 only.")
@@ -34,6 +34,7 @@ add_library(M485E.Core STATIC
   src/M485E.Core/M485E_ModbusRtu.cpp
   src/M485E.Core/M485E_Queues.cpp
   src/M485E.Core/M485E_RtuFraming.cpp
+  src/M485E.Core/M485E_RtuLog.cpp
   src/M485E.Core/M485E_PortWorker.cpp
   src/M485E.Core/M485E_SignalCodec.cpp
 )

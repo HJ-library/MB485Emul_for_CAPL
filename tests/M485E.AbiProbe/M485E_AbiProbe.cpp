@@ -43,6 +43,11 @@ constexpr ExpectedEntry kProductionExpected[] = {
     {"M485E_Dll_GetLastSyncError", "DDLDC", "\000\000\001\000\001", "ContextHandle|MetaCapacity|OutMeta|TextCapacity|OutText"},
     {"M485E_Dll_TryDequeueErrorEvent", "DDLDC", "\000\000\001\000\001", "ContextHandle|MetaCapacity|OutMeta|TextCapacity|OutText"},
     {"M485E_Dll_GetErrorQueueStats", "DDL", "\000\000\001", "ContextHandle|StatsCapacity|OutStats"},
+    {"M485E_Dll_SetDeviceCommunicationEnabled", "DLL", "\000\000\000", "ContextHandle|Index|Enabled"},
+    {"M485E_Dll_GetDeviceCommunicationStates", "DDL", "\000\000\001", "ContextHandle|StateCapacity|OutStates"},
+    {"M485E_Dll_SetRtuLogEnabled", "DL", "\000\000", "ContextHandle|Enabled"},
+    {"M485E_Dll_TryDequeueRtuLogLine", "DDC", "\000\000\001", "ContextHandle|LineCapacity|OutLine"},
+    {"M485E_Dll_GetRtuLogStats", "DDL", "\000\000\001", "ContextHandle|StatsCapacity|OutStats"},
 };
 
 constexpr ExpectedEntry kFixtureExpected[] = {
@@ -195,6 +200,9 @@ int main(int argc, char** argv)
   using ReadSignal = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t, const char*, double*);
   using WriteSignal = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t, const char*, double);
   using ErrorOutput = std::int32_t(__stdcall*)(std::uint32_t, std::uint32_t, std::int32_t*, std::uint32_t, char*);
+  using SetDeviceCommunication = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t);
+  using Toggle = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t);
+  using RtuLogLine = std::int32_t(__stdcall*)(std::uint32_t, std::uint32_t, char*);
   using EchoF = std::int32_t(__stdcall*)(double, double*);
   using EchoWords = std::int32_t(__stdcall*)(std::uint32_t, const std::uint16_t*, std::uint16_t*);
   using EchoLongs = std::int32_t(__stdcall*)(std::uint32_t, const std::int32_t*, std::int32_t*);
@@ -341,6 +349,32 @@ int main(int argc, char** argv)
       errorStats(handle, 11, longs.data()) != 0 || longs[0] != 1 || longs[1] != 11)
     return Fail("Error queue stats capacity or output failed.");
 
+  auto setDeviceCommunication = FunctionAt<SetDeviceCommunication>(
+      table, "M485E_Dll_SetDeviceCommunicationEnabled");
+  auto deviceStates = FunctionAt<Status>(table,
+      "M485E_Dll_GetDeviceCommunicationStates");
+  auto setRtuLog = FunctionAt<Toggle>(table,
+      "M485E_Dll_SetRtuLogEnabled");
+  auto dequeueRtuLog = FunctionAt<RtuLogLine>(table,
+      "M485E_Dll_TryDequeueRtuLogLine");
+  auto rtuLogStats = FunctionAt<Status>(table, "M485E_Dll_GetRtuLogStats");
+  std::array<std::int32_t, 256> deviceStateValues;
+  deviceStateValues.fill(0x5A5A5A5A);
+  text.fill(static_cast<char>(0x5A));
+  longs.fill(0x5A5A5A5A);
+  if (setDeviceCommunication(handle, 1, 1) != -4000 ||
+      deviceStates(handle, 255, deviceStateValues.data()) != -105 ||
+      !AllEqual(deviceStateValues, 0x5A5A5A5A) ||
+      deviceStates(handle, 256, deviceStateValues.data()) != 0 ||
+      !AllEqual(deviceStateValues, 0) ||
+      setRtuLog(handle, 2) != -100 ||
+      setRtuLog(handle, 1) != -2002 ||
+      dequeueRtuLog(handle, static_cast<std::uint32_t>(text.size()), text.data()) != 1 ||
+      rtuLogStats(handle, 8, longs.data()) != -105 ||
+      !AllEqual(longs, 0x5A5A5A5A) ||
+      rtuLogStats(handle, 9, longs.data()) != 0 || longs[0] != 1 || longs[1] != 9)
+    return Fail("Device communication or RTU Log ABI guard contract failed.");
+
   if (finalize(handle) != 0 || lifecycle(handle, 9, longs.data()) != -103 ||
       initialize(handle) != 0 || finalize(handle) != 0)
     return Fail("Finalize, post-finalize, or reinitialize contract failed.");
@@ -366,6 +400,6 @@ int main(int argc, char** argv)
   FreeLibrary(fixtureModule);
   FreeLibrary(productionModule);
   std::cout << "PASS: Windows " << (sizeof(void*) == 8 ? "x64" : "x86")
-            << " VIA registration export and production table with exactly 21 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
+            << " VIA registration export and production table with exactly 26 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
   return 0;
 }

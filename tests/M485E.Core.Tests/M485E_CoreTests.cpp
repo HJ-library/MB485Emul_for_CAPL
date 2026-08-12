@@ -5,6 +5,7 @@
 #include "M485E_Queues.h"
 #include "M485E_Runtime.h"
 #include "M485E_RtuFraming.h"
+#include "M485E_RtuLog.h"
 #include "M485E_SignalCodec.h"
 
 #include <atomic>
@@ -518,6 +519,28 @@ void TestModbusRtuEngine()
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
               result.response.empty(),
           "unknown Slave was not ignored");
+
+  Require(runtime.SetCommunicationEnabled(0, false) == M485E_OK,
+          "Device communication disable failed");
+  result = engine.Process(0, Rtu({1, 0x03, 0x27, 0x10, 0, 1}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.noResponseReason == m485e::core::RtuNoResponseReason::DeviceDisabled,
+          "disabled Device answered an addressed Read");
+  result = engine.Process(0, Rtu({1, 0x10, 0x27, 0x10, 0, 1, 2, 0xDE, 0xAD}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.noResponseReason == m485e::core::RtuNoResponseReason::DeviceDisabled &&
+              runtime.ReadRegisters(0, 10000, 1, registers) == M485E_OK &&
+              registers[0] == 0x1234U,
+          "disabled Device accepted an addressed FC10 Write");
+  Require(runtime.WriteRegisters(0, 10000, {0xCAFEU},
+                                 m485e::core::WriteSource::Direct).status == M485E_OK &&
+              runtime.ReadRegisters(0, 10000, 1, registers) == M485E_OK &&
+              registers[0] == 0xCAFEU,
+          "Device communication disable incorrectly blocked Direct control");
+  Require(runtime.SetCommunicationEnabled(0, true) == M485E_OK &&
+              engine.Process(0, Rtu({1, 0x03, 0x27, 0x10, 0, 1})).disposition ==
+                  m485e::core::RtuDisposition::Response,
+          "re-enabled Device did not resume RTU responses");
   Fixture broadcastFixture;
   const std::string broadcastDevices = std::string(kDeviceHeader) +
                                        "0,COM11,1,First,signals.csv\n"
@@ -546,6 +569,19 @@ void TestModbusRtuEngine()
   Require(broadcastRuntime.ReadRegisters(2, 10000, 2, registers) == M485E_OK &&
               registers == std::vector<std::uint16_t>({0x4148U, 0x0000U}),
           "FC10 Broadcast leaked into a different physical Port");
+  Require(broadcastRuntime.SetCommunicationEnabled(0, false) == M485E_OK,
+          "Broadcast target disable failed");
+  result = broadcastEngine.Process(
+      0, Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0x33, 0x33}));
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
+              result.deviceWrites.size() == 1U &&
+              result.deviceWrites[0].deviceIndex == 1U,
+          "Broadcast did not exclude the disabled Device");
+  Require(broadcastRuntime.ReadRegisters(0, 10000, 1, registers) == M485E_OK &&
+              registers[0] == 0x1111U &&
+              broadcastRuntime.ReadRegisters(1, 10000, 1, registers) == M485E_OK &&
+              registers[0] == 0x3333U,
+          "Broadcast changed a disabled Device or skipped an enabled peer");
   result = broadcastEngine.Process(0, Rtu({0, 0x03, 0x27, 0x10, 0, 1}));
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
               result.response.empty() && result.deviceWrites.empty(),
@@ -592,6 +628,74 @@ void TestModbusRtuEngine()
   Require(result.disposition == m485e::core::RtuDisposition::Discard &&
               result.diagnosticStatus == M485E_ERR_RTU_FRAME_DISCARDED,
           "bad CRC was not silently discarded");
+}
+
+void TestRtuLogQueue()
+{
+  Fixture fixture;
+  const auto built = ConfigurationLoader{}.Build(
+      fixture.Write(OnePortDevices(), ValidRules(), ValidSignals()));
+  Require(built.Succeeded(), "RTU Log fixture build failed");
+  m485e::core::RtuLogQueue log(built.configuration);
+  const auto request = Rtu({1, 0x03, 0x27, 0x10, 0, 1});
+  const auto response = Rtu({1, 0x03, 2, 0x41, 0x48});
+  Require(log.SetEnabled(true) == M485E_OK,
+          "RTU Log capture did not start");
+  auto token = log.Begin(0, request);
+  Require(token.active && log.SetEnabled(true) == M485E_OK,
+          "idempotent RTU Log enable failed");
+  log.Complete(std::move(token), &response, m485e::core::RtuNoResponseReason::None);
+  auto stats = log.GetStats();
+  Require(stats.captureEnabled && stats.pendingLines == 2U && stats.inFlight == 0U &&
+              stats.lastSequence == 1U && stats.completedCount == 1U,
+          "RTU Log statistics do not describe one completed transaction");
+  std::array<char, M485E_MAX_RTU_LOG_LINE_LENGTH + 1> line{};
+  Require(log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK,
+          "RTU REQ row was not dequeued");
+  const std::string requestLine(line.data());
+  Require(requestLine.find(",1,REQ,COM11,1,0,First,0x03,10000,1,Received,") !=
+                  std::string::npos &&
+              requestLine.find("01 03 27 10 00 01") != std::string::npos,
+          "RTU REQ row columns or raw ADU are incorrect");
+  Require(log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK,
+          "RTU RES row was not dequeued");
+  const std::string responseLine(line.data());
+  Require(responseLine.find(",1,RES,COM11,1,0,First,0x03,10000,1,OK,") !=
+                  std::string::npos &&
+              responseLine.find("01 03 02 41 48") != std::string::npos &&
+              log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) ==
+                  M485E_STATUS_NO_DATA,
+          "RTU RES row, paired Sequence, or empty status is incorrect");
+
+  token = log.Begin(0, request);
+  log.Complete(std::move(token), nullptr,
+               m485e::core::RtuNoResponseReason::DeviceDisabled);
+  Require(log.SetEnabled(false) == M485E_OK,
+          "RTU Log capture did not stop");
+  Require(log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK &&
+              log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK &&
+              std::string(line.data()).find(",NO_RES,") != std::string::npos &&
+              std::string(line.data()).find(",DeviceDisabled,") != std::string::npos,
+          "RTU NO_RES DeviceDisabled pair was not preserved during drain");
+  Require(log.SetEnabled(true) == M485E_OK,
+          "new RTU Log capture session did not start after drain");
+  token = log.Begin(0, request);
+  log.Complete(std::move(token), &response, m485e::core::RtuNoResponseReason::None);
+  Require(log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK &&
+              std::string(line.data()).find(",1,REQ,") != std::string::npos,
+          "RTU Log did not expose the first row before capacity stress");
+  for (std::size_t count = 0; count < M485E_RTU_LOG_TRANSACTION_CAPACITY + 1U; ++count)
+  {
+    token = log.Begin(0, request);
+    log.Complete(std::move(token), &response, m485e::core::RtuNoResponseReason::None);
+  }
+  stats = log.GetStats();
+  Require(stats.pendingLines == M485E_RTU_LOG_TRANSACTION_CAPACITY * 2U + 1U &&
+              stats.droppedCount == 1U &&
+              stats.completedCount == M485E_RTU_LOG_TRANSACTION_CAPACITY + 2U &&
+              log.TryDequeue(static_cast<std::uint32_t>(line.size()), line.data()) == M485E_OK &&
+              std::string(line.data()).find(",1,RES,") != std::string::npos,
+          "RTU Log oldest-drop capacity policy failed");
 }
 
 void TestSnapshotAndDiagnosticQueues()
@@ -763,7 +867,8 @@ void TestRtuTimingAndStreamFraming()
   parser.Reset();
   batch = parser.PushBytes(prefixed.data(), prefixed.size());
   Require(batch.frames.size() == 1U && batch.frames[0] == readRequest &&
-              batch.discardedSegments == 1U,
+              batch.discardedSegments == 1U && batch.discardedData.size() == 1U &&
+              batch.discardedData[0] == std::vector<std::uint8_t>({0x55U, 0xAAU}),
           "RTU parser did not CRC-resynchronize after a garbage prefix");
 
   auto badCrc = readRequest;
@@ -773,7 +878,8 @@ void TestRtuTimingAndStreamFraming()
   Require(batch.frames.empty(), "bad CRC frame was accepted");
   batch = parser.PushBytes(readRequest.data(), readRequest.size());
   Require(batch.frames.size() == 1U && batch.frames[0] == readRequest &&
-              batch.discardedSegments == 1U,
+              batch.discardedSegments == 1U && batch.discardedData.size() == 1U &&
+              batch.discardedData[0] == badCrc,
           "bad CRC segment was not discarded when the next valid frame arrived");
 
   const auto unsupported = Rtu({1, 0x06, 0x27, 0x10, 0x12, 0x34});
@@ -872,6 +978,8 @@ void TestPortWorkerWithPartialIoAndCancellation()
   m485e::core::RuntimeModel runtime(built.configuration);
   m485e::core::SnapshotQueueService snapshots(built.configuration);
   m485e::core::ErrorQueue errors;
+  m485e::core::RtuLogQueue rtuLog(built.configuration);
+  Require(rtuLog.SetEnabled(true) == M485E_OK, "Worker RTU Log capture did not start");
   // A timeout between every byte emulates user-mode scheduling/USB delivery gaps.
   // The RTU parser must retain the partial frame instead of treating them as t3.5.
   FakeSerialTransport transport(Rtu({1, 0x03, 0x27, 0x10, 0, 1}), 1U, true);
@@ -880,7 +988,7 @@ void TestPortWorkerWithPartialIoAndCancellation()
       0, m485e::core::CalculateRtuTiming(
              {115200, 8, m485e::core::SerialParity::None, 1}),
       transport,
-      runtime, snapshots, errors,
+      runtime, snapshots, errors, rtuLog,
       [&fatalCount](std::uint8_t, std::int32_t, std::uint32_t) { ++fatalCount; });
   Require(worker.Start() == M485E_OK, "Port Worker did not start");
   std::vector<std::uint8_t> response;
@@ -896,6 +1004,14 @@ void TestPortWorkerWithPartialIoAndCancellation()
               m485e::core::ModbusCrc16::IsValid(response) &&
               fatalCount.load() == 0 && !worker.IsRunning(),
           "Port Worker partial Write, cancellation, or RTU response failed");
+  std::array<char, M485E_MAX_RTU_LOG_LINE_LENGTH + 1> logLine{};
+  Require(rtuLog.TryDequeue(static_cast<std::uint32_t>(logLine.size()), logLine.data()) ==
+                  M485E_OK &&
+              std::string(logLine.data()).find(",REQ,") != std::string::npos &&
+              rtuLog.TryDequeue(static_cast<std::uint32_t>(logLine.size()), logLine.data()) ==
+                  M485E_OK &&
+              std::string(logLine.data()).find(",RES,") != std::string::npos,
+          "Port Worker did not publish a paired RTU REQ/RES log");
 }
 
 void TestPortWorkerBroadcastWrite()
@@ -911,13 +1027,14 @@ void TestPortWorkerBroadcastWrite()
   m485e::core::SnapshotQueueService snapshots(built.configuration);
   snapshots.StartMonitoring();
   m485e::core::ErrorQueue errors;
+  m485e::core::RtuLogQueue rtuLog(built.configuration);
   FakeSerialTransport transport(
       Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0xA5, 0x5A}), 1U, true);
   std::atomic<int> fatalCount{0};
   m485e::core::PortWorker worker(
       0, m485e::core::CalculateRtuTiming(
              {115200, 8, m485e::core::SerialParity::None, 1}),
-      transport, runtime, snapshots, errors,
+      transport, runtime, snapshots, errors, rtuLog,
       [&fatalCount](std::uint8_t, std::int32_t, std::uint32_t) { ++fatalCount; });
   Require(worker.Start() == M485E_OK, "Broadcast Port Worker did not start");
   bool updated = false;
@@ -956,6 +1073,7 @@ int main()
     TestRuntimeRegisterAndSignalOperations();
     TestPortCardinalityAndSlot3Routing();
     TestModbusRtuEngine();
+    TestRtuLogQueue();
     TestSnapshotAndDiagnosticQueues();
     TestMonitoringStopIsAnEnqueueBarrier();
     TestRtuTimingAndStreamFraming();

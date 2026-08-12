@@ -37,7 +37,8 @@ class RuntimeConnection final
   RuntimeConnection(std::array<ConnectionPortConfig, M485E_PORT_SLOT_COUNT> configs,
                     std::uint8_t activePortCount,
                     core::RuntimeModel& runtime, core::SnapshotQueueService& snapshots,
-                    core::ErrorQueue& errors, StateCallback stateCallback);
+                    core::ErrorQueue& errors, core::RtuLogQueue& rtuLog,
+                    StateCallback stateCallback);
   ~RuntimeConnection();
   RuntimeConnection(const RuntimeConnection&) = delete;
   RuntimeConnection& operator=(const RuntimeConnection&) = delete;
@@ -59,6 +60,7 @@ class RuntimeConnection final
   core::RuntimeModel& runtime_;
   core::SnapshotQueueService& snapshots_;
   core::ErrorQueue& errors_;
+  core::RtuLogQueue& rtuLog_;
   StateCallback stateCallback_;
   std::array<std::unique_ptr<Win32SerialTransport>, M485E_PORT_SLOT_COUNT> transports_{};
   std::array<std::unique_ptr<core::PortWorker>, M485E_PORT_SLOT_COUNT> workers_{};

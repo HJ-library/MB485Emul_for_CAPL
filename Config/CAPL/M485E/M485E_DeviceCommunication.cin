@@ -1,0 +1,149 @@
+/*@!Encoding:949*/
+
+// DeviceCommunication은 외부 Modbus Master에 대한 Index별 응답 가능 상태만 제어한다.
+// Direct Register/Signal 제어와 CAN Monitoring은 이 상태와 독립적으로 계속 사용할 수 있다.
+
+variables
+{
+     long gM485E_DeviceStates[256];
+     long gM485E_DeviceEnabledValues[256];
+     long gM485E_DeviceEnabledCache[256];
+     long gM485E_DeviceAvailableValues[256];
+     long gM485E_DeviceLastRefreshGeneration = -1;
+}
+
+/*
+ * 함수명: M485E_DeviceCommunication_ResetFromConfiguration
+ * 기능: 성공한 CSV Refresh 뒤 구성된 Index를 모두 Enabled 상태로 초기화한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 Device 상태 조회 오류 코드
+ */
+long M485E_DeviceCommunication_ResetFromConfiguration()
+{
+     long index;
+     long result;
+
+     result = M485E_Core_GetDeviceCommunicationStates(gM485E_DeviceStates);
+     if (result != M485E_OK) return result;
+     for (index = 0; index < elcount(gM485E_DeviceEnabledValues); index++)
+     {
+          gM485E_DeviceEnabledValues[index] =
+               gM485E_DeviceStates[index] == M485E_DEVICE_STATE_UNCONFIGURED ? 0 : 1;
+          gM485E_DeviceEnabledCache[index] = gM485E_DeviceEnabledValues[index];
+     }
+     sysSetVariableLongArray(sysvar::M485E::DeviceCommunication::Enabled,
+          gM485E_DeviceEnabledValues, elcount(gM485E_DeviceEnabledValues));
+     return M485E_OK;
+}
+
+/*
+ * 함수명: M485E_DeviceCommunication_ApplyCommands
+ * 기능: Panel Enabled 배열에서 변경된 Index만 DLL의 RTU 응답 상태에 반영한다.
+ * 파라미터: 없음
+ * 반환값: M485E_OK 또는 마지막으로 발생한 Index 설정 오류 코드
+ */
+long M485E_DeviceCommunication_ApplyCommands()
+{
+     long index;
+     long result;
+     long finalResult;
+
+     finalResult = M485E_OK;
+     sysGetVariableLongArray(sysvar::M485E::DeviceCommunication::Enabled,
+          gM485E_DeviceEnabledValues, elcount(gM485E_DeviceEnabledValues));
+     for (index = 0; index < elcount(gM485E_DeviceEnabledValues); index++)
+     {
+          gM485E_DeviceEnabledValues[index] = gM485E_DeviceEnabledValues[index] == 0 ? 0 : 1;
+          if (gM485E_DeviceEnabledValues[index] == gM485E_DeviceEnabledCache[index])
+               continue;
+          result = M485E_Core_SetDeviceCommunicationEnabled(index,
+               gM485E_DeviceEnabledValues[index]);
+          if (result == M485E_OK)
+               gM485E_DeviceEnabledCache[index] = gM485E_DeviceEnabledValues[index];
+          else
+          {
+               gM485E_DeviceEnabledValues[index] = gM485E_DeviceEnabledCache[index];
+               finalResult = result;
+          }
+     }
+     sysSetVariableLongArray(sysvar::M485E::DeviceCommunication::Enabled,
+          gM485E_DeviceEnabledValues, elcount(gM485E_DeviceEnabledValues));
+     @sysvar::M485E::DeviceCommunication::ResultCode = finalResult;
+     return finalResult;
+}
+
+/*
+ * 함수명: M485E_DeviceCommunication_Poll
+ * 기능: 100ms Lifecycle Poll과 함께 명령 변경을 적용하고 Index별 Available LED를 갱신한다.
+ * 파라미터: lifecycleStatus - M485E_LS_* Layout의 현재 Lifecycle 상태 배열
+ * 반환값: 없음
+ */
+void M485E_DeviceCommunication_Poll(long lifecycleStatus[])
+{
+     long index;
+     long result;
+     long refreshGeneration;
+
+     refreshGeneration = lifecycleStatus[M485E_LS_LAST_COMPLETED_GENERATION];
+     if (lifecycleStatus[M485E_LS_LAST_COMPLETED_OPERATION] ==
+               M485E_OPERATION_REFRESH_CSV &&
+          lifecycleStatus[M485E_LS_LAST_RESULT] == M485E_OK &&
+          refreshGeneration != gM485E_DeviceLastRefreshGeneration)
+     {
+          result = M485E_DeviceCommunication_ResetFromConfiguration();
+          if (result == M485E_OK)
+               gM485E_DeviceLastRefreshGeneration = refreshGeneration;
+          else
+               @sysvar::M485E::DeviceCommunication::ResultCode = result;
+     }
+     result = M485E_DeviceCommunication_ApplyCommands();
+     if (result < M485E_OK) M485E_Core_ReportSyncFailure("DeviceCommunication", result);
+
+     result = M485E_Core_GetDeviceCommunicationStates(gM485E_DeviceStates);
+     if (result != M485E_OK)
+     {
+          @sysvar::M485E::DeviceCommunication::ResultCode = result;
+          return;
+     }
+     for (index = 0; index < elcount(gM485E_DeviceAvailableValues); index++)
+          gM485E_DeviceAvailableValues[index] =
+               gM485E_DeviceStates[index] == M485E_DEVICE_STATE_AVAILABLE ? 1 : 0;
+     sysSetVariableLongArray(sysvar::M485E::DeviceCommunication::AvailableLed,
+          gM485E_DeviceAvailableValues, elcount(gM485E_DeviceAvailableValues));
+}
+
+/*
+ * 함수명: M485E_DeviceCommunication_Start
+ * 기능: 새 Measurement의 Index 명령과 LED 배열을 안전한 0 상태로 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_DeviceCommunication_Start()
+{
+     long index;
+     gM485E_DeviceLastRefreshGeneration = -1;
+     for (index = 0; index < elcount(gM485E_DeviceEnabledCache); index++)
+     {
+          gM485E_DeviceEnabledCache[index] = 0;
+          gM485E_DeviceEnabledValues[index] = 0;
+          gM485E_DeviceAvailableValues[index] = 0;
+     }
+     sysSetVariableLongArray(sysvar::M485E::DeviceCommunication::Enabled,
+          gM485E_DeviceEnabledValues, elcount(gM485E_DeviceEnabledValues));
+     sysSetVariableLongArray(sysvar::M485E::DeviceCommunication::AvailableLed,
+          gM485E_DeviceAvailableValues, elcount(gM485E_DeviceAvailableValues));
+     @sysvar::M485E::DeviceCommunication::ResultCode = M485E_OK;
+}
+
+/*
+ * 함수명: M485E_DeviceCommunication_Stop
+ * 기능: Measurement 종료 시 Index별 Available LED를 모두 끈다.
+ * 파라미터: 없음
+ */
+void M485E_DeviceCommunication_Stop()
+{
+     long index;
+     for (index = 0; index < elcount(gM485E_DeviceAvailableValues); index++)
+          gM485E_DeviceAvailableValues[index] = 0;
+     sysSetVariableLongArray(sysvar::M485E::DeviceCommunication::AvailableLed,
+          gM485E_DeviceAvailableValues, elcount(gM485E_DeviceAvailableValues));
+}

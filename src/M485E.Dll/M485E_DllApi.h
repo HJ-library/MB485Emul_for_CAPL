@@ -261,3 +261,59 @@ M485E_API M485E_Dll_TryDequeueErrorEvent(std::uint32_t contextHandle,
 M485E_API M485E_Dll_GetErrorQueueStats(std::uint32_t contextHandle,
                                        std::uint32_t statsCapacity,
                                        std::int32_t* outStats);
+
+/**
+ * @brief Enables or disables external Modbus RTU communication for one Device Index.
+ * @param contextHandle Active CAPL context handle.
+ * @param index Configured Device Index in the range 0..255.
+ * @param enabled Zero simulates an absent Slave; one enables normal RTU service.
+ * @return M485E_OK on success, otherwise a negative M485E error code.
+ * @note Direct CAPL Register/Signal access and CAN monitoring remain available.
+ */
+M485E_API M485E_Dll_SetDeviceCommunicationEnabled(std::uint32_t contextHandle,
+                                                  std::int32_t index,
+                                                  std::int32_t enabled);
+
+/**
+ * @brief Copies the current availability state for every Device Index.
+ * @param contextHandle Active CAPL context handle.
+ * @param stateCapacity Number of std::int32_t elements in outStates; at least 256.
+ * @param outStates Values described by M485E_DEVICE_STATE_* constants.
+ * @return M485E_OK on success, otherwise a negative M485E error code.
+ */
+M485E_API M485E_Dll_GetDeviceCommunicationStates(std::uint32_t contextHandle,
+                                                 std::uint32_t stateCapacity,
+                                                 std::int32_t* outStates);
+
+/**
+ * @brief Starts or stops non-blocking RTU transaction capture.
+ * @param contextHandle Active CAPL context handle.
+ * @param enabled One starts a fresh session at Sequence 1; zero stops new capture.
+ * @return M485E_OK on success, otherwise a negative M485E error code.
+ * @note Disabling retains completed and in-flight lines so CAPL can drain them.
+ */
+M485E_API M485E_Dll_SetRtuLogEnabled(std::uint32_t contextHandle,
+                                     std::int32_t enabled);
+
+/**
+ * @brief Removes one complete CSV row from the RTU log queue.
+ * @param contextHandle Active CAPL context handle.
+ * @param lineCapacity Number of char elements in outLine, including the NUL.
+ * @param outLine Caller-owned NUL-terminated UTF-8 CSV row without a newline.
+ * @return M485E_OK, M485E_STATUS_NO_DATA, or a negative M485E error code.
+ * @note A line is retained when the output buffer is too small.
+ */
+M485E_API M485E_Dll_TryDequeueRtuLogLine(std::uint32_t contextHandle,
+                                         std::uint32_t lineCapacity,
+                                         char* outLine);
+
+/**
+ * @brief Copies RTU capture/queue statistics.
+ * @param contextHandle Active CAPL context handle.
+ * @param statsCapacity Number of std::int32_t elements in outStats.
+ * @param outStats Versioned statistics described by M485E_RLS_* constants.
+ * @return M485E_OK on success, otherwise a negative M485E error code.
+ */
+M485E_API M485E_Dll_GetRtuLogStats(std::uint32_t contextHandle,
+                                   std::uint32_t statsCapacity,
+                                   std::int32_t* outStats);

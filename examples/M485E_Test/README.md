@@ -29,7 +29,7 @@ CAPL의 `M485E_ReadOption_ConfigureAll()`도 이 순서로 구성되어 있다.
 ## 빠른 시작
 
 1. [START_HERE.md](START_HERE.md)에 따라 DLL, CAPL, System Variable DB와 CSV를 배치한다.
-2. [PANEL_SETUP_GUIDE.md](PANEL_SETUP_GUIDE.md)에 따라 Connection, Monitoring과 Write Panel을 만든다.
+2. [PANEL_SETUP_GUIDE.md](PANEL_SETUP_GUIDE.md)에 따라 Connection, Device Communication, RTU Log, Monitoring과 Write Panel을 만든다.
 3. [VALIDATION_CHECKLIST.md](VALIDATION_CHECKLIST.md)로 결과를 기록한다.
 
 프로젝트별 적용에서는 CSV 내용과 COM 설정만 변경하고 공개 DLL ABI와 CAPL Core Wrapper는 그대로 사용한다.

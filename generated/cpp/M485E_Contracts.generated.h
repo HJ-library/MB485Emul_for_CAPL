@@ -191,7 +191,29 @@ inline constexpr std::int32_t M485E_MAX_CSV_DB_NAME_LENGTH = 255;
 inline constexpr std::int32_t M485E_MAX_UNIT_LENGTH = 31;
 inline constexpr std::int32_t M485E_MAX_VALUE_TABLE_LENGTH = 1023;
 inline constexpr std::int32_t M485E_MAX_ERROR_TEXT_LENGTH = 1023;
-inline constexpr std::int32_t M485E_ERROR_CODE_COUNT = 90;
+inline constexpr std::int32_t M485E_DEVICE_STATE_UNCONFIGURED = 0;
+inline constexpr std::int32_t M485E_DEVICE_STATE_DISABLED = 1;
+inline constexpr std::int32_t M485E_DEVICE_STATE_DISCONNECTED = 2;
+inline constexpr std::int32_t M485E_DEVICE_STATE_AVAILABLE = 3;
+inline constexpr std::int32_t M485E_RTU_LOG_STATS_VERSION = 1;
+inline constexpr std::int32_t M485E_RTU_LOG_STATS_COUNT = 9;
+inline constexpr std::int32_t M485E_RLS_LAYOUT_VERSION = 0;
+inline constexpr std::int32_t M485E_RLS_FIELD_COUNT = 1;
+inline constexpr std::int32_t M485E_RLS_CAPTURE_ENABLED = 2;
+inline constexpr std::int32_t M485E_RLS_PENDING_LINES = 3;
+inline constexpr std::int32_t M485E_RLS_IN_FLIGHT = 4;
+inline constexpr std::int32_t M485E_RLS_CAPACITY = 5;
+inline constexpr std::int32_t M485E_RLS_DROPPED_COUNT = 6;
+inline constexpr std::int32_t M485E_RLS_LAST_SEQUENCE = 7;
+inline constexpr std::int32_t M485E_RLS_COMPLETED_COUNT = 8;
+inline constexpr std::int32_t M485E_OPERATION_SET_DEVICE_COMMUNICATION_ENABLED = 22;
+inline constexpr std::int32_t M485E_OPERATION_GET_DEVICE_COMMUNICATION_STATES = 23;
+inline constexpr std::int32_t M485E_OPERATION_SET_RTU_LOG_ENABLED = 24;
+inline constexpr std::int32_t M485E_OPERATION_TRY_DEQUEUE_RTU_LOG_LINE = 25;
+inline constexpr std::int32_t M485E_OPERATION_GET_RTU_LOG_STATS = 26;
+inline constexpr std::int32_t M485E_RTU_LOG_TRANSACTION_CAPACITY = 256;
+inline constexpr std::int32_t M485E_MAX_RTU_LOG_LINE_LENGTH = 1535;
+inline constexpr std::int32_t M485E_ERROR_CODE_COUNT = 92;
 
 inline constexpr std::int32_t M485E_ERR_INVALID_ARGUMENT = -100;
 inline constexpr std::int32_t M485E_ERR_INVALID_ENUM = -101;
@@ -283,6 +305,8 @@ inline constexpr std::int32_t M485E_ERR_INTERNAL_EXCEPTION = -7002;
 inline constexpr std::int32_t M485E_ERR_INTERNAL_STATE = -7003;
 inline constexpr std::int32_t M485E_ERR_INTERNAL_QUEUE = -7004;
 inline constexpr std::int32_t M485E_ERR_INTERNAL_WORKER = -7005;
+inline constexpr std::int32_t M485E_ERR_RTU_LOG_FILE_OPEN = -6010;
+inline constexpr std::int32_t M485E_ERR_RTU_LOG_FILE_WRITE = -6011;
 
 struct ErrorDefinition
 {
@@ -383,5 +407,7 @@ inline constexpr std::array<ErrorDefinition, M485E_ERROR_CODE_COUNT> kErrorDefin
     {M485E_ERR_INTERNAL_STATE, M485E_SEVERITY_CRITICAL, "M485E_ERR_INTERNAL_STATE", "ERR_INTERNAL_STATE"},
     {M485E_ERR_INTERNAL_QUEUE, M485E_SEVERITY_CRITICAL, "M485E_ERR_INTERNAL_QUEUE", "ERR_INTERNAL_QUEUE"},
     {M485E_ERR_INTERNAL_WORKER, M485E_SEVERITY_CRITICAL, "M485E_ERR_INTERNAL_WORKER", "ERR_INTERNAL_WORKER"},
+    {M485E_ERR_RTU_LOG_FILE_OPEN, M485E_SEVERITY_ERROR, "M485E_ERR_RTU_LOG_FILE_OPEN", "ERR_RTU_LOG_FILE_OPEN"},
+    {M485E_ERR_RTU_LOG_FILE_WRITE, M485E_SEVERITY_ERROR, "M485E_ERR_RTU_LOG_FILE_WRITE", "ERR_RTU_LOG_FILE_WRITE"},
 }};
 }  // namespace m485e

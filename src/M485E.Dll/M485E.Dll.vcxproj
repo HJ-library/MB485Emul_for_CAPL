@@ -102,7 +102,7 @@
     </ProjectReference>
   </ItemGroup>
   <Target Name="ValidateGeneratedContracts" BeforeTargets="PrepareForBuild">
-    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\Generate-M485EContracts.ps1&quot; -Mode Check" />
+    <Exec Command="%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(SolutionDir)tools\Generate-M485EContracts.ps1&quot; -Mode Check" />
   </Target>
   <Target Name="ValidateVectorCaplDllIncludeDir" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(VectorCaplDllIncludeDir)'==''" Text="Set VectorCaplDllIncludeDir to the Vector CAPLdll sample Includes directory." />

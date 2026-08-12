@@ -15,6 +15,7 @@ out/
 *.lib
 *.exp
 *.cbf
+Config/Logs/M485E/*.csv
 __pycache__/
 *.py[cod]
 /Config/CAPL/DLL/

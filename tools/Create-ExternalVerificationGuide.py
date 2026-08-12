@@ -12,7 +12,7 @@ from docx.shared import Cm, Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "05_Test" / "External_Verification_Guide.docx"
-RELEASE_VERSION = "0.2.0"
+RELEASE_VERSION = "0.3.0"
 
 NAVY = "17365D"
 BLUE = "2F75B5"
@@ -173,7 +173,7 @@ def main():
 
     add_heading(doc, "3. 필수 시험 순서", 1)
     rows = [
-        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 21개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
+        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 26개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
         ("EV-002", "3/8", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
         ("EV-003", "7/8", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
         ("EV-004", "5/7", "Port별 Slave에 FC03 Quantity 1/125 요청", "직접 Address의 Holding 값, CRC Low/High 정상 응답", "Serial trace"),
@@ -189,6 +189,8 @@ def main():
         ("EV-014", "7/8", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected", "Timestamp log"),
         ("EV-015", "8", "Disconnect/Connect와 Finalize", "Disconnect는 값 보존, Finalize는 2초 목표 내 Join/Close 후 Context 폐기", "Status/Process"),
         ("EV-016", "9/10", "200 Rule, 최대 Quantity, 0x81 Burst 성능 Profile", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표와 bounded Queue 진단; Error Queue DropCount 변화/Overflow 최초 전환은 누적 통계 한 번 출력", "Trace/metrics"),
+        ("EV-017", "5/7/10", "Index별 RTU 통신 OFF/ON", "비활성 Index는 FC03/04/10에 무응답·무변경, 동일 Port의 다른 Slave와 Direct/CAN 제어는 유지; Refresh 성공 후 활성화", "Panel/Serial/CAN"),
+        ("EV-018", "7/10", "RTU Log Switch와 CSV 기록", "OFF→ON마다 새 파일, REQ/RES 또는 REQ/NO_RES 동일 Sequence, 12개 Column·전체 ADU·DroppedCount·ActiveLed 확인", "CSV/Panel"),
     ]
     add_test_table(doc, rows)
 
@@ -223,7 +225,7 @@ def main():
     run.font.color.rgb = RGBColor.from_string("6B7280")
 
     doc.core_properties.title = "Modbus485Emulator External Verification Guide"
-    doc.core_properties.subject = "Release 0.2.0 external verification procedures"
+    doc.core_properties.subject = f"Release {RELEASE_VERSION} external verification procedures"
     doc.core_properties.author = "Modbus485Emulator Project"
     doc.core_properties.last_modified_by = "Modbus485Emulator Project"
     doc.core_properties.comments = ""

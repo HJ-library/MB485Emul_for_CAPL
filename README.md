@@ -1,10 +1,10 @@
 # Modbus485Emulator
 
-## v0.2.0 Windows x86/x64 지원
+## v0.3.0 장치별 RTU 제어와 요청·응답 로그
 
 - CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드합니다.
 - CANalyzer 13 이상(CANalyzer 18 포함)은 `M485E.vmodule`에서 실행 환경에 맞는 x86/x64 DLL을 선택합니다.
-- 두 아키텍처는 같은 21개 CAPL-visible API, CSV 형식과 Runtime 동작을 유지합니다.
+- 두 아키텍처는 같은 26개 CAPL-visible API, CSV 형식과 Runtime 동작을 유지합니다.
 - 정식 배포 파일은 `dist/M485E.vmodule`, `dist/Windows-x86/M485E.dll`, `dist/Windows-x64/M485E.dll`입니다.
 
 ```powershell
@@ -21,7 +21,9 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 양쪽 Release 빌드 후 `Prepare-M485EPackage.ps1`을 실행하면 CAPL Config에 `.vmodule`과 두 DLL을 함께 배치합니다.
 
-현재 릴리스는 **v0.2.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+현재 릴리스는 **v0.3.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+
+v0.3.0에서는 Device Index별 외부 RTU 통신을 Panel에서 켜고 끌 수 있습니다. 비활성 Device는 Slave가 없는 것처럼 응답하지 않지만 Direct Register/Signal 제어와 가상 CAN Monitoring은 계속 사용할 수 있습니다. `RtuLog::LogSwitch`를 켜면 Master 요청과 Emulator 응답 또는 무응답 결과가 `Logs/M485E/M485E_RTU_YYYYMMDD_HHMMSS.csv`에 REQ/RES/NO_RES 쌍으로 저장됩니다.
 
 CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니다. C++ Runtime과 CAPL Core/Monitoring/UI Adapter, 자동 검증 및 외부 검증 패키지가 준비되어 있습니다. Phase 1/2/9 Probe는 CANalyzer 13 x86 CAPL 컴파일러에서 경고 없이 컴파일되었습니다. CANalyzer 9.x SP8 및 CANalyzer 18 Measurement, SystemBase Multi USB-485, 실제 Board, Panel과 가상 CAN Trace 검증은 `External Verification Pending`입니다.
 
@@ -33,7 +35,7 @@ CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니�
 - Windows x86/x64 `M485E.dll`과 아키텍처 선택용 `M485E.vmodule`
 - Vector `CAPL_DLL_INFO4` / `caplDllTable4`
 - x86 `__stdcall` 및 x64 Windows 호출 규약
-- 요구사양서 Appendix A의 저수준 API 21개 ABI 등록
+- 요구사양서 Appendix A의 저수준 API 26개 ABI 등록(기존 21개 순서 유지)
 - `registerCAPLDLL()` Context Handle 기반 최소 Initialize/Finalize 수명주기
 - 생산 API의 scalar/배열/문자열 경계와 caller-owned 출력 보호 Probe
 - 생산 API와 분리된 시험 전용 `M485E.CaplAbiFixture.dll`의 `char[]`, `word[]`, `long[]`, `F[1]` 성공 왕복
@@ -47,7 +49,7 @@ CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니�
 - `tools/Generate-M485EContracts.ps1`: C++/CAPL 계약 생성 및 stale 결과 검사
 - `generated/cpp/M485E_Contracts.generated.h`: DLL과 C++ 시험이 사용하는 생성 계약
 - `generated/capl/M485E_Contracts.generated.cin`: CAPL Core가 사용할 생성 계약
-- 90개 오류 계약과 185개 공개 상수의 변경·누락 회귀 검사
+- 92개 오류 계약과 207개 공개 상수의 변경·누락 회귀 검사
 - 90개 오류 뒤에 신규 오류를 추가하는 호환 확장 지원
 - 잘못된 입력, 중복 코드·상수·Message Key, 잘못된 Severity 및 stale 생성 결과 시험
 
@@ -67,9 +69,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 - Phase 5: CRC-16/Modbus, FC03/FC04/FC10, 표준 Exception 및 무응답 정책
 - Phase 6: Port별 Change Snapshot FIFO와 Error FIFO, 고정 용량 256, oldest-drop·병합·통계. CAPL은 Error FIFO DropCount 변화 또는 Overflow Latch 최초 전환만 Write Window에 누적 통계로 알림
 - Phase 7: Win32 Overlapped Chunk I/O, 예상 길이+CRC RTU Stream Parser, 응답 t3.5 Guard, Port Worker, 취소 가능한 I/O
-- Phase 8: 비동기 Refresh/Connect/Disconnect, 활성 Port 전체 성공/전체 실패, 3초 간격 최대 10회 자동 재연결, 21개 Export의 실제 Core 연결
+- Phase 8: 비동기 Refresh/Connect/Disconnect, 활성 Port 전체 성공/전체 실패, 3초 간격 최대 10회 자동 재연결, 공개 Export의 실제 Core 연결
 - Phase 9: CAPL Core Wrapper, 1,000ms Monitoring Cycle, 10ms Output Pump, 1~4 Port Round-robin, Vector Extended CAN ID와 Header/Data Frame 생성
 - Phase 10: Manual Write, Signal 물리값 제어, ReadSwitch/ReadOption System Variable Adapter와 외부 시험 패키지. 수동 Register Read/AutoRead Panel은 제거했으며 공개 Register Read API는 유지
+- v0.3.0 확장: Index별 외부 RTU 응답 On/Off와 Available LED, Connection Connected/Disconnected LED, bounded RTU Transaction Queue와 CAPL CSV 기록
 
 자동 시험은 실제 COM 장치 대신 Fake Transport 또는 존재하지 않는 COM Port를 사용합니다. 실제 SystemBase Adapter의 제거·복구, Board RTU, CANalyzer CAPL Compile/Measurement와 Panel 동작은 [외부 검증 가이드](docs/05_Test/External_Verification_Guide.docx)에 따라 대상 환경에서 수행하고, 결과는 [외부 시험 결과서](docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx)에 기록합니다. 모든 외부 결과의 초기값은 `Not Tested`입니다.
 
@@ -125,7 +128,7 @@ Probe는 다음을 검사합니다.
 
 - DLL이 현재 Win32 Process에서 로드되는지
 - `caplDllTable4`의 Version Entry와 종료 Entry
-- 생산 API 21개의 이름, 순서, 개수와 종료 Entry
+- 생산 API 26개의 이름, 순서, 개수와 종료 Entry(기존 21개 Entry 순서 불변)
 - 반환형, 파라미터형, 배열 차원, 파라미터명 및 Function Pointer
 - Vector가 반환한 Handle 0 허용, 중복/불일치 Handle 거부, Finalize 후 호출과 재초기화
 - 작은 Capacity, Embedded NUL, 문자열 길이 불일치 검증
@@ -134,7 +137,7 @@ Probe는 다음을 검사합니다.
 
 ## CANalyzer CAPL Probe
 
-[`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 생산 Release DLL과 시험 전용 Fixture를 `#pragma library`로 각각 로드합니다. 생산 API 21개의 반환 계약·Buffer 보호를 확인하고 Fixture로 배열과 `F[1]` 성공 왕복을 검사합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
+[`tests/capl/M485E_Phase1_AbiProbe.can`](tests/capl/M485E_Phase1_AbiProbe.can)은 생산 Release DLL과 시험 전용 Fixture를 `#pragma library`로 각각 로드합니다. 생산 API 26개의 반환 계약·Buffer 보호를 확인하고 Fixture로 배열과 `F[1]` 성공 왕복을 검사합니다. CANalyzer 9.x SP8 x86에서 다음 절차로 최종 확인합니다.
 
 1. CANalyzer 9.x 시험은 Release/Win32, CANalyzer 18 시험은 Release/x64로 빌드합니다.
 2. CAPL Probe 파일을 CANalyzer Configuration의 Program Node에 연결합니다.

@@ -372,3 +372,65 @@ long M485E_Core_GetErrorQueueStats(long outStats[])
 {
      return M485E_Dll_GetErrorQueueStats(gM485E_ContextHandle, elcount(outStats), outStats);
 }
+
+
+/*
+ * 함수명: M485E_Core_SetDeviceCommunicationEnabled
+ * 기능: 외부 Modbus Master에 대한 지정 Index의 RTU 응답 가능 여부를 설정한다.
+ * 파라미터:
+ *   index - DeviceMap의 장치 Index
+ *   enabled - 0은 무응답 모사, 1은 정상 RTU 응답
+ * 반환값: M485E_OK 또는 장치/입력 오류 코드
+ */
+long M485E_Core_SetDeviceCommunicationEnabled(long index, long enabled)
+{
+     return M485E_Dll_SetDeviceCommunicationEnabled(gM485E_ContextHandle, index,
+          enabled);
+}
+
+/*
+ * 함수명: M485E_Core_GetDeviceCommunicationStates
+ * 기능: 0~255 전체 Index의 구성/비활성/연결/응답 가능 상태를 조회한다.
+ * 파라미터: outStates - 256개의 M485E_DEVICE_STATE_* 값을 받을 long 배열
+ * 반환값: M485E_OK 또는 출력 버퍼 오류 코드
+ */
+long M485E_Core_GetDeviceCommunicationStates(long outStates[])
+{
+     return M485E_Dll_GetDeviceCommunicationStates(gM485E_ContextHandle,
+          elcount(outStates), outStates);
+}
+
+/*
+ * 함수명: M485E_Core_SetRtuLogEnabled
+ * 기능: DLL의 비차단 RTU Transaction capture를 시작하거나 중지한다.
+ * 파라미터: enabled - 0은 신규 capture 중지, 1은 Sequence 1의 새 session 시작
+ * 반환값: M485E_OK 또는 상태 오류 코드
+ */
+long M485E_Core_SetRtuLogEnabled(long enabled)
+{
+     return M485E_Dll_SetRtuLogEnabled(gM485E_ContextHandle, enabled);
+}
+
+/*
+ * 함수명: M485E_Core_TryDequeueRtuLogLine
+ * 기능: RTU Log Queue에서 개행이 없는 CSV 행 한 건을 꺼낸다.
+ * 파라미터: outLine - UTF-8 CSV 행을 받을 char 배열
+ * 반환값: M485E_OK, M485E_STATUS_NO_DATA 또는 출력 버퍼 오류 코드
+ */
+long M485E_Core_TryDequeueRtuLogLine(char outLine[])
+{
+     return M485E_Dll_TryDequeueRtuLogLine(gM485E_ContextHandle,
+          elcount(outLine), outLine);
+}
+
+/*
+ * 함수명: M485E_Core_GetRtuLogStats
+ * 기능: capture, 대기 행, in-flight, 누락 통계를 조회한다.
+ * 파라미터: outStats - M485E_RLS_* Layout을 받을 long 배열
+ * 반환값: M485E_OK 또는 출력 버퍼 오류 코드
+ */
+long M485E_Core_GetRtuLogStats(long outStats[])
+{
+     return M485E_Dll_GetRtuLogStats(gM485E_ContextHandle, elcount(outStats),
+          outStats);
+}

@@ -4,6 +4,7 @@
 #include "M485E_Connection.h"
 #include "M485E_Queues.h"
 #include "M485E_Runtime.h"
+#include "M485E_RtuLog.h"
 
 #include <algorithm>
 #include <array>
@@ -40,6 +41,11 @@
 #define M485E_Dll_GetLastSyncError M485E_Dll_GetLastSyncError_Impl
 #define M485E_Dll_TryDequeueErrorEvent M485E_Dll_TryDequeueErrorEvent_Impl
 #define M485E_Dll_GetErrorQueueStats M485E_Dll_GetErrorQueueStats_Impl
+#define M485E_Dll_SetDeviceCommunicationEnabled M485E_Dll_SetDeviceCommunicationEnabled_Impl
+#define M485E_Dll_GetDeviceCommunicationStates M485E_Dll_GetDeviceCommunicationStates_Impl
+#define M485E_Dll_SetRtuLogEnabled M485E_Dll_SetRtuLogEnabled_Impl
+#define M485E_Dll_TryDequeueRtuLogLine M485E_Dll_TryDequeueRtuLogLine_Impl
+#define M485E_Dll_GetRtuLogStats M485E_Dll_GetRtuLogStats_Impl
 
 namespace
 {
@@ -70,6 +76,7 @@ struct Context
   ConfigurationStore configurationStore;
   std::unique_ptr<RuntimeModel> runtime;
   std::unique_ptr<SnapshotQueueService> snapshots;
+  std::unique_ptr<RtuLogQueue> rtuLog;
   std::unique_ptr<m485e::platform::RuntimeConnection> connection;
   ErrorQueue errors;
   SyncError lastSyncError;
@@ -230,6 +237,7 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
   const ConfigurationRefreshResult result = context->configurationStore.Refresh(paths, loader);
   std::unique_ptr<RuntimeModel> runtime;
   std::unique_ptr<SnapshotQueueService> snapshots;
+  std::unique_ptr<RtuLogQueue> rtuLog;
   try
   {
     if (result.status == M485E_OK)
@@ -237,12 +245,14 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
       auto configuration = context->configurationStore.Snapshot();
       runtime = std::make_unique<RuntimeModel>(configuration);
       snapshots = std::make_unique<SnapshotQueueService>(configuration);
+      rtuLog = std::make_unique<RtuLogQueue>(configuration);
     }
   }
   catch (...)
   {
     runtime.reset();
     snapshots.reset();
+    rtuLog.reset();
   }
 
   std::lock_guard<std::mutex> lock(gMutex);
@@ -250,12 +260,13 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
   // In that case the detached result must not be published into a newer context.
   if (!gContext || gContext.get() != context || context->closing) return;
   std::int32_t finalStatus = result.status;
-  if (result.status == M485E_OK && (!runtime || !snapshots))
+  if (result.status == M485E_OK && (!runtime || !snapshots || !rtuLog))
     finalStatus = M485E_ERR_INTERNAL_ALLOCATION;
   if (finalStatus == M485E_OK)
   {
     context->runtime = std::move(runtime);
     context->snapshots = std::move(snapshots);
+    context->rtuLog = std::move(rtuLog);
     context->configurationValid = true;
   }
   else
@@ -321,7 +332,7 @@ void FinishConnect(Context* const context, const std::uint32_t generation,
   {
     connection = std::make_unique<m485e::platform::RuntimeConnection>(
         std::move(configs), activePortCount, *context->runtime, *context->snapshots,
-        context->errors,
+        context->errors, *context->rtuLog,
         [context](const std::int32_t operation, const std::int32_t result) {
           UpdateReconnectState(context, operation, result);
         });
@@ -553,6 +564,13 @@ std::int32_t __stdcall M485E_Dll_RefreshCsv(const std::uint32_t contextHandle)
       gContext->activeOperation != M485E_OPERATION_NONE)
     return RecordFailure(*gContext, M485E_ERR_INVALID_STATE,
                          "CSV refresh requires an idle disconnected context.");
+  if (gContext->rtuLog)
+  {
+    const RtuLogStats logStats = gContext->rtuLog->GetStats();
+    if (logStats.captureEnabled || logStats.inFlight != 0U || logStats.pendingLines != 0U)
+      return RecordFailure(*gContext, M485E_ERR_OPERATION_BUSY,
+                           "Stop and drain RTU logging before CSV refresh.");
+  }
   if (gContext->csvPaths[0].empty() || gContext->csvPaths[1].empty())
     return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
                          "DeviceMap and FrameRule paths must be set before refresh.");
@@ -977,6 +995,124 @@ std::int32_t __stdcall M485E_Dll_GetErrorQueueStats(
   return RecordSuccess(*gContext);
 }
 
+std::int32_t __stdcall M485E_Dll_SetDeviceCommunicationEnabled(
+    const std::uint32_t contextHandle, const std::int32_t index,
+    const std::int32_t enabled)
+{
+  std::lock_guard<std::mutex> lock(gMutex);
+  const std::int32_t status = ValidateContext(contextHandle);
+  if (status != M485E_OK) return status;
+  if (index < 0 || index > M485E_MAX_DEVICE_INDEX || (enabled != 0 && enabled != 1))
+    return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
+                         "Device communication arguments are invalid.");
+  if (!RuntimeState(*gContext) || !gContext->runtime)
+    return RecordFailure(*gContext, M485E_ERR_DEVICE_NOT_FOUND,
+                         "No active Device exists.");
+  const std::int32_t result = gContext->runtime->SetCommunicationEnabled(
+      static_cast<std::uint8_t>(index), enabled != 0);
+  if (result != M485E_OK)
+    return RecordFailure(*gContext, result,
+                         "Device communication state update failed.");
+  return RecordSuccess(*gContext);
+}
+
+std::int32_t __stdcall M485E_Dll_GetDeviceCommunicationStates(
+    const std::uint32_t contextHandle, const std::uint32_t stateCapacity,
+    std::int32_t* const outStates)
+{
+  std::lock_guard<std::mutex> lock(gMutex);
+  const std::int32_t status = ValidateContext(contextHandle);
+  if (status != M485E_OK) return status;
+  const std::int32_t outputStatus =
+      ValidateOutput(stateCapacity, M485E_MAX_DEVICES, outStates);
+  if (outputStatus != M485E_OK)
+    return RecordFailure(*gContext, outputStatus,
+                         "Device communication state output is too small.");
+  std::array<std::int32_t, M485E_MAX_DEVICES> states{};
+  if (gContext->runtime)
+  {
+    for (std::size_t index = 0; index < states.size(); ++index)
+    {
+      const auto deviceIndex = static_cast<std::uint8_t>(index);
+      if (!gContext->runtime->IsConfigured(deviceIndex)) continue;
+      if (!gContext->runtime->IsCommunicationEnabled(deviceIndex))
+        states[index] = M485E_DEVICE_STATE_DISABLED;
+      else if (gContext->state == M485E_STATE_CONNECTED)
+        states[index] = M485E_DEVICE_STATE_AVAILABLE;
+      else
+        states[index] = M485E_DEVICE_STATE_DISCONNECTED;
+    }
+  }
+  std::copy(states.begin(), states.end(), outStates);
+  return RecordSuccess(*gContext);
+}
+
+std::int32_t __stdcall M485E_Dll_SetRtuLogEnabled(
+    const std::uint32_t contextHandle, const std::int32_t enabled)
+{
+  std::lock_guard<std::mutex> lock(gMutex);
+  const std::int32_t status = ValidateContext(contextHandle);
+  if (status != M485E_OK) return status;
+  if (enabled != 0 && enabled != 1)
+    return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
+                         "RTU Log enabled value must be zero or one.");
+  if (!gContext->rtuLog)
+    return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
+                         "A successful CSV refresh is required before RTU logging.");
+  const std::int32_t result = gContext->rtuLog->SetEnabled(enabled != 0);
+  if (result != M485E_OK)
+    return RecordFailure(*gContext, result, "RTU Log state update failed.");
+  return RecordSuccess(*gContext);
+}
+
+std::int32_t __stdcall M485E_Dll_TryDequeueRtuLogLine(
+    const std::uint32_t contextHandle, const std::uint32_t lineCapacity,
+    char* const outLine)
+{
+  std::lock_guard<std::mutex> lock(gMutex);
+  const std::int32_t status = ValidateContext(contextHandle);
+  if (status != M485E_OK) return status;
+  if (outLine == nullptr)
+    return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
+                         "RTU Log line output is null.");
+  if (lineCapacity == 0U)
+    return RecordFailure(*gContext, M485E_ERR_BUFFER_TOO_SMALL,
+                         "RTU Log line output is too small.");
+  if (!gContext->rtuLog) return M485E_STATUS_NO_DATA;
+  const std::int32_t result = gContext->rtuLog->TryDequeue(lineCapacity, outLine);
+  if (result == M485E_STATUS_NO_DATA) return result;
+  if (result != M485E_OK)
+    return RecordFailure(*gContext, result, "RTU Log line dequeue failed.");
+  return RecordSuccess(*gContext);
+}
+
+std::int32_t __stdcall M485E_Dll_GetRtuLogStats(
+    const std::uint32_t contextHandle, const std::uint32_t statsCapacity,
+    std::int32_t* const outStats)
+{
+  std::lock_guard<std::mutex> lock(gMutex);
+  const std::int32_t status = ValidateContext(contextHandle);
+  if (status != M485E_OK) return status;
+  const std::int32_t outputStatus =
+      ValidateOutput(statsCapacity, M485E_RTU_LOG_STATS_COUNT, outStats);
+  if (outputStatus != M485E_OK)
+    return RecordFailure(*gContext, outputStatus, "RTU Log Stats output is too small.");
+  const RtuLogStats value = gContext->rtuLog ? gContext->rtuLog->GetStats()
+                                             : RtuLogStats{};
+  std::array<std::int32_t, M485E_RTU_LOG_STATS_COUNT> stats{};
+  stats[M485E_RLS_LAYOUT_VERSION] = M485E_RTU_LOG_STATS_VERSION;
+  stats[M485E_RLS_FIELD_COUNT] = M485E_RTU_LOG_STATS_COUNT;
+  stats[M485E_RLS_CAPTURE_ENABLED] = value.captureEnabled ? 1 : 0;
+  stats[M485E_RLS_PENDING_LINES] = static_cast<std::int32_t>(value.pendingLines);
+  stats[M485E_RLS_IN_FLIGHT] = static_cast<std::int32_t>(value.inFlight);
+  stats[M485E_RLS_CAPACITY] = M485E_RTU_LOG_TRANSACTION_CAPACITY;
+  stats[M485E_RLS_DROPPED_COUNT] = static_cast<std::int32_t>(value.droppedCount);
+  stats[M485E_RLS_LAST_SEQUENCE] = static_cast<std::int32_t>(value.lastSequence);
+  stats[M485E_RLS_COMPLETED_COUNT] = static_cast<std::int32_t>(value.completedCount);
+  std::copy(stats.begin(), stats.end(), outStats);
+  return RecordSuccess(*gContext);
+}
+
 #undef M485E_Dll_InitializeContext
 #undef M485E_Dll_FinalizeContext
 #undef M485E_Dll_SetCsvPath
@@ -998,6 +1134,11 @@ std::int32_t __stdcall M485E_Dll_GetErrorQueueStats(
 #undef M485E_Dll_GetLastSyncError
 #undef M485E_Dll_TryDequeueErrorEvent
 #undef M485E_Dll_GetErrorQueueStats
+#undef M485E_Dll_SetDeviceCommunicationEnabled
+#undef M485E_Dll_GetDeviceCommunicationStates
+#undef M485E_Dll_SetRtuLogEnabled
+#undef M485E_Dll_TryDequeueRtuLogLine
+#undef M485E_Dll_GetRtuLogStats
 
 namespace
 {
@@ -1220,5 +1361,50 @@ std::int32_t __stdcall M485E_Dll_GetErrorQueueStats(
 {
   return GuardExport(contextHandle, [&] {
     return M485E_Dll_GetErrorQueueStats_Impl(contextHandle, statsCapacity, outStats);
+  });
+}
+
+std::int32_t __stdcall M485E_Dll_SetDeviceCommunicationEnabled(
+    const std::uint32_t contextHandle, const std::int32_t index,
+    const std::int32_t enabled)
+{
+  return GuardExport(contextHandle, [&] {
+    return M485E_Dll_SetDeviceCommunicationEnabled_Impl(contextHandle, index, enabled);
+  });
+}
+
+std::int32_t __stdcall M485E_Dll_GetDeviceCommunicationStates(
+    const std::uint32_t contextHandle, const std::uint32_t stateCapacity,
+    std::int32_t* const outStates)
+{
+  return GuardExport(contextHandle, [&] {
+    return M485E_Dll_GetDeviceCommunicationStates_Impl(contextHandle, stateCapacity,
+                                                        outStates);
+  });
+}
+
+std::int32_t __stdcall M485E_Dll_SetRtuLogEnabled(
+    const std::uint32_t contextHandle, const std::int32_t enabled)
+{
+  return GuardExport(contextHandle, [&] {
+    return M485E_Dll_SetRtuLogEnabled_Impl(contextHandle, enabled);
+  });
+}
+
+std::int32_t __stdcall M485E_Dll_TryDequeueRtuLogLine(
+    const std::uint32_t contextHandle, const std::uint32_t lineCapacity,
+    char* const outLine)
+{
+  return GuardExport(contextHandle, [&] {
+    return M485E_Dll_TryDequeueRtuLogLine_Impl(contextHandle, lineCapacity, outLine);
+  });
+}
+
+std::int32_t __stdcall M485E_Dll_GetRtuLogStats(
+    const std::uint32_t contextHandle, const std::uint32_t statsCapacity,
+    std::int32_t* const outStats)
+{
+  return GuardExport(contextHandle, [&] {
+    return M485E_Dll_GetRtuLogStats_Impl(contextHandle, statsCapacity, outStats);
   });
 }

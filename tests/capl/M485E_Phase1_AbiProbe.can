@@ -1,7 +1,11 @@
 /*@!Encoding:949*/
 includes
 {
-  #pragma library("..\\..\\dist\\M485E.dll")
+  #if TOOL_MAJOR_VERSION >= 13
+    #pragma library("..\\..\\dist\\M485E.vmodule")
+  #else
+    #pragma library("..\\..\\dist\\Windows-x86\\M485E.dll")
+  #endif
   #pragma library("..\\..\\out\\Win32\\Release\\M485E.CaplAbiFixture.dll")
 }
 
@@ -9,6 +13,9 @@ variables
 {
   dword gM485EContext;
   long gM485EStatus[20];
+  long gM485EDeviceStates[256];
+  long gM485ERtuLogStats[9];
+  char gM485ERtuLogLine[1536];
   word gM485ERegisters[125];
   char gM485EText[1024];
   float gM485EPhysicalValue[1];
@@ -141,6 +148,30 @@ void M485E_Test()
   if (result != -105 || gM485EStatus[0] != 0x5A5A5A5A) failureCount++;
   result = M485E_Dll_GetErrorQueueStats(gM485EContext, 11, gM485EStatus);
   if (result != 0 || gM485EStatus[0] != 1 || gM485EStatus[1] != 11) failureCount++;
+
+  for (index = 0; index < elcount(gM485EDeviceStates); index++)
+    gM485EDeviceStates[index] = 0x5A5A5A5A;
+  result = M485E_Dll_SetDeviceCommunicationEnabled(gM485EContext, 1, 1);
+  if (result != -4000) failureCount++;
+  result = M485E_Dll_GetDeviceCommunicationStates(gM485EContext, 255,
+                                                   gM485EDeviceStates);
+  if (result != -105 || gM485EDeviceStates[0] != 0x5A5A5A5A) failureCount++;
+  result = M485E_Dll_GetDeviceCommunicationStates(gM485EContext, 256,
+                                                   gM485EDeviceStates);
+  if (result != 0 || gM485EDeviceStates[0] != 0) failureCount++;
+  result = M485E_Dll_SetRtuLogEnabled(gM485EContext, 2);
+  if (result != -100) failureCount++;
+  result = M485E_Dll_SetRtuLogEnabled(gM485EContext, 1);
+  if (result != -2002) failureCount++;
+  result = M485E_Dll_TryDequeueRtuLogLine(gM485EContext,
+                                          elcount(gM485ERtuLogLine),
+                                          gM485ERtuLogLine);
+  if (result != 1) failureCount++;
+  result = M485E_Dll_GetRtuLogStats(gM485EContext, 8, gM485ERtuLogStats);
+  if (result != -105) failureCount++;
+  result = M485E_Dll_GetRtuLogStats(gM485EContext, 9, gM485ERtuLogStats);
+  if (result != 0 || gM485ERtuLogStats[0] != 1 || gM485ERtuLogStats[1] != 9)
+    failureCount++;
 
   gM485EFixtureWordsIn[0] = 0x1234;
   gM485EFixtureWordsIn[1] = 0xABCD;

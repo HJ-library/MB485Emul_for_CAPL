@@ -13,6 +13,8 @@ includes
      #include "M485E_Monitoring.cin"
      #include "M485E_ReadOption.cin"
      #include "M485E_Connection.cin"
+     #include "M485E_DeviceCommunication.cin"
+     #include "M485E_RtuLog.cin"
      #include "M485E_UI.cin"
 }
 
@@ -133,6 +135,8 @@ long M485E_Main_Startup()
 
      // Context가 준비된 뒤 UI Timer를 먼저 시작하면 이후 비동기 Refresh 상태도 Panel에 표시된다.
      M485E_UI_Start();
+     M485E_DeviceCommunication_Start();
+     M485E_RtuLog_Start();
      result = M485E_Core_SetCsvPath(M485E_FILE_DEVICE_MAP, gM485E_DeviceMapPath);
      if (result == M485E_OK)
           result = M485E_Core_SetCsvPath(M485E_FILE_MODBUS_RULE,
@@ -181,7 +185,9 @@ on stopMeasurement
 {
      long result;
 
+     M485E_RtuLog_Shutdown();
      M485E_Connection_Shutdown();
+     M485E_DeviceCommunication_Stop();
      M485E_UI_Stop();
      if (gM485E_ContextInitialized != 0 && M485E_Monitoring_IsEnabled() != 0)
           M485E_Monitoring_Stop();
