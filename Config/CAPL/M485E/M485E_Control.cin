@@ -196,7 +196,7 @@ on timer tM485E_LifecycleStatus
                @sysvar::M485E::Connection::ConnectSwitch = 0;
           }
 
-          // DLL이 Snapshot Queue를 중지한 상태에서는 CAPL Monitoring Timer도 함께 멈춘다.
+          // 연결이 끊기면 더 이상 Rule Data를 읽을 수 없으므로 CAPL Monitoring Timer도 멈춘다.
           if (currentState != M485E_STATE_CONNECTED &&
                M485E_Monitoring_IsEnabled() != 0)
           {

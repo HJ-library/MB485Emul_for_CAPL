@@ -16,7 +16,7 @@
 <text x='840.0' y='467.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>frame words</text>
 <line x1='780' y1='390.0' x2='930' y2='230.0' stroke='#64748B' stroke-width='2.5' marker-end='url(#arrow)'/>
 <rect x='785.0' y='286.0' width='140' height='22' rx='5' fill='#FFFFFF'/>
-<text x='855.0' y='302.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>changed rules</text>
+<text x='855.0' y='302.0' text-anchor='middle' font-family='Arial' font-size='15' fill='#475569'>current rule data</text>
 <rect x='70' y='140' width='220' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
 <text x='180.0' y='190.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>RTU FC03/04/10</text>
 <rect x='70' y='340' width='220' height='100' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
@@ -31,6 +31,6 @@
 <text x='1020.0' y='548.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Signal Codec</text>
 <text x='1020.0' y='573.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Physical ↔ Raw</text>
 <rect x='930' y='170' width='240' height='120' rx='14' fill='#E8F5E9' stroke='#2F855A' stroke-width='2.5'/>
-<text x='1050.0' y='218.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Snapshot Service</text>
-<text x='1050.0' y='243.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Periodic / Change</text>
+<text x='1050.0' y='218.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Rule Data Provider</text>
+<text x='1050.0' y='243.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Periodic 0x80 only</text>
 </svg>

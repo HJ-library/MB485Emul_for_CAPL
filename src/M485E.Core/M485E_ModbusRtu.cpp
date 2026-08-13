@@ -213,13 +213,12 @@ RtuResult ModbusRtuEngine::ProcessWrite(const std::uint8_t deviceIndex,
   std::vector<std::uint16_t> values;
   const std::uint8_t exception = DecodeWriteRequest(request, address, values);
   if (exception != 0U) return Exception(deviceIndex, slaveId, 0x10U, exception);
-  RegisterWriteResult write =
+  const std::int32_t writeStatus =
       runtime_.WriteRegisters(deviceIndex, address, values, WriteSource::Rtu);
-  if (write.status != M485E_OK)
-    return Exception(deviceIndex, slaveId, 0x10U, MapRegisterErrorToException(write.status));
+  if (writeStatus != M485E_OK)
+    return Exception(deviceIndex, slaveId, 0x10U, MapRegisterErrorToException(writeStatus));
   RtuResult result;
   result.disposition = RtuDisposition::Response;
-  result.deviceWrites.push_back({deviceIndex, std::move(write)});
   // FC10 success echoes Slave, Function, Address, and Quantity only.
   result.response.assign(request.begin(), request.begin() + 6U);
   ModbusCrc16::Append(result.response);
@@ -235,10 +234,7 @@ RtuResult ModbusRtuEngine::ProcessBroadcastWrite(
   std::uint16_t address = 0;
   std::vector<std::uint16_t> values;
   if (DecodeWriteRequest(request, address, values) != 0U) return result;
-  BroadcastRegisterWriteResult write =
-      runtime_.WriteBroadcastRegisters(portSlot, address, values);
-  if (write.status == M485E_OK)
-    result.deviceWrites = std::move(write.deviceWrites);
+  (void)runtime_.WriteBroadcastRegisters(portSlot, address, values);
   // Modbus Broadcast never sends a normal or exception response. Atomic validation
   // failure therefore leaves every target unchanged and remains silent on the wire.
   return result;

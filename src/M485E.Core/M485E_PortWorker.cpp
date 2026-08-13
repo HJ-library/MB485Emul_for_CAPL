@@ -12,13 +12,12 @@ namespace m485e::core
 {
 PortWorker::PortWorker(const std::uint8_t portSlot, const RtuTiming timing,
                        ISerialTransport& transport, RuntimeModel& runtime,
-                       SnapshotQueueService& snapshots, ErrorQueue& errors,
-                       RtuLogQueue& rtuLog, FatalCallback fatalCallback)
+                       ErrorQueue& errors, RtuLogQueue& rtuLog,
+                       FatalCallback fatalCallback)
     : portSlot_(portSlot),
       timing_(timing),
       transport_(transport),
       runtime_(runtime),
-      snapshots_(snapshots),
       errors_(errors),
       rtuLog_(rtuLog),
       fatalCallback_(std::move(fatalCallback))
@@ -106,13 +105,6 @@ bool PortWorker::ProcessFrame(const std::vector<std::uint8_t>& frame) noexcept
   if (result.diagnosticStatus != M485E_OK)
     Report(result.diagnosticStatus, M485E_STAGE_PARSE, 0,
            "Modbus RTU frame was discarded or failed internally.");
-  for (auto& deviceWrite : result.deviceWrites)
-  {
-    // The protocol engine already committed the FC10 write. Forward its captured
-    // Rule values so monitoring observes exactly that committed state.
-    snapshots_.RecordChange(deviceWrite.deviceIndex, WriteSource::Rtu,
-                            deviceWrite.write);
-  }
   if (result.disposition != RtuDisposition::Response)
   {
     rtuLog_.Complete(std::move(logToken), nullptr, result.noResponseReason);

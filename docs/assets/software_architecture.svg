@@ -30,13 +30,13 @@
 <rect x='730' y='225' width='250' height='130' rx='14' fill='#EAF2F8' stroke='#2E75B6' stroke-width='2.5'/>
 <text x='855.0' y='266.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>DLL ABI Adapter</text>
 <text x='855.0' y='291.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>CAPL_DLL_INFO4</text>
-<text x='855.0' y='316.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>21 Exports</text>
+<text x='855.0' y='316.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>23 Exports</text>
 <rect x='1060' y='130' width='270' height='290' rx='14' fill='#FFF4CE' stroke='#B7791F' stroke-width='2.5'/>
 <text x='1195.0' y='227.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>M485E Core Runtime</text>
 <text x='1195.0' y='252.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Lifecycle</text>
 <text x='1195.0' y='277.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Configuration</text>
 <text x='1195.0' y='302.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Device / Register / Signal</text>
-<text x='1195.0' y='327.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>RTU / Snapshot / Diagnostics</text>
+<text x='1195.0' y='327.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>RTU / Rule Data / Diagnostics</text>
 <rect x='1060' y='520' width='270' height='120' rx='14' fill='#F2F4F7' stroke='#64748B' stroke-width='2.5'/>
 <text x='1195.0' y='568.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>Windows Serial</text>
 <text x='1195.0' y='593.0' text-anchor='middle' dominant-baseline='middle' font-family='Arial' font-size='18' font-weight='600' fill='#1F2937'>1~4 Port Workers</text>

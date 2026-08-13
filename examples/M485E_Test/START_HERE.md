@@ -45,7 +45,7 @@ ProjectConfig/
 3. `ReadSwitch`를 ON 한다.
 4. 가상 CAN 채널 1의 Trace에서 Extended ID `0x80IIRRMM` Frame을 확인한다.
 5. Manual Write에서 `Index=0`, `StartAddress=10000`, `Quantity=1`, `Data[0]` 값을 설정한 뒤 `Send`를 누른다.
-6. 값 변경 Snapshot `0x81IIRRMM`과 `ResultCode=0`을 확인한다.
+6. `ResultCode=0`을 확인하고 다음 `0x80IIRRMM` Periodic 출력에 변경값이 반영되는지 확인한다. 별도 `0x81` 변경 Message는 출력되지 않는다.
 7. `DeviceCommunication::Enabled[0]`을 0으로 내리고 Slave 1 요청이 무응답이며 Slave 2는 계속 응답하는지 확인한다. `AvailableLed[0]`은 0, `[1]`은 1이어야 한다.
 8. `RtuLog::LogSwitch`를 ON하고 요청을 전송한 뒤 OFF한다. `Logs/M485E`의 새 CSV에서 같은 Sequence의 REQ/RES 또는 REQ/NO_RES 쌍을 확인한다.
 

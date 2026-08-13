@@ -27,21 +27,30 @@ static_assert(m485e::M485E_FILE_EMULATOR_MAP == 3);
 static_assert(m485e::M485E_STATE_UNINITIALIZED == 0);
 static_assert(m485e::M485E_STATE_ERROR == 6);
 static_assert(m485e::M485E_PORT_SLOT_COUNT == 4);
-static_assert(m485e::M485E_SM_QUANTITY + 1 == m485e::M485E_SNAPSHOT_META_COUNT);
+static_assert(m485e::M485E_RULE_DATA_META_COUNT == 9);
+static_assert(m485e::M485E_RDM_LAYOUT_VERSION == 0);
+static_assert(m485e::M485E_RDM_FIELD_COUNT == 1);
+static_assert(m485e::M485E_RDM_PORT_SLOT == 2);
+static_assert(m485e::M485E_RDM_DEVICE_INDEX == 3);
+static_assert(m485e::M485E_RDM_RULE_ID == 4);
+static_assert(m485e::M485E_RDM_SLAVE_ID == 5);
+static_assert(m485e::M485E_RDM_FUNCTION_CODE == 6);
+static_assert(m485e::M485E_RDM_ADDRESS == 7);
+static_assert(m485e::M485E_RDM_QUANTITY == 8);
+static_assert(m485e::M485E_OPERATION_GET_LIFECYCLE_STATUS == 8);
+static_assert(m485e::M485E_OPERATION_READ_RULE_DATA == 11);
+static_assert(m485e::M485E_OPERATION_READ_REGISTERS == 14);
 static_assert(m485e::M485E_LS_CONFIGURATION_VALID + 1 ==
               m485e::M485E_LIFECYCLE_STATUS_COUNT);
 static_assert(m485e::M485E_EM_OS_ERROR + 1 == m485e::M485E_ERROR_META_COUNT);
 static_assert(m485e::M485E_ES_LAST_SEQUENCE + 1 ==
               m485e::M485E_ERROR_QUEUE_STATS_COUNT);
-static_assert(m485e::M485E_CS_LAST_SEQUENCE + 1 ==
-              m485e::M485E_CHANGE_QUEUE_STATS_COUNT);
 static_assert(m485e::M485E_MAX_DIRECT_QUANTITY == 125);
 static_assert(m485e::M485E_MAX_DEVICES == 256);
 static_assert(m485e::M485E_MAX_RULES == 200);
 static_assert(m485e::M485E_MAX_SIGNALS == 4096);
-static_assert(m485e::M485E_CHANGE_QUEUE_CAPACITY == 256);
 static_assert(m485e::M485E_ERROR_QUEUE_CAPACITY == 256);
-static_assert(m485e::M485E_ERROR_CODE_COUNT >= 90);
+static_assert(m485e::M485E_ERROR_CODE_COUNT == 91);
 
 int main()
 {
@@ -82,6 +91,8 @@ int main()
                   "CSV error baseline is missing");
   passed &= Check(codes.count(m485e::M485E_ERR_INTERNAL_WORKER) == 1,
                   "internal error baseline is missing");
+  passed &= Check(codes.count(-5000) == 0 && codes.count(-5007) == 0,
+                  "removed monitoring or change-queue error code remains published");
 
   if (!passed)
   {

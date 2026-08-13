@@ -27,19 +27,17 @@ inline constexpr std::int32_t M485E_PORT_SLOT_1 = 1;
 inline constexpr std::int32_t M485E_PORT_SLOT_2 = 2;
 inline constexpr std::int32_t M485E_PORT_SLOT_3 = 3;
 inline constexpr std::int32_t M485E_PORT_SLOT_COUNT = 4;
-inline constexpr std::int32_t M485E_SNAPSHOT_META_VERSION = 1;
-inline constexpr std::int32_t M485E_SNAPSHOT_META_COUNT = 11;
-inline constexpr std::int32_t M485E_SM_LAYOUT_VERSION = 0;
-inline constexpr std::int32_t M485E_SM_FIELD_COUNT = 1;
-inline constexpr std::int32_t M485E_SM_SEQUENCE = 2;
-inline constexpr std::int32_t M485E_SM_PORT_SLOT = 3;
-inline constexpr std::int32_t M485E_SM_DEVICE_INDEX = 4;
-inline constexpr std::int32_t M485E_SM_RULE_ID = 5;
-inline constexpr std::int32_t M485E_SM_SLAVE_ID = 6;
-inline constexpr std::int32_t M485E_SM_FUNCTION_CODE = 7;
-inline constexpr std::int32_t M485E_SM_SOURCE_TYPE = 8;
-inline constexpr std::int32_t M485E_SM_ADDRESS = 9;
-inline constexpr std::int32_t M485E_SM_QUANTITY = 10;
+inline constexpr std::int32_t M485E_RULE_DATA_META_VERSION = 1;
+inline constexpr std::int32_t M485E_RULE_DATA_META_COUNT = 9;
+inline constexpr std::int32_t M485E_RDM_LAYOUT_VERSION = 0;
+inline constexpr std::int32_t M485E_RDM_FIELD_COUNT = 1;
+inline constexpr std::int32_t M485E_RDM_PORT_SLOT = 2;
+inline constexpr std::int32_t M485E_RDM_DEVICE_INDEX = 3;
+inline constexpr std::int32_t M485E_RDM_RULE_ID = 4;
+inline constexpr std::int32_t M485E_RDM_SLAVE_ID = 5;
+inline constexpr std::int32_t M485E_RDM_FUNCTION_CODE = 6;
+inline constexpr std::int32_t M485E_RDM_ADDRESS = 7;
+inline constexpr std::int32_t M485E_RDM_QUANTITY = 8;
 inline constexpr std::int32_t M485E_LIFECYCLE_STATUS_VERSION = 1;
 inline constexpr std::int32_t M485E_LIFECYCLE_STATUS_COUNT = 9;
 inline constexpr std::int32_t M485E_LS_LAYOUT_VERSION = 0;
@@ -97,20 +95,6 @@ inline constexpr std::int32_t M485E_ES_COALESCED_COUNT = 7;
 inline constexpr std::int32_t M485E_ES_DROPPED_COUNT = 8;
 inline constexpr std::int32_t M485E_ES_OVERFLOW_LATCH = 9;
 inline constexpr std::int32_t M485E_ES_LAST_SEQUENCE = 10;
-inline constexpr std::int32_t M485E_CHANGE_QUEUE_STATS_VERSION = 1;
-inline constexpr std::int32_t M485E_CHANGE_QUEUE_STATS_COUNT = 12;
-inline constexpr std::int32_t M485E_CS_LAYOUT_VERSION = 0;
-inline constexpr std::int32_t M485E_CS_FIELD_COUNT = 1;
-inline constexpr std::int32_t M485E_CS_PORT_SLOT = 2;
-inline constexpr std::int32_t M485E_CS_PENDING = 3;
-inline constexpr std::int32_t M485E_CS_CAPACITY = 4;
-inline constexpr std::int32_t M485E_CS_HIGH_WATER_MARK = 5;
-inline constexpr std::int32_t M485E_CS_ENQUEUED_COUNT = 6;
-inline constexpr std::int32_t M485E_CS_DEQUEUED_COUNT = 7;
-inline constexpr std::int32_t M485E_CS_DROPPED_COUNT = 8;
-inline constexpr std::int32_t M485E_CS_SUPPRESSED_COUNT = 9;
-inline constexpr std::int32_t M485E_CS_OVERFLOW_LATCH = 10;
-inline constexpr std::int32_t M485E_CS_LAST_SEQUENCE = 11;
 inline constexpr std::int32_t M485E_SEVERITY_INFO = 0;
 inline constexpr std::int32_t M485E_SEVERITY_WARNING = 1;
 inline constexpr std::int32_t M485E_SEVERITY_ERROR = 2;
@@ -134,11 +118,7 @@ inline constexpr std::int32_t M485E_OPERATION_REFRESH_CSV = 5;
 inline constexpr std::int32_t M485E_OPERATION_CONNECT = 6;
 inline constexpr std::int32_t M485E_OPERATION_DISCONNECT = 7;
 inline constexpr std::int32_t M485E_OPERATION_GET_LIFECYCLE_STATUS = 8;
-inline constexpr std::int32_t M485E_OPERATION_START_MONITORING = 9;
-inline constexpr std::int32_t M485E_OPERATION_STOP_MONITORING = 10;
-inline constexpr std::int32_t M485E_OPERATION_READ_RULE_SNAPSHOT = 11;
-inline constexpr std::int32_t M485E_OPERATION_TRY_DEQUEUE_CHANGE_SNAPSHOT = 12;
-inline constexpr std::int32_t M485E_OPERATION_GET_CHANGE_QUEUE_STATS = 13;
+inline constexpr std::int32_t M485E_OPERATION_READ_RULE_DATA = 11;
 inline constexpr std::int32_t M485E_OPERATION_READ_REGISTERS = 14;
 inline constexpr std::int32_t M485E_OPERATION_WRITE_REGISTERS = 15;
 inline constexpr std::int32_t M485E_OPERATION_RESET_DEVICE = 16;
@@ -180,7 +160,6 @@ inline constexpr std::int32_t M485E_MAX_RULES = 200;
 inline constexpr std::int32_t M485E_MAX_SIGNALS = 4096;
 inline constexpr std::int32_t M485E_MAX_CSV_FILE_BYTES = 4194304;
 inline constexpr std::int32_t M485E_MAX_CSV_ROW_BYTES = 4096;
-inline constexpr std::int32_t M485E_CHANGE_QUEUE_CAPACITY = 256;
 inline constexpr std::int32_t M485E_ERROR_QUEUE_CAPACITY = 256;
 inline constexpr std::int32_t M485E_MAX_PATH_LENGTH = 1023;
 inline constexpr std::int32_t M485E_MAX_PORT_LENGTH = 31;
@@ -216,7 +195,7 @@ inline constexpr std::int32_t M485E_RTU_LOG_TRANSACTION_CAPACITY = 256;
 inline constexpr std::int32_t M485E_MAX_RTU_LOG_LINE_LENGTH = 1535;
 inline constexpr std::int32_t M485E_RTU_LOG_IDLE_TIMEOUT_MS = 2000;
 inline constexpr std::int32_t M485E_MAX_RTU_LOG_IDLE_TIMEOUT_MS = 60000;
-inline constexpr std::int32_t M485E_ERROR_CODE_COUNT = 93;
+inline constexpr std::int32_t M485E_ERROR_CODE_COUNT = 91;
 
 inline constexpr std::int32_t M485E_ERR_INVALID_ARGUMENT = -100;
 inline constexpr std::int32_t M485E_ERR_INVALID_ENUM = -101;
@@ -290,14 +269,12 @@ inline constexpr std::int32_t M485E_ERR_SIGNAL_CONVERSION = -4012;
 inline constexpr std::int32_t M485E_ERR_SIGNAL_NON_FINITE = -4013;
 inline constexpr std::int32_t M485E_ERR_SIGNAL_PRECISION_RANGE = -4014;
 inline constexpr std::int32_t M485E_ERR_SIGNAL_RAW_INVALID = -4015;
-inline constexpr std::int32_t M485E_ERR_MONITORING_STATE = -5000;
 inline constexpr std::int32_t M485E_ERR_RULE_NOT_FOUND = -5001;
 inline constexpr std::int32_t M485E_ERR_READOPTION_INVALID = -5002;
 inline constexpr std::int32_t M485E_ERR_PERIODIC_BUDGET = -5003;
-inline constexpr std::int32_t M485E_ERR_SNAPSHOT_VERSION = -5004;
+inline constexpr std::int32_t M485E_ERR_RULE_DATA_VERSION = -5004;
 inline constexpr std::int32_t M485E_ERR_OUTPUT_BUDGET_OVERRUN = -5005;
 inline constexpr std::int32_t M485E_ERR_OUTPUT_DEADLINE_MISSED = -5006;
-inline constexpr std::int32_t M485E_ERR_CHANGE_QUEUE_OVERFLOW = -5007;
 inline constexpr std::int32_t M485E_ERR_DIAGNOSTIC_VERSION = -6000;
 inline constexpr std::int32_t M485E_ERR_ERROR_QUEUE_OVERFLOW = -6001;
 inline constexpr std::int32_t M485E_ERR_ERROR_CONTEXT_UNAVAILABLE = -6002;
@@ -393,14 +370,12 @@ inline constexpr std::array<ErrorDefinition, M485E_ERROR_CODE_COUNT> kErrorDefin
     {M485E_ERR_SIGNAL_NON_FINITE, M485E_SEVERITY_ERROR, "M485E_ERR_SIGNAL_NON_FINITE", "ERR_SIGNAL_NON_FINITE"},
     {M485E_ERR_SIGNAL_PRECISION_RANGE, M485E_SEVERITY_ERROR, "M485E_ERR_SIGNAL_PRECISION_RANGE", "ERR_SIGNAL_PRECISION_RANGE"},
     {M485E_ERR_SIGNAL_RAW_INVALID, M485E_SEVERITY_ERROR, "M485E_ERR_SIGNAL_RAW_INVALID", "ERR_SIGNAL_RAW_INVALID"},
-    {M485E_ERR_MONITORING_STATE, M485E_SEVERITY_ERROR, "M485E_ERR_MONITORING_STATE", "ERR_MONITORING_STATE"},
     {M485E_ERR_RULE_NOT_FOUND, M485E_SEVERITY_ERROR, "M485E_ERR_RULE_NOT_FOUND", "ERR_RULE_NOT_FOUND"},
     {M485E_ERR_READOPTION_INVALID, M485E_SEVERITY_ERROR, "M485E_ERR_READOPTION_INVALID", "ERR_READOPTION_INVALID"},
     {M485E_ERR_PERIODIC_BUDGET, M485E_SEVERITY_ERROR, "M485E_ERR_PERIODIC_BUDGET", "ERR_PERIODIC_BUDGET"},
-    {M485E_ERR_SNAPSHOT_VERSION, M485E_SEVERITY_ERROR, "M485E_ERR_SNAPSHOT_VERSION", "ERR_SNAPSHOT_VERSION"},
+    {M485E_ERR_RULE_DATA_VERSION, M485E_SEVERITY_ERROR, "M485E_ERR_RULE_DATA_VERSION", "ERR_RULE_DATA_VERSION"},
     {M485E_ERR_OUTPUT_BUDGET_OVERRUN, M485E_SEVERITY_WARNING, "M485E_ERR_OUTPUT_BUDGET_OVERRUN", "ERR_OUTPUT_BUDGET_OVERRUN"},
     {M485E_ERR_OUTPUT_DEADLINE_MISSED, M485E_SEVERITY_WARNING, "M485E_ERR_OUTPUT_DEADLINE_MISSED", "ERR_OUTPUT_DEADLINE_MISSED"},
-    {M485E_ERR_CHANGE_QUEUE_OVERFLOW, M485E_SEVERITY_WARNING, "M485E_ERR_CHANGE_QUEUE_OVERFLOW", "ERR_CHANGE_QUEUE_OVERFLOW"},
     {M485E_ERR_DIAGNOSTIC_VERSION, M485E_SEVERITY_ERROR, "M485E_ERR_DIAGNOSTIC_VERSION", "ERR_DIAGNOSTIC_VERSION"},
     {M485E_ERR_ERROR_QUEUE_OVERFLOW, M485E_SEVERITY_WARNING, "M485E_ERR_ERROR_QUEUE_OVERFLOW", "ERR_ERROR_QUEUE_OVERFLOW"},
     {M485E_ERR_ERROR_CONTEXT_UNAVAILABLE, M485E_SEVERITY_ERROR, "M485E_ERR_ERROR_CONTEXT_UNAVAILABLE", "ERR_ERROR_CONTEXT_UNAVAILABLE"},

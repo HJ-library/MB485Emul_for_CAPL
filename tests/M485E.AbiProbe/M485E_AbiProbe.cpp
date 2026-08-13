@@ -30,11 +30,7 @@ constexpr ExpectedEntry kProductionExpected[] = {
     {"M485E_Dll_Connect", "D", "\000", "ContextHandle"},
     {"M485E_Dll_Disconnect", "D", "\000", "ContextHandle"},
     {"M485E_Dll_GetLifecycleStatus", "DDL", "\000\000\001", "ContextHandle|StatusCapacity|OutStatus"},
-    {"M485E_Dll_StartMonitoring", "D", "\000", "ContextHandle"},
-    {"M485E_Dll_StopMonitoring", "D", "\000", "ContextHandle"},
-    {"M485E_Dll_ReadRuleSnapshot", "DLLDLDW", "\000\000\000\000\001\000\001", "ContextHandle|Index|RuleId|MetaCapacity|OutMeta|DataCapacity|OutRegisters"},
-    {"M485E_Dll_TryDequeueChangeSnapshot", "DLDLDW", "\000\000\000\001\000\001", "ContextHandle|PortSlot|MetaCapacity|OutMeta|DataCapacity|OutRegisters"},
-    {"M485E_Dll_GetChangeQueueStats", "DLDL", "\000\000\000\001", "ContextHandle|PortSlot|StatsCapacity|OutStats"},
+    {"M485E_Dll_ReadRuleData", "DLLDLDW", "\000\000\000\000\001\000\001", "ContextHandle|Index|RuleId|MetaCapacity|OutMeta|DataCapacity|OutRegisters"},
     {"M485E_Dll_ReadRegisters", "DLLLDW", "\000\000\000\000\000\001", "ContextHandle|Index|StartAddress|Quantity|OutCapacity|OutRegisters"},
     {"M485E_Dll_WriteRegisters", "DLLLDW", "\000\000\000\000\000\001", "ContextHandle|Index|StartAddress|Quantity|InCount|InRegisters"},
     {"M485E_Dll_ResetDevice", "DL", "\000\000", "ContextHandle|Index"},
@@ -177,6 +173,41 @@ int main(int argc, char** argv)
     FreeLibrary(productionModule);
     return Fail("Production VIARegisterCDLL export is missing.");
   }
+#if defined(_WIN64)
+  constexpr const char* kRuleDataExport = "M485E_Dll_ReadRuleData";
+#else
+  constexpr const char* kRuleDataExport = "_M485E_Dll_ReadRuleData@28";
+#endif
+  if (GetProcAddress(productionModule, kRuleDataExport) == nullptr)
+  {
+    FreeLibrary(fixtureModule);
+    FreeLibrary(productionModule);
+    return Fail("Production ReadRuleData export is missing.");
+  }
+  struct RemovedExport
+  {
+    const char* undecorated;
+    const char* x86Decorated;
+  };
+  constexpr RemovedExport kRemovedExports[] = {
+      {"M485E_Dll_StartMonitoring", "_M485E_Dll_StartMonitoring@4"},
+      {"M485E_Dll_StopMonitoring", "_M485E_Dll_StopMonitoring@4"},
+      {"M485E_Dll_ReadRuleSnapshot", "_M485E_Dll_ReadRuleSnapshot@28"},
+      {"M485E_Dll_TryDequeueChangeSnapshot",
+       "_M485E_Dll_TryDequeueChangeSnapshot@24"},
+      {"M485E_Dll_GetChangeQueueStats", "_M485E_Dll_GetChangeQueueStats@16"},
+  };
+  for (const auto& removed : kRemovedExports)
+  {
+    if (GetProcAddress(productionModule, removed.undecorated) != nullptr ||
+        GetProcAddress(productionModule, removed.x86Decorated) != nullptr)
+    {
+      FreeLibrary(fixtureModule);
+      FreeLibrary(productionModule);
+      return Fail(std::string("Removed DLL export remains published: ") +
+                  removed.undecorated);
+    }
+  }
 
   CAPL_DLL_INFO4* table = LoadTable(productionModule);
   CAPL_DLL_INFO4* fixtureTable = LoadTable(fixtureModule);
@@ -192,9 +223,7 @@ int main(int argc, char** argv)
   using SetCsvPath = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t, const char*);
   using SetPortConfig = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t, const char*, std::int32_t, std::int32_t, std::int32_t, std::int32_t);
   using Status = std::int32_t(__stdcall*)(std::uint32_t, std::uint32_t, std::int32_t*);
-  using Snapshot = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t, std::uint32_t, std::int32_t*, std::uint32_t, std::uint16_t*);
-  using ChangeSnapshot = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t, std::int32_t*, std::uint32_t, std::uint16_t*);
-  using ChangeStats = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t, std::int32_t*);
+  using RuleData = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t, std::uint32_t, std::int32_t*, std::uint32_t, std::uint16_t*);
   using ReadRegisters = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t, std::int32_t, std::uint32_t, std::uint16_t*);
   using WriteRegisters = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t, std::int32_t, std::uint32_t, const std::uint16_t*);
   using ResetDevice = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t);
@@ -274,33 +303,23 @@ int main(int argc, char** argv)
   if (lifecycle(handle, 9, longs.data()) != 0 || longs[0] != 1 || longs[1] != 9 || longs[2] != 1)
     return Fail("long[] lifecycle output round-trip failed.");
 
-  if (FunctionAt<OneDword>(table, "M485E_Dll_StartMonitoring")(handle) != -5000 ||
-      FunctionAt<OneDword>(table, "M485E_Dll_StopMonitoring")(handle) != 0)
-    return Fail("Monitoring guard calls failed.");
-
   std::array<std::uint16_t, 125> words;
-  auto snapshot = FunctionAt<Snapshot>(table, "M485E_Dll_ReadRuleSnapshot");
+  auto ruleData = FunctionAt<RuleData>(table, "M485E_Dll_ReadRuleData");
   longs.fill(0x5A5A5A5A);
   words.fill(0xA55AU);
-  if (snapshot(handle, 1, 1, 10, longs.data(), 125, words.data()) != -105 ||
+  if (ruleData(handle, 1, 1, 8, longs.data(), 125, words.data()) != -105 ||
       !AllEqual(longs, 0x5A5A5A5A) || !AllEqual(words, static_cast<std::uint16_t>(0xA55A)))
-    return Fail("Rule snapshot capacity or output invariance failed.");
-  if (snapshot(handle, 1, 1, 11, longs.data(), 125, words.data()) != -5001)
-    return Fail("Rule snapshot guard failed.");
-
-  auto change = FunctionAt<ChangeSnapshot>(table, "M485E_Dll_TryDequeueChangeSnapshot");
-  longs.fill(0x5A5A5A5A);
-  words.fill(0xA55AU);
-  if (change(handle, 0, 10, longs.data(), 125, words.data()) != -105 ||
-      !AllEqual(longs, 0x5A5A5A5A) || !AllEqual(words, static_cast<std::uint16_t>(0xA55A)) ||
-      change(handle, 0, 11, longs.data(), 125, words.data()) != 1)
-    return Fail("Change snapshot capacity, invariance, or no-data result failed.");
-
-  auto changeStats = FunctionAt<ChangeStats>(table, "M485E_Dll_GetChangeQueueStats");
-  longs.fill(0x5A5A5A5A);
-  if (changeStats(handle, 0, 11, longs.data()) != -105 || !AllEqual(longs, 0x5A5A5A5A) ||
-      changeStats(handle, 0, 12, longs.data()) != 0 || longs[0] != 1 || longs[1] != 12)
-    return Fail("Change queue stats capacity or output failed.");
+    return Fail("Rule Data capacity or output invariance failed.");
+  if (ruleData(handle, 1, 1, 9, longs.data(), 125, words.data()) != -2000 ||
+      !AllEqual(longs, 0x5A5A5A5A) ||
+      !AllEqual(words, static_cast<std::uint16_t>(0xA55A)))
+    return Fail("Rule Data lifecycle guard or output invariance failed.");
+  if (Find(table, "M485E_Dll_StartMonitoring") != nullptr ||
+      Find(table, "M485E_Dll_StopMonitoring") != nullptr ||
+      Find(table, "M485E_Dll_ReadRuleSnapshot") != nullptr ||
+      Find(table, "M485E_Dll_TryDequeueChangeSnapshot") != nullptr ||
+      Find(table, "M485E_Dll_GetChangeQueueStats") != nullptr)
+    return Fail("Removed monitoring or change-snapshot API remains published.");
 
   auto readRegisters = FunctionAt<ReadRegisters>(table, "M485E_Dll_ReadRegisters");
   words.fill(0xA55AU);
@@ -407,6 +426,6 @@ int main(int argc, char** argv)
   FreeLibrary(fixtureModule);
   FreeLibrary(productionModule);
   std::cout << "PASS: Windows " << (sizeof(void*) == 8 ? "x64" : "x86")
-            << " VIA registration export and production table with exactly 27 APIs; metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
+            << " VIA registration export and production table with exactly 23 APIs; Rule Data metadata, context lifecycle, capacity/output invariance, string validation, and test-only char[], word[], long[], F[1] successful round-trips passed.\n";
   return 0;
 }

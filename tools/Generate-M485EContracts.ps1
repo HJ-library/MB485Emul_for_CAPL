@@ -151,17 +151,14 @@ foreach ($errorRow in $errors) {
     $capl.Add("  char $messageSymbol`[$messageLength`] = `"$($errorRow.Message_Key)`";")
 }
 $capl.Add('}')
-$caplText = ($capl -join "`n") + "`n"
+$caplText = ($capl -join "`r`n") + "`r`n"
 
 function Write-OrCheckGeneratedFile {
     param([string]$Path, [string]$Content)
 
     if ($Mode -eq 'Check') {
         Assert-Condition (Test-Path -LiteralPath $Path -PathType Leaf) "Generated file is missing: $Path"
-        # Git may materialize tracked text as CRLF on Windows even though the
-        # deterministic generator composes LF. Compare normalized content so a
-        # clean checkout is not reported as stale solely because of core.autocrlf.
-        $actual = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8).Replace("`r`n", "`n")
+        $actual = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8)
         Assert-Condition ($actual -ceq $Content) "Generated file is stale: $Path"
         return
     }

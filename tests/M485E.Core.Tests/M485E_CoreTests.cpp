@@ -6,8 +6,10 @@
 #include "M485E_Runtime.h"
 #include "M485E_RtuFraming.h"
 #include "M485E_RtuLog.h"
+#include "M485E_RuleDataContract.h"
 #include "M485E_SignalCodec.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -15,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -73,6 +76,18 @@ class Fixture final
 void Require(const bool condition, const char* message)
 {
   if (!condition) throw std::runtime_error(message);
+}
+
+std::vector<std::uint16_t> ReadRuleValues(m485e::core::RuntimeModel& runtime,
+                                          const std::uint8_t index,
+                                          const std::uint8_t ruleId)
+{
+  m485e::core::RuleDefinition rule{};
+  m485e::core::DeviceDefinition device{};
+  std::vector<std::uint16_t> values;
+  Require(runtime.ReadRule(index, ruleId, rule, device, values) == M485E_OK,
+          "Rule Data read failed");
+  return values;
 }
 
 std::string ValidDevices()
@@ -366,50 +381,176 @@ void TestRuntimeRegisterAndSignalOperations()
               M485E_ERR_REGISTER_ACCESS_DENIED,
           "FC04 permission hole accepted");
 
-  const auto denied = runtime.WriteRegisters(0, 10002, {1U, 2U},
-                                             m485e::core::WriteSource::Rtu);
-  Require(denied.status == M485E_OK && denied.changed,
+  Require(runtime.WriteRegisters(0, 10002, {1U, 2U},
+                                 m485e::core::WriteSource::Rtu) == M485E_OK,
           "overlapping FC03 permission was not writable");
-  const auto same = runtime.WriteRegisters(0, 10002, {1U, 2U},
-                                           m485e::core::WriteSource::Rtu);
-  Require(same.status == M485E_OK && !same.changed && same.changedRuleIndices.empty(),
-          "same-value Write created a change");
-  const auto direct = runtime.WriteRegisters(0, 10002, {3U, 4U},
-                                             m485e::core::WriteSource::Direct);
-  Require(direct.status == M485E_OK && direct.changed && direct.changedRuleIndices.size() == 2 &&
-              built.configuration->rules[direct.changedRuleIndices[0]].ruleId == 1 &&
-              built.configuration->rules[direct.changedRuleIndices[1]].ruleId == 2,
-          "changed Rule de-duplication or ordering failed");
+  Require(runtime.WriteRegisters(0, 10002, {1U, 2U},
+                                 m485e::core::WriteSource::Rtu) == M485E_OK,
+          "same-value Write was rejected");
+  Require(runtime.WriteRegisters(0, 10002, {3U, 4U},
+                                 m485e::core::WriteSource::Direct) == M485E_OK,
+          "Direct overlapping Rule Write failed");
+  Require(ReadRuleValues(runtime, 0, 1) ==
+              std::vector<std::uint16_t>({0x4148U, 0x0000U, 3U, 4U}),
+          "Direct Register Write was not visible through Rule Data");
   const auto directOnly = runtime.WriteRegisters(0, 200, {0x1234U},
                                                  m485e::core::WriteSource::Direct);
-  Require(directOnly.status == M485E_OK && directOnly.changed,
+  Require(directOnly == M485E_OK,
           "Direct debug Write incorrectly required FC03 Rule permission");
   const auto rtuDenied = runtime.WriteRegisters(0, 200, {0x5678U},
                                                 m485e::core::WriteSource::Rtu);
-  Require(rtuDenied.status == M485E_ERR_REGISTER_ACCESS_DENIED,
+  Require(rtuDenied == M485E_ERR_REGISTER_ACCESS_DENIED,
           "RTU FC10 Write bypassed FC03 Rule permission");
 
   double physical = -1.0;
-  Require(runtime.WriteSignal(0, "Power12V", 25.5).status == M485E_OK &&
+  Require(runtime.WriteSignal(0, "Power12V", 25.5) == M485E_OK &&
               runtime.ReadSignal(0, "Power12V", physical) == M485E_OK && physical == 25.5,
           "physical Signal round trip failed");
+  Require(ReadRuleValues(runtime, 0, 1) ==
+              std::vector<std::uint16_t>({0x41CCU, 0x0000U, 3U, 4U}),
+          "Signal Write was not visible through Rule Data");
   const double untouched = physical;
   Require(runtime.ReadSignal(0, "Missing", physical) == M485E_ERR_SIGNAL_NOT_FOUND &&
               physical == untouched,
           "failed Signal Read changed caller output");
 
-  const auto reset = runtime.ResetDevice(0);
-  Require(reset.status == M485E_OK && reset.changed &&
+  Require(runtime.ResetDevice(0) == M485E_OK &&
               runtime.ReadSignal(0, "Power12V", physical) == M485E_OK && physical == 12.5,
           "atomic Default Reset failed");
-  Require(!runtime.ResetDevice(0).changed, "same-state Default Reset created a change");
+  Require(ReadRuleValues(runtime, 0, 1) ==
+              std::vector<std::uint16_t>({0x4148U, 0x0000U, 0x4000U, 0x0010U}),
+          "Default Reset was not visible through Rule Data");
+  Require(runtime.ResetDevice(0) == M485E_OK, "same-state Default Reset failed");
 
   m485e::core::RuleDefinition rule{};
   m485e::core::DeviceDefinition device{};
   values.clear();
   Require(runtime.ReadRule(0, 1, rule, device, values) == M485E_OK && rule.address == 10000 &&
               rule.quantity == 4 && device.slaveId == 1 && values.size() == 4,
-          "Rule Snapshot read failed");
+          "Rule Data read failed");
+  const auto meta = m485e::platform::BuildRuleDataMeta(0, rule, device);
+  Require(meta == std::array<std::int32_t, M485E_RULE_DATA_META_COUNT>{
+                      M485E_RULE_DATA_META_VERSION, M485E_RULE_DATA_META_COUNT, 0, 0,
+                      1, 1, 0x03, 10000, 4},
+          "Rule Data metadata field values or ordering changed");
+
+  m485e::core::RuleDefinition preservedRule{};
+  preservedRule.address = 4321;
+  m485e::core::DeviceDefinition preservedDevice{};
+  preservedDevice.slaveId = 99;
+  std::vector<std::uint16_t> preservedValues{0xBEEFU};
+  Require(runtime.ReadRule(0, 99, preservedRule, preservedDevice, preservedValues) ==
+                  M485E_ERR_RULE_NOT_FOUND &&
+              preservedRule.address == 4321 && preservedDevice.slaveId == 99 &&
+              preservedValues == std::vector<std::uint16_t>({0xBEEFU}),
+          "failed Rule Data read changed caller-owned outputs");
+}
+
+void TestRuleDataQuantitiesAndAtomicReads()
+{
+  Fixture fixture;
+  const std::string devices = std::string(kDeviceHeader) +
+                              "0,COM11,1,Quantity Device,signals.csv\n";
+  const std::string rules = std::string(kRuleHeader) +
+                            "0,1,0x03,30000,1,Q1\n"
+                            "0,2,0x03,30000,4,Q4\n"
+                            "0,3,0x03,30000,5,Q5\n"
+                            "0,4,0x03,30000,125,Q125\n";
+  std::ostringstream signals;
+  signals << kSignalHeader;
+  for (std::uint16_t offset = 0; offset < M485E_MAX_DIRECT_QUANTITY; ++offset)
+  {
+    signals << static_cast<std::uint32_t>(30000U + offset) << ",Word" << offset
+            << ",Unsigned,2,BigEndian,0,16,1,0,,0,,,\n";
+  }
+  const auto built = ConfigurationLoader{}.Build(
+      fixture.Write(devices, rules, signals.str()));
+  Require(built.Succeeded(), "Rule Data Quantity fixture build failed");
+  m485e::core::RuntimeModel runtime(built.configuration);
+
+  std::vector<std::uint16_t> pattern(M485E_MAX_DIRECT_QUANTITY);
+  for (std::size_t offset = 0; offset < pattern.size(); ++offset)
+    pattern[offset] = static_cast<std::uint16_t>(offset + 1U);
+  Require(runtime.WriteRegisters(0, 30000, pattern,
+                                 m485e::core::WriteSource::Direct) == M485E_OK,
+          "maximum-size Direct Register Write failed");
+  const std::array<std::uint16_t, 4> quantities{1U, 4U, 5U, 125U};
+  for (std::size_t position = 0; position < quantities.size(); ++position)
+  {
+    const auto values = ReadRuleValues(runtime, 0,
+                                       static_cast<std::uint8_t>(position + 1U));
+    const std::size_t quantity = quantities[position];
+    Require(values.size() == quantity &&
+                std::equal(values.begin(), values.end(), pattern.begin()),
+            "Rule Data Quantity 1/4/5/125 contract failed");
+  }
+
+  m485e::core::RuleDefinition rule{};
+  m485e::core::DeviceDefinition device{};
+  std::vector<std::uint16_t> values;
+  Require(runtime.ReadRule(0, 4, rule, device, values) == M485E_OK,
+          "maximum-size Rule Data read failed");
+  const auto meta = m485e::platform::BuildRuleDataMeta(2, rule, device);
+  Require(meta == std::array<std::int32_t, M485E_RULE_DATA_META_COUNT>{
+                      M485E_RULE_DATA_META_VERSION, M485E_RULE_DATA_META_COUNT, 2, 0,
+                      4, 1, 0x03, 30000, 125},
+          "maximum-size Rule Data metadata contract failed");
+
+  std::array<std::int32_t, M485E_RULE_DATA_META_COUNT> copiedMeta{};
+  std::array<std::uint16_t, M485E_MAX_DIRECT_QUANTITY> copiedRegisters{};
+  Require(m485e::platform::CopyRuleDataOutputs(
+              2, rule, device, values, static_cast<std::uint32_t>(copiedMeta.size()),
+              copiedMeta.data(), static_cast<std::uint32_t>(copiedRegisters.size()),
+              copiedRegisters.data()) == M485E_OK &&
+              copiedMeta == meta &&
+              std::equal(copiedRegisters.begin(), copiedRegisters.end(), pattern.begin()),
+          "Rule Data public-output success copy failed");
+  copiedMeta.fill(0x5A5A5A5A);
+  copiedRegisters.fill(0xA55AU);
+  Require(m485e::platform::CopyRuleDataOutputs(
+              2, rule, device, values, static_cast<std::uint32_t>(copiedMeta.size()),
+              copiedMeta.data(), static_cast<std::uint32_t>(copiedRegisters.size() - 1U),
+              copiedRegisters.data()) == M485E_ERR_BUFFER_TOO_SMALL &&
+              std::all_of(copiedMeta.begin(), copiedMeta.end(),
+                          [](const std::int32_t value) { return value == 0x5A5A5A5A; }) &&
+              std::all_of(copiedRegisters.begin(), copiedRegisters.end(),
+                          [](const std::uint16_t value) { return value == 0xA55AU; }),
+          "failed Rule Data output copy changed caller-owned buffers");
+
+  const std::vector<std::uint16_t> first(5, 0x1111U);
+  const std::vector<std::uint16_t> second(5, 0xEEEEU);
+  Require(runtime.WriteRegisters(0, 30000, first,
+                                 m485e::core::WriteSource::Direct) == M485E_OK,
+          "concurrent Rule Data setup failed");
+  std::atomic<bool> writerDone{false};
+  std::atomic<bool> failure{false};
+  std::thread writer([&] {
+    for (std::uint32_t iteration = 0; iteration < 20000U; ++iteration)
+    {
+      const auto& next = (iteration & 1U) == 0U ? second : first;
+      if (runtime.WriteRegisters(0, 30000, next,
+                                 m485e::core::WriteSource::Direct) != M485E_OK)
+      {
+        failure.store(true);
+        break;
+      }
+    }
+    writerDone.store(true);
+  });
+  std::uint32_t readCount = 0;
+  while (!writerDone.load() || readCount < 20000U)
+  {
+    const auto current = ReadRuleValues(runtime, 0, 3);
+    if (current != first && current != second)
+    {
+      failure.store(true);
+      break;
+    }
+    ++readCount;
+  }
+  writer.join();
+  Require(!failure.load(),
+          "concurrent Rule Data read observed a torn multi-Register write");
 }
 
 std::vector<std::uint8_t> Rtu(std::initializer_list<std::uint8_t> bytes)
@@ -445,12 +586,12 @@ void TestPortCardinalityAndSlot3Routing()
               m485e::core::RtuDisposition::Ignore,
           "out-of-range PortSlot was not ignored");
 
-  m485e::core::SnapshotQueueService snapshots(built.configuration);
-  snapshots.StartMonitoring();
-  m485e::core::RuleSnapshot snapshot;
-  Require(snapshots.CreatePeriodic(runtime, 3, 1, snapshot) == M485E_OK &&
-              snapshot.portSlot == 3,
-          "PortSlot 3 Snapshot routing failed");
+  m485e::core::RuleDefinition rule{};
+  m485e::core::DeviceDefinition device{};
+  std::vector<std::uint16_t> values;
+  Require(runtime.ReadRule(3, 1, rule, device, values) == M485E_OK &&
+              built.configuration->portLookup.at(device.port) == 3U,
+          "PortSlot 3 Rule Data routing failed");
 
   const std::string fivePorts = FourPortDevices() +
                                 "4,COM15,1,Fifth,signals.csv\n";
@@ -487,14 +628,15 @@ void TestModbusRtuEngine()
 
   result = engine.Process(0, Rtu({1, 0x10, 0x27, 0x10, 0, 2, 4,
                                   0x12, 0x34, 0x56, 0x78}));
-  Require(result.response.size() == 8 && result.response[1] == 0x10 &&
-              result.deviceWrites.size() == 1U &&
-              !result.deviceWrites[0].write.changedRuleIndices.empty(),
+  Require(result.response.size() == 8 && result.response[1] == 0x10,
           "FC10 normal response failed");
   std::vector<std::uint16_t> registers;
   Require(runtime.ReadRegisters(0, 10000, 2, registers) == M485E_OK &&
               registers[0] == 0x1234U && registers[1] == 0x5678U,
           "FC10 did not atomically update Registers");
+  Require(ReadRuleValues(runtime, 0, 1) ==
+              std::vector<std::uint16_t>({0x1234U, 0x5678U, 0x4000U, 0x0010U}),
+          "RTU FC10 result was not visible through Rule Data");
 
   result = engine.Process(0, Rtu({1, 0x06, 0x27, 0x10, 0, 1}));
   Require(result.response.size() == 5 && result.response[1] == 0x86 &&
@@ -533,7 +675,7 @@ void TestModbusRtuEngine()
               registers[0] == 0x1234U,
           "disabled Device accepted an addressed FC10 Write");
   Require(runtime.WriteRegisters(0, 10000, {0xCAFEU},
-                                 m485e::core::WriteSource::Direct).status == M485E_OK &&
+                                 m485e::core::WriteSource::Direct) == M485E_OK &&
               runtime.ReadRegisters(0, 10000, 1, registers) == M485E_OK &&
               registers[0] == 0xCAFEU,
           "Device communication disable incorrectly blocked Direct control");
@@ -558,13 +700,16 @@ void TestModbusRtuEngine()
   result = broadcastEngine.Process(
       0, Rtu({0, 0x10, 0x27, 0x10, 0, 2, 4, 0x11, 0x11, 0x22, 0x22}));
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
-              result.response.empty() && result.deviceWrites.size() == 2U,
+              result.response.empty(),
           "FC10 Broadcast was not applied silently to every Port-local Slave");
   for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
   {
     Require(broadcastRuntime.ReadRegisters(index, 10000, 2, registers) == M485E_OK &&
                 registers == std::vector<std::uint16_t>({0x1111U, 0x2222U}),
             "FC10 Broadcast did not update every Port-local Register image");
+    Require(ReadRuleValues(broadcastRuntime, index, 1) ==
+                std::vector<std::uint16_t>({0x1111U, 0x2222U}),
+            "FC10 Broadcast result was not visible through Rule Data");
   }
   Require(broadcastRuntime.ReadRegisters(2, 10000, 2, registers) == M485E_OK &&
               registers == std::vector<std::uint16_t>({0x4148U, 0x0000U}),
@@ -573,9 +718,7 @@ void TestModbusRtuEngine()
           "Broadcast target disable failed");
   result = broadcastEngine.Process(
       0, Rtu({0, 0x10, 0x27, 0x10, 0, 1, 2, 0x33, 0x33}));
-  Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
-              result.deviceWrites.size() == 1U &&
-              result.deviceWrites[0].deviceIndex == 1U,
+  Require(result.disposition == m485e::core::RtuDisposition::Ignore,
           "Broadcast did not exclude the disabled Device");
   Require(broadcastRuntime.ReadRegisters(0, 10000, 1, registers) == M485E_OK &&
               registers[0] == 0x1111U &&
@@ -584,7 +727,7 @@ void TestModbusRtuEngine()
           "Broadcast changed a disabled Device or skipped an enabled peer");
   result = broadcastEngine.Process(0, Rtu({0, 0x03, 0x27, 0x10, 0, 1}));
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
-              result.response.empty() && result.deviceWrites.empty(),
+              result.response.empty(),
           "Broadcast Read was not a silent no-op");
 
   Fixture atomicBroadcastFixture;
@@ -599,7 +742,7 @@ void TestModbusRtuEngine()
   result = atomicBroadcastEngine.Process(
       0, Rtu({0, 0x10, 0x27, 0x11, 0, 1, 2, 0xAB, 0xCD}));
   Require(result.disposition == m485e::core::RtuDisposition::Ignore &&
-              result.response.empty() && result.deviceWrites.empty(),
+              result.response.empty(),
           "invalid FC10 Broadcast was not silent");
   for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
   {
@@ -715,63 +858,8 @@ void TestRtuLogQueue()
           "RTU Log oldest-drop capacity policy failed");
 }
 
-void TestSnapshotAndDiagnosticQueues()
+void TestDiagnosticQueue()
 {
-  Fixture fixture;
-  const auto built = ConfigurationLoader{}.Build(
-      fixture.Write(ValidDevices(), ValidRules(), ValidSignals()));
-  Require(built.Succeeded(), "Queue fixture build failed");
-  m485e::core::RuntimeModel runtime(built.configuration);
-  m485e::core::SnapshotQueueService snapshots(built.configuration);
-  m485e::core::RuleSnapshot snapshot;
-  Require(snapshots.CreatePeriodic(runtime, 0, 1, snapshot) == M485E_ERR_MONITORING_STATE,
-          "Periodic Snapshot was available while Monitoring OFF");
-  snapshots.StartMonitoring();
-  Require(snapshots.CreatePeriodic(runtime, 0, 1, snapshot) == M485E_OK &&
-              snapshot.sequence == 0 && snapshot.sourceType == 0 && snapshot.quantity == 4,
-          "Periodic Snapshot metadata failed");
-
-  auto write = runtime.WriteRegisters(0, 10000, {0x1111U},
-                                      m485e::core::WriteSource::Direct);
-  snapshots.RecordChange(0, m485e::core::WriteSource::Direct, write);
-  write = runtime.WriteRegisters(0, 10000, {0x2222U},
-                                 m485e::core::WriteSource::Direct);
-  snapshots.RecordChange(0, m485e::core::WriteSource::Direct, write);
-  const auto before = snapshot;
-  Require(snapshots.TryDequeue(0, 3, snapshot) == M485E_ERR_BUFFER_TOO_SMALL &&
-              snapshot.values == before.values,
-          "small output capacity consumed or changed Snapshot");
-  Require(snapshots.TryDequeue(0, 125, snapshot) == M485E_OK && snapshot.sequence == 1 &&
-              snapshot.sourceType == 0x02 && snapshot.values[0] == 0x1111U,
-          "Change Snapshot did not preserve the change-time value");
-  Require(snapshots.TryDequeue(0, 125, snapshot) == M485E_OK && snapshot.sequence == 2 &&
-              snapshot.values[0] == 0x2222U,
-          "Change Snapshot FIFO order failed");
-
-  for (std::uint16_t value = 0; value < 257U; ++value)
-  {
-    write = runtime.WriteRegisters(0, 10000, {static_cast<std::uint16_t>(0x3000U + value)},
-                                   m485e::core::WriteSource::Direct);
-    snapshots.RecordChange(0, m485e::core::WriteSource::Direct, write);
-  }
-  auto stats = snapshots.GetStats(0);
-  Require(stats.pending == 256 && stats.droppedCount == 1 && stats.overflowLatch &&
-              stats.highWaterMark == 256,
-          "Change Queue oldest-drop diagnostics failed");
-  Require(snapshots.TryDequeue(0, 125, snapshot) == M485E_OK && snapshot.sequence == 4,
-          "Change Queue did not drop only the oldest item");
-  stats = snapshots.GetStats(0);
-  const std::uint32_t pendingBeforeStop = stats.pending;
-  snapshots.StopMonitoring();
-  stats = snapshots.GetStats(0);
-  Require(stats.pending == 0 && stats.suppressedCount == pendingBeforeStop,
-          "StopMonitoring did not clear and count queued Snapshots");
-  write = runtime.WriteRegisters(0, 10000, {0x7777U},
-                                 m485e::core::WriteSource::Direct);
-  snapshots.RecordChange(0, m485e::core::WriteSource::Direct, write);
-  Require(snapshots.GetStats(0).suppressedCount == pendingBeforeStop + 1U,
-          "Monitoring OFF change was not suppressed without Queueing");
-
   m485e::core::ErrorQueue errors;
   m485e::core::ErrorEvent event;
   event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED;
@@ -805,39 +893,6 @@ void TestSnapshotAndDiagnosticQueues()
   Require(errorStats.pending == 256 && errorStats.droppedCount == 1 &&
               errorStats.overflowLatch,
           "Error Queue oldest-drop diagnostics failed");
-}
-
-void TestMonitoringStopIsAnEnqueueBarrier()
-{
-  Fixture fixture;
-  const auto built = ConfigurationLoader{}.Build(
-      fixture.Write(ValidDevices(), ValidRules(), ValidSignals()));
-  Require(built.Succeeded(), "Monitoring barrier fixture build failed");
-  m485e::core::RuntimeModel runtime(built.configuration);
-  m485e::core::SnapshotQueueService snapshots(built.configuration);
-  const auto write = runtime.WriteRegisters(0, 10000, {0x1357U},
-                                            m485e::core::WriteSource::Direct);
-  Require(write.changed, "Monitoring barrier write did not change a Rule");
-
-  for (int round = 0; round < 50; ++round)
-  {
-    snapshots.StartMonitoring();
-    std::atomic<bool> run{true};
-    std::array<std::thread, 4> writers;
-    for (auto& writer : writers)
-    {
-      writer = std::thread([&] {
-        while (run.load(std::memory_order_relaxed))
-          snapshots.RecordChange(0, m485e::core::WriteSource::Direct, write);
-      });
-    }
-    std::this_thread::yield();
-    snapshots.StopMonitoring();
-    run.store(false, std::memory_order_relaxed);
-    for (auto& writer : writers) writer.join();
-    Require(snapshots.GetStats(0).pending == 0,
-            "RecordChange enqueued after StopMonitoring returned");
-  }
 }
 
 void TestRtuTimingAndStreamFraming()
@@ -993,7 +1048,6 @@ void TestPortWorkerWithPartialIoAndCancellation()
       fixture.Write(ValidDevices(), ValidRules(), ValidSignals()));
   Require(built.Succeeded(), "Worker fixture build failed");
   m485e::core::RuntimeModel runtime(built.configuration);
-  m485e::core::SnapshotQueueService snapshots(built.configuration);
   m485e::core::ErrorQueue errors;
   m485e::core::RtuLogQueue rtuLog(built.configuration);
   Require(rtuLog.SetEnabled(true) == M485E_OK, "Worker RTU Log capture did not start");
@@ -1005,7 +1059,7 @@ void TestPortWorkerWithPartialIoAndCancellation()
       0, m485e::core::CalculateRtuTiming(
              {115200, 8, m485e::core::SerialParity::None, 1}),
       transport,
-      runtime, snapshots, errors, rtuLog,
+      runtime, errors, rtuLog,
       [&fatalCount](std::uint8_t, std::int32_t, std::uint32_t) { ++fatalCount; });
   Require(worker.Start() == M485E_OK, "Port Worker did not start");
   std::vector<std::uint8_t> response;
@@ -1041,8 +1095,6 @@ void TestPortWorkerBroadcastWrite()
       fixture.Write(OnePortDevices(), rules, ValidSignals()));
   Require(built.Succeeded(), "Worker Broadcast fixture build failed");
   m485e::core::RuntimeModel runtime(built.configuration);
-  m485e::core::SnapshotQueueService snapshots(built.configuration);
-  snapshots.StartMonitoring();
   m485e::core::ErrorQueue errors;
   m485e::core::RtuLogQueue rtuLog(built.configuration);
   FakeSerialTransport transport(
@@ -1051,7 +1103,7 @@ void TestPortWorkerBroadcastWrite()
   m485e::core::PortWorker worker(
       0, m485e::core::CalculateRtuTiming(
              {115200, 8, m485e::core::SerialParity::None, 1}),
-      transport, runtime, snapshots, errors, rtuLog,
+      transport, runtime, errors, rtuLog,
       [&fatalCount](std::uint8_t, std::int32_t, std::uint32_t) { ++fatalCount; });
   Require(worker.Start() == M485E_OK, "Broadcast Port Worker did not start");
   bool updated = false;
@@ -1071,9 +1123,8 @@ void TestPortWorkerBroadcastWrite()
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
   worker.Stop();
-  Require(updated && transport.Output().empty() &&
-              snapshots.GetStats(0).pending == 2U && fatalCount.load() == 0,
-          "Port Worker did not apply Broadcast silently or queue both changes");
+  Require(updated && transport.Output().empty() && fatalCount.load() == 0,
+          "Port Worker did not apply Broadcast silently to both Devices");
 }
 }  // namespace
 
@@ -1088,11 +1139,11 @@ int main()
     TestCardinalityBoundaries();
     TestAtomicRefresh();
     TestRuntimeRegisterAndSignalOperations();
+    TestRuleDataQuantitiesAndAtomicReads();
     TestPortCardinalityAndSlot3Routing();
     TestModbusRtuEngine();
     TestRtuLogQueue();
-    TestSnapshotAndDiagnosticQueues();
-    TestMonitoringStopIsAnEnqueueBarrier();
+    TestDiagnosticQueue();
     TestRtuTimingAndStreamFraming();
     TestPortWorkerWithPartialIoAndCancellation();
     TestPortWorkerBroadcastWrite();

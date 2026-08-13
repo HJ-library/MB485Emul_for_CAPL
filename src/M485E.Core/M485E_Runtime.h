@@ -16,27 +16,6 @@ enum class WriteSource : std::uint8_t
 {
   Rtu = 0x01,
   Direct = 0x02,
-  Reset = 0x03,
-};
-
-struct RegisterWriteResult
-{
-  std::int32_t status = 0;
-  bool changed = false;
-  std::vector<std::size_t> changedRuleIndices;
-  std::vector<std::vector<std::uint16_t>> changedRuleValues;
-};
-
-struct DeviceRegisterWriteResult
-{
-  std::uint8_t deviceIndex = 0;
-  RegisterWriteResult write;
-};
-
-struct BroadcastRegisterWriteResult
-{
-  std::int32_t status = 0;
-  std::vector<DeviceRegisterWriteResult> deviceWrites;
 };
 
 /**
@@ -57,29 +36,24 @@ class RuntimeModel final
   std::int32_t ReadRegistersForFunction(std::uint8_t index, std::uint8_t functionCode,
                                         std::uint16_t address, std::uint16_t quantity,
                                         std::vector<std::uint16_t>& output) const;
-  /**
-   * @brief Applies a register write and captures all overlapping Rule values atomically.
-   * @note Capturing under the device mutex guarantees a change snapshot represents the
-   *       same register state as the completed write.
-   */
-  RegisterWriteResult WriteRegisters(std::uint8_t index, std::uint16_t address,
-                                     const std::vector<std::uint16_t>& values,
-                                     WriteSource source);
+  /** @brief Applies one validated register write atomically to a Device image. */
+  std::int32_t WriteRegisters(std::uint8_t index, std::uint16_t address,
+                              const std::vector<std::uint16_t>& values,
+                              WriteSource source);
   /**
    * @brief Atomically applies one FC10 broadcast to every configured Slave on a Port.
-   * @note Every target is validated and all change snapshots are prepared before any
-   *       Register image is modified. A failure therefore leaves all targets unchanged.
+   * @note Every target is validated before any Register image is modified. A failure
+   *       therefore leaves all targets unchanged.
    */
-  BroadcastRegisterWriteResult WriteBroadcastRegisters(
-      std::uint8_t portSlot, std::uint16_t address,
-      const std::vector<std::uint16_t>& values);
-  RegisterWriteResult ResetDevice(std::uint8_t index);
+  std::int32_t WriteBroadcastRegisters(std::uint8_t portSlot, std::uint16_t address,
+                                       const std::vector<std::uint16_t>& values);
+  std::int32_t ResetDevice(std::uint8_t index);
   /** @brief Decodes a case-sensitive SignalName from one device register image. */
   std::int32_t ReadSignal(std::uint8_t index, std::string_view signalName,
                           double& physicalValue) const;
-  /** @brief Encodes a physical Signal value and reports affected monitoring Rules. */
-  RegisterWriteResult WriteSignal(std::uint8_t index, std::string_view signalName,
-                                  double physicalValue);
+  /** @brief Encodes a physical Signal value into its backing register frame. */
+  std::int32_t WriteSignal(std::uint8_t index, std::string_view signalName,
+                           double physicalValue);
   /** @brief Copies one Rule definition, device metadata, and current register values. */
   std::int32_t ReadRule(std::uint8_t index, std::uint8_t ruleId,
                         RuleDefinition& rule, DeviceDefinition& device,
@@ -106,17 +80,6 @@ class RuntimeModel final
   std::int32_t ValidateRange(std::uint8_t index, std::uint16_t address,
                              std::uint16_t quantity, const RegisterImage*& image,
                              const DeviceConfiguration*& device) const noexcept;
-  static std::vector<std::size_t> FindChangedRules(
-      const ActiveConfiguration& configuration, const DeviceConfiguration& device,
-      const std::bitset<65536>& changedAddresses);
-  static std::vector<std::vector<std::uint16_t>> CaptureRuleValues(
-      const ActiveConfiguration& configuration, const RegisterImage& image,
-      const std::vector<std::size_t>& ruleIndices);
-  static std::vector<std::vector<std::uint16_t>> CaptureRuleValuesAfterWrite(
-      const ActiveConfiguration& configuration, const RegisterImage& image,
-      const std::vector<std::size_t>& ruleIndices, std::uint16_t writeAddress,
-      const std::vector<std::uint16_t>& writeValues);
-
   std::shared_ptr<const ActiveConfiguration> configuration_;
   std::array<std::unique_ptr<DeviceRuntime>, 256> devices_{};
 };

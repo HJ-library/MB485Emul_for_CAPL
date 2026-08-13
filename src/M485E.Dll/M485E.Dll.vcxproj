@@ -87,6 +87,7 @@
   <ItemGroup>
     <ClInclude Include="..\..\generated\cpp\M485E_Contracts.generated.h" />
     <ClInclude Include="M485E_DllApi.h" />
+    <ClInclude Include="M485E_RuleDataContract.h" />
     <ClInclude Include="M485E_Win32Serial.h" />
     <ClInclude Include="M485E_Connection.h" />
   </ItemGroup>

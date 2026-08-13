@@ -3,6 +3,7 @@
 #include "M485E_ConfigurationLoader.h"
 #include "M485E_Connection.h"
 #include "M485E_Queues.h"
+#include "M485E_RuleDataContract.h"
 #include "M485E_Runtime.h"
 #include "M485E_RtuLog.h"
 
@@ -29,11 +30,7 @@
 #define M485E_Dll_Connect M485E_Dll_Connect_Impl
 #define M485E_Dll_Disconnect M485E_Dll_Disconnect_Impl
 #define M485E_Dll_GetLifecycleStatus M485E_Dll_GetLifecycleStatus_Impl
-#define M485E_Dll_StartMonitoring M485E_Dll_StartMonitoring_Impl
-#define M485E_Dll_StopMonitoring M485E_Dll_StopMonitoring_Impl
-#define M485E_Dll_ReadRuleSnapshot M485E_Dll_ReadRuleSnapshot_Impl
-#define M485E_Dll_TryDequeueChangeSnapshot M485E_Dll_TryDequeueChangeSnapshot_Impl
-#define M485E_Dll_GetChangeQueueStats M485E_Dll_GetChangeQueueStats_Impl
+#define M485E_Dll_ReadRuleData M485E_Dll_ReadRuleData_Impl
 #define M485E_Dll_ReadRegisters M485E_Dll_ReadRegisters_Impl
 #define M485E_Dll_WriteRegisters M485E_Dll_WriteRegisters_Impl
 #define M485E_Dll_ResetDevice M485E_Dll_ResetDevice_Impl
@@ -77,7 +74,6 @@ struct Context
   std::array<PortConfig, M485E_PORT_SLOT_COUNT> ports{};
   ConfigurationStore configurationStore;
   std::unique_ptr<RuntimeModel> runtime;
-  std::unique_ptr<SnapshotQueueService> snapshots;
   std::unique_ptr<RtuLogQueue> rtuLog;
   std::unique_ptr<m485e::platform::RuntimeConnection> connection;
   ErrorQueue errors;
@@ -89,7 +85,6 @@ struct Context
   std::uint32_t lastCompletedGeneration = 0;
   std::int32_t lastResult = M485E_STATUS_NO_DATA;
   bool configurationValid = false;
-  bool monitoringRequested = false;
 };
 
 std::mutex gMutex;
@@ -197,22 +192,6 @@ std::int32_t ValidateRegisterArguments(const std::int32_t index,
                                                          : M485E_OK;
 }
 
-void FillSnapshotMeta(const RuleSnapshot& snapshot,
-                      std::array<std::int32_t, M485E_SNAPSHOT_META_COUNT>& meta)
-{
-  meta[M485E_SM_LAYOUT_VERSION] = M485E_SNAPSHOT_META_VERSION;
-  meta[M485E_SM_FIELD_COUNT] = M485E_SNAPSHOT_META_COUNT;
-  meta[M485E_SM_SEQUENCE] = static_cast<std::int32_t>(snapshot.sequence);
-  meta[M485E_SM_PORT_SLOT] = snapshot.portSlot;
-  meta[M485E_SM_DEVICE_INDEX] = snapshot.deviceIndex;
-  meta[M485E_SM_RULE_ID] = snapshot.ruleId;
-  meta[M485E_SM_SLAVE_ID] = snapshot.slaveId;
-  meta[M485E_SM_FUNCTION_CODE] = snapshot.functionCode;
-  meta[M485E_SM_SOURCE_TYPE] = snapshot.sourceType;
-  meta[M485E_SM_ADDRESS] = snapshot.address;
-  meta[M485E_SM_QUANTITY] = snapshot.quantity;
-}
-
 void FillErrorMeta(const ErrorEvent& event,
                    std::array<std::int32_t, M485E_ERROR_META_COUNT>& meta)
 {
@@ -238,7 +217,6 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
   ConfigurationLoader loader;
   const ConfigurationRefreshResult result = context->configurationStore.Refresh(paths, loader);
   std::unique_ptr<RuntimeModel> runtime;
-  std::unique_ptr<SnapshotQueueService> snapshots;
   std::unique_ptr<RtuLogQueue> rtuLog;
   try
   {
@@ -246,14 +224,12 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
     {
       auto configuration = context->configurationStore.Snapshot();
       runtime = std::make_unique<RuntimeModel>(configuration);
-      snapshots = std::make_unique<SnapshotQueueService>(configuration);
       rtuLog = std::make_unique<RtuLogQueue>(configuration);
     }
   }
   catch (...)
   {
     runtime.reset();
-    snapshots.reset();
     rtuLog.reset();
   }
 
@@ -262,12 +238,11 @@ void FinishRefresh(Context* const context, const CsvPaths paths,
   // In that case the detached result must not be published into a newer context.
   if (!gContext || gContext.get() != context || context->closing) return;
   std::int32_t finalStatus = result.status;
-  if (result.status == M485E_OK && (!runtime || !snapshots || !rtuLog))
+  if (result.status == M485E_OK && (!runtime || !rtuLog))
     finalStatus = M485E_ERR_INTERNAL_ALLOCATION;
   if (finalStatus == M485E_OK)
   {
     context->runtime = std::move(runtime);
-    context->snapshots = std::move(snapshots);
     context->rtuLog = std::move(rtuLog);
     context->configurationValid = true;
   }
@@ -320,8 +295,6 @@ void UpdateReconnectState(Context* const context, const std::int32_t operation,
   context->lastResult = result;
   gLifecycleThreadDone.store(true);
   context->state = result == M485E_OK ? M485E_STATE_CONNECTED : M485E_STATE_DISCONNECTED;
-  if (result == M485E_OK && context->monitoringRequested && context->snapshots)
-    context->snapshots->StartMonitoring();
 }
 
 void FinishConnect(Context* const context, const std::uint32_t generation,
@@ -333,8 +306,8 @@ void FinishConnect(Context* const context, const std::uint32_t generation,
   try
   {
     connection = std::make_unique<m485e::platform::RuntimeConnection>(
-        std::move(configs), activePortCount, *context->runtime, *context->snapshots,
-        context->errors, *context->rtuLog,
+        std::move(configs), activePortCount, *context->runtime, context->errors,
+        *context->rtuLog,
         [context](const std::int32_t operation, const std::int32_t result) {
           UpdateReconnectState(context, operation, result);
         });
@@ -429,8 +402,6 @@ void FinishDisconnect(Context* const context, const std::uint32_t generation) no
   std::lock_guard<std::mutex> lock(gMutex);
   if (!gContext || gContext.get() != context || context->closing) return;
   context->connection.reset();
-  if (context->snapshots) context->snapshots->StopMonitoring();
-  context->monitoringRequested = false;
   context->state = M485E_STATE_DISCONNECTED;
   context->activeOperation = M485E_OPERATION_NONE;
   context->lastCompletedOperation = M485E_OPERATION_DISCONNECT;
@@ -677,30 +648,7 @@ std::int32_t __stdcall M485E_Dll_GetLifecycleStatus(const std::uint32_t contextH
   return RecordSuccess(*gContext);
 }
 
-std::int32_t __stdcall M485E_Dll_StartMonitoring(const std::uint32_t contextHandle)
-{
-  std::lock_guard<std::mutex> lock(gMutex);
-  const std::int32_t status = ValidateContext(contextHandle);
-  if (status != M485E_OK) return status;
-  if (gContext->state != M485E_STATE_CONNECTED || !gContext->snapshots)
-    return RecordFailure(*gContext, M485E_ERR_MONITORING_STATE,
-                         "Monitoring requires Connected state.");
-  gContext->snapshots->StartMonitoring();
-  gContext->monitoringRequested = true;
-  return RecordSuccess(*gContext);
-}
-
-std::int32_t __stdcall M485E_Dll_StopMonitoring(const std::uint32_t contextHandle)
-{
-  std::lock_guard<std::mutex> lock(gMutex);
-  const std::int32_t status = ValidateContext(contextHandle);
-  if (status != M485E_OK) return status;
-  if (gContext->snapshots) gContext->snapshots->StopMonitoring();
-  gContext->monitoringRequested = false;
-  return RecordSuccess(*gContext);
-}
-
-std::int32_t __stdcall M485E_Dll_ReadRuleSnapshot(
+std::int32_t __stdcall M485E_Dll_ReadRuleData(
     const std::uint32_t contextHandle, const std::int32_t index, const std::int32_t ruleId,
     const std::uint32_t metaCapacity, std::int32_t* outMeta,
     const std::uint32_t dataCapacity, std::uint16_t* outRegisters)
@@ -711,92 +659,37 @@ std::int32_t __stdcall M485E_Dll_ReadRuleSnapshot(
   if (index < 0 || index > M485E_MAX_DEVICE_INDEX || ruleId < 0 ||
       ruleId > M485E_MAX_RULE_ID || outMeta == nullptr || outRegisters == nullptr)
     return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
-                         "Snapshot arguments are invalid.");
-  if (metaCapacity < M485E_SNAPSHOT_META_COUNT || dataCapacity == 0U)
+                         "Rule Data arguments are invalid.");
+  if (metaCapacity < M485E_RULE_DATA_META_COUNT || dataCapacity == 0U)
     return RecordFailure(*gContext, M485E_ERR_BUFFER_TOO_SMALL,
-                         "Snapshot output is too small.");
-  if (!gContext->runtime || !gContext->snapshots)
+                         "Rule Data output is too small.");
+  if (gContext->state != M485E_STATE_CONNECTED)
+    return RecordFailure(*gContext, M485E_ERR_INVALID_STATE,
+                         "Rule Data requires Connected state.");
+  if (!gContext->configurationValid)
+    return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
+                         "Rule Data requires a valid configuration.");
+  if (!gContext->runtime)
     return RecordFailure(*gContext, M485E_ERR_RULE_NOT_FOUND, "No active Rule exists.");
-  RuleSnapshot snapshot;
-  const std::int32_t result = gContext->snapshots->CreatePeriodic(
-      *gContext->runtime, static_cast<std::uint8_t>(index),
-      static_cast<std::uint8_t>(ruleId), snapshot);
-  if (result != M485E_OK) return RecordFailure(*gContext, result, "Rule Snapshot failed.");
-  if (dataCapacity < snapshot.quantity)
-    return RecordFailure(*gContext, M485E_ERR_BUFFER_TOO_SMALL,
-                         "Snapshot Register output is too small.");
-  std::array<std::int32_t, M485E_SNAPSHOT_META_COUNT> meta{};
-  FillSnapshotMeta(snapshot, meta);
-  // Copy only after all validations succeed. This caller-owned-buffer rule lets CAPL
-  // keep displaying its previous valid sample when a read fails.
-  std::copy(meta.begin(), meta.end(), outMeta);
-  std::copy_n(snapshot.values.begin(), snapshot.quantity, outRegisters);
-  return RecordSuccess(*gContext);
-}
-
-std::int32_t __stdcall M485E_Dll_TryDequeueChangeSnapshot(
-    const std::uint32_t contextHandle, const std::int32_t portSlot,
-    const std::uint32_t metaCapacity, std::int32_t* outMeta,
-    const std::uint32_t dataCapacity, std::uint16_t* outRegisters)
-{
-  std::lock_guard<std::mutex> lock(gMutex);
-  const std::int32_t status = ValidateContext(contextHandle);
-  if (status != M485E_OK) return status;
-  if (portSlot < 0 || portSlot >= M485E_PORT_SLOT_COUNT || outMeta == nullptr ||
-      outRegisters == nullptr)
-    return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
-                         "Change Snapshot arguments are invalid.");
-  if (metaCapacity < M485E_SNAPSHOT_META_COUNT || dataCapacity == 0U)
-    return RecordFailure(*gContext, M485E_ERR_BUFFER_TOO_SMALL,
-                         "Change Snapshot output is too small.");
-  if (!gContext->snapshots) return M485E_STATUS_NO_DATA;
-  RuleSnapshot snapshot;
-  const std::int32_t result = gContext->snapshots->TryDequeue(
-      static_cast<std::uint8_t>(portSlot), static_cast<std::uint16_t>(
-          std::min<std::uint32_t>(dataCapacity, 0xFFFFU)), snapshot);
-  if (result == M485E_STATUS_NO_DATA) return result;
-  if (result != M485E_OK)
-    return RecordFailure(*gContext, result, "Change Snapshot dequeue failed.");
-  std::array<std::int32_t, M485E_SNAPSHOT_META_COUNT> meta{};
-  FillSnapshotMeta(snapshot, meta);
-  // TryDequeue validated capacity before consuming, so these copies cannot partially
-  // report a snapshot that remains in the queue.
-  std::copy(meta.begin(), meta.end(), outMeta);
-  std::copy_n(snapshot.values.begin(), snapshot.quantity, outRegisters);
-  return RecordSuccess(*gContext);
-}
-
-std::int32_t __stdcall M485E_Dll_GetChangeQueueStats(
-    const std::uint32_t contextHandle, const std::int32_t portSlot,
-    const std::uint32_t statsCapacity, std::int32_t* outStats)
-{
-  std::lock_guard<std::mutex> lock(gMutex);
-  const std::int32_t status = ValidateContext(contextHandle);
-  if (status != M485E_OK) return status;
-  if (portSlot < 0 || portSlot >= M485E_PORT_SLOT_COUNT)
-    return RecordFailure(*gContext, M485E_ERR_INVALID_ENUM, "PortSlot is invalid.");
-  const std::int32_t outputStatus =
-      ValidateOutput(statsCapacity, M485E_CHANGE_QUEUE_STATS_COUNT, outStats);
-  if (outputStatus != M485E_OK)
-    return RecordFailure(*gContext, outputStatus, "Change Queue Stats output is too small.");
-  ChangeQueueStats value;
-  if (gContext->snapshots)
-    value = gContext->snapshots->GetStats(static_cast<std::uint8_t>(portSlot));
-  value.portSlot = static_cast<std::uint8_t>(portSlot);
-  std::array<std::int32_t, M485E_CHANGE_QUEUE_STATS_COUNT> stats{};
-  stats[M485E_CS_LAYOUT_VERSION] = M485E_CHANGE_QUEUE_STATS_VERSION;
-  stats[M485E_CS_FIELD_COUNT] = M485E_CHANGE_QUEUE_STATS_COUNT;
-  stats[M485E_CS_PORT_SLOT] = portSlot;
-  stats[M485E_CS_PENDING] = static_cast<std::int32_t>(value.pending);
-  stats[M485E_CS_CAPACITY] = M485E_CHANGE_QUEUE_CAPACITY;
-  stats[M485E_CS_HIGH_WATER_MARK] = static_cast<std::int32_t>(value.highWaterMark);
-  stats[M485E_CS_ENQUEUED_COUNT] = static_cast<std::int32_t>(value.enqueuedCount);
-  stats[M485E_CS_DEQUEUED_COUNT] = static_cast<std::int32_t>(value.dequeuedCount);
-  stats[M485E_CS_DROPPED_COUNT] = static_cast<std::int32_t>(value.droppedCount);
-  stats[M485E_CS_SUPPRESSED_COUNT] = static_cast<std::int32_t>(value.suppressedCount);
-  stats[M485E_CS_OVERFLOW_LATCH] = value.overflowLatch ? 1 : 0;
-  stats[M485E_CS_LAST_SEQUENCE] = static_cast<std::int32_t>(value.lastSequence);
-  std::copy(stats.begin(), stats.end(), outStats);
+  RuleDefinition rule;
+  DeviceDefinition device;
+  std::vector<std::uint16_t> registers;
+  const std::int32_t result = gContext->runtime->ReadRule(
+      static_cast<std::uint8_t>(index), static_cast<std::uint8_t>(ruleId), rule,
+      device, registers);
+  if (result != M485E_OK) return RecordFailure(*gContext, result, "Rule Data read failed.");
+  const auto configuration = gContext->runtime->Configuration();
+  const auto port = configuration->portLookup.find(device.port);
+  if (port == configuration->portLookup.end() ||
+      port->second >= configuration->activePortCount)
+    return RecordFailure(*gContext, M485E_ERR_PORT_CONFIG_INCOMPLETE,
+                         "Rule Data Port mapping is invalid.");
+  const std::int32_t copyStatus = platform::CopyRuleDataOutputs(
+      static_cast<std::uint8_t>(port->second), rule, device, registers, metaCapacity,
+      outMeta, dataCapacity, outRegisters);
+  if (copyStatus != M485E_OK)
+    return RecordFailure(*gContext, copyStatus,
+                         "Rule Data output buffer is too small.");
   return RecordSuccess(*gContext);
 }
 
@@ -842,14 +735,11 @@ std::int32_t __stdcall M485E_Dll_WriteRegisters(
   if (!RuntimeState(*gContext) || !gContext->runtime)
     return RecordFailure(*gContext, M485E_ERR_DEVICE_NOT_FOUND, "No active Device exists.");
   std::vector<std::uint16_t> values(inRegisters, inRegisters + quantity);
-  const RegisterWriteResult result = gContext->runtime->WriteRegisters(
+  const std::int32_t result = gContext->runtime->WriteRegisters(
       static_cast<std::uint8_t>(index), static_cast<std::uint16_t>(startAddress), values,
       WriteSource::Direct);
-  if (result.status != M485E_OK)
-    return RecordFailure(*gContext, result.status, "Register Write failed.");
-  if (gContext->snapshots)
-    gContext->snapshots->RecordChange(static_cast<std::uint8_t>(index), WriteSource::Direct,
-                                      result);
+  if (result != M485E_OK)
+    return RecordFailure(*gContext, result, "Register Write failed.");
   return RecordSuccess(*gContext);
 }
 
@@ -863,13 +753,10 @@ std::int32_t __stdcall M485E_Dll_ResetDevice(const std::uint32_t contextHandle,
     return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT, "Device Index is invalid.");
   if (!RuntimeState(*gContext) || !gContext->runtime)
     return RecordFailure(*gContext, M485E_ERR_DEVICE_NOT_FOUND, "No active Device exists.");
-  const RegisterWriteResult result =
+  const std::int32_t result =
       gContext->runtime->ResetDevice(static_cast<std::uint8_t>(index));
-  if (result.status != M485E_OK)
-    return RecordFailure(*gContext, result.status, "Default Reset failed.");
-  if (gContext->snapshots)
-    gContext->snapshots->RecordChange(static_cast<std::uint8_t>(index), WriteSource::Reset,
-                                      result);
+  if (result != M485E_OK)
+    return RecordFailure(*gContext, result, "Default Reset failed.");
   return RecordSuccess(*gContext);
 }
 
@@ -917,14 +804,11 @@ std::int32_t __stdcall M485E_Dll_WriteSignal(const std::uint32_t contextHandle,
     return RecordFailure(*gContext, stringStatus, "SignalName is invalid.");
   if (!RuntimeState(*gContext) || !gContext->runtime)
     return RecordFailure(*gContext, M485E_ERR_SIGNAL_NOT_FOUND, "No active Signal exists.");
-  const RegisterWriteResult result = gContext->runtime->WriteSignal(
+  const std::int32_t result = gContext->runtime->WriteSignal(
       static_cast<std::uint8_t>(index), std::string_view(signalName, nameLength),
       inPhysicalValue);
-  if (result.status != M485E_OK)
-    return RecordFailure(*gContext, result.status, "Signal Write failed.");
-  if (gContext->snapshots)
-    gContext->snapshots->RecordChange(static_cast<std::uint8_t>(index), WriteSource::Direct,
-                                      result);
+  if (result != M485E_OK)
+    return RecordFailure(*gContext, result, "Signal Write failed.");
   return RecordSuccess(*gContext);
 }
 
@@ -1152,11 +1036,7 @@ std::int32_t __stdcall M485E_Dll_WaitRtuLogIdle(
 #undef M485E_Dll_Connect
 #undef M485E_Dll_Disconnect
 #undef M485E_Dll_GetLifecycleStatus
-#undef M485E_Dll_StartMonitoring
-#undef M485E_Dll_StopMonitoring
-#undef M485E_Dll_ReadRuleSnapshot
-#undef M485E_Dll_TryDequeueChangeSnapshot
-#undef M485E_Dll_GetChangeQueueStats
+#undef M485E_Dll_ReadRuleData
 #undef M485E_Dll_ReadRegisters
 #undef M485E_Dll_WriteRegisters
 #undef M485E_Dll_ResetDevice
@@ -1271,48 +1151,15 @@ std::int32_t __stdcall M485E_Dll_GetLifecycleStatus(
   });
 }
 
-std::int32_t __stdcall M485E_Dll_StartMonitoring(const std::uint32_t contextHandle)
-{
-  return GuardExport(contextHandle,
-                     [&] { return M485E_Dll_StartMonitoring_Impl(contextHandle); });
-}
-
-std::int32_t __stdcall M485E_Dll_StopMonitoring(const std::uint32_t contextHandle)
-{
-  return GuardExport(contextHandle,
-                     [&] { return M485E_Dll_StopMonitoring_Impl(contextHandle); });
-}
-
-std::int32_t __stdcall M485E_Dll_ReadRuleSnapshot(
+std::int32_t __stdcall M485E_Dll_ReadRuleData(
     const std::uint32_t contextHandle, const std::int32_t index,
     const std::int32_t ruleId, const std::uint32_t metaCapacity,
     std::int32_t* const outMeta, const std::uint32_t dataCapacity,
-    std::uint16_t* const outRegisters)
+  std::uint16_t* const outRegisters)
 {
   return GuardExport(contextHandle, [&] {
-    return M485E_Dll_ReadRuleSnapshot_Impl(contextHandle, index, ruleId, metaCapacity,
-                                           outMeta, dataCapacity, outRegisters);
-  });
-}
-
-std::int32_t __stdcall M485E_Dll_TryDequeueChangeSnapshot(
-    const std::uint32_t contextHandle, const std::int32_t portSlot,
-    const std::uint32_t metaCapacity, std::int32_t* const outMeta,
-    const std::uint32_t dataCapacity, std::uint16_t* const outRegisters)
-{
-  return GuardExport(contextHandle, [&] {
-    return M485E_Dll_TryDequeueChangeSnapshot_Impl(
-        contextHandle, portSlot, metaCapacity, outMeta, dataCapacity, outRegisters);
-  });
-}
-
-std::int32_t __stdcall M485E_Dll_GetChangeQueueStats(
-    const std::uint32_t contextHandle, const std::int32_t portSlot,
-    const std::uint32_t statsCapacity, std::int32_t* const outStats)
-{
-  return GuardExport(contextHandle, [&] {
-    return M485E_Dll_GetChangeQueueStats_Impl(contextHandle, portSlot, statsCapacity,
-                                              outStats);
+    return M485E_Dll_ReadRuleData_Impl(contextHandle, index, ruleId, metaCapacity,
+                                       outMeta, dataCapacity, outRegisters);
   });
 }
 
