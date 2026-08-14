@@ -184,74 +184,21 @@ long M485E_Core_GetLifecycleStatus(long outStatus[])
 }
 
 /*
- * 함수명: M485E_Core_StartMonitoring
- * 기능: DLL Snapshot 생성 기능을 활성화한다.
- * 파라미터: 없음
- * 반환값: M485E_OK 또는 Lifecycle 상태 오류 코드
- */
-long M485E_Core_StartMonitoring()
-{
-     return M485E_Dll_StartMonitoring(gM485E_ContextHandle);
-}
-
-/*
- * 함수명: M485E_Core_StopMonitoring
- * 기능: DLL Snapshot 생성 기능을 비활성화한다.
- * 파라미터: 없음
- * 반환값: M485E_OK 또는 Lifecycle 상태 오류 코드
- */
-long M485E_Core_StopMonitoring()
-{
-     return M485E_Dll_StopMonitoring(gM485E_ContextHandle);
-}
-
-/*
- * 함수명: M485E_Core_ReadRuleSnapshot
+ * 함수명: M485E_Core_ReadRuleData
  * 기능: Device Index와 Rule ID의 현재 Register 묶음을 동기식으로 읽는다.
  * 파라미터:
  *   index - DeviceMap의 장치 Index
  *   ruleId - FrameRule의 Rule_ID
- *   outMeta - M485E_SM_* Layout의 호출자 소유 배열
+ *   outMeta - M485E_RDM_* Layout의 호출자 소유 배열
  *   outRegisters - Rule Quantity를 받을 호출자 소유 word 배열
  * 반환값: M485E_OK 또는 Rule/출력 버퍼 오류 코드
  */
-long M485E_Core_ReadRuleSnapshot(long index, long ruleId, long outMeta[],
+long M485E_Core_ReadRuleData(long index, long ruleId, long outMeta[],
      word outRegisters[])
 {
-     return M485E_Dll_ReadRuleSnapshot(gM485E_ContextHandle, index, ruleId,
+     return M485E_Dll_ReadRuleData(gM485E_ContextHandle, index, ruleId,
           elcount(outMeta), outMeta,
           elcount(outRegisters), outRegisters);
-}
-
-/*
- * 함수명: M485E_Core_TryDequeueChangeSnapshot
- * 기능: 지정 Port의 값 변경 Snapshot Queue에서 한 건을 꺼낸다.
- * 파라미터:
- *   portSlot - 조회할 DLL Port Slot
- *   outMeta - M485E_SM_* Layout의 호출자 소유 배열
- *   outRegisters - Snapshot Register를 받을 호출자 소유 word 배열
- * 반환값: M485E_OK, M485E_STATUS_NO_DATA 또는 DLL 오류 코드
- */
-long M485E_Core_TryDequeueChangeSnapshot(long portSlot, long outMeta[],
-     word outRegisters[])
-{
-     return M485E_Dll_TryDequeueChangeSnapshot(gM485E_ContextHandle, portSlot,
-          elcount(outMeta), outMeta,
-          elcount(outRegisters), outRegisters);
-}
-
-/*
- * 함수명: M485E_Core_GetChangeQueueStats
- * 기능: 지정 Port의 Change Queue 사용량과 누락 통계를 조회한다.
- * 파라미터:
- *   portSlot - 조회할 DLL Port Slot
- *   outStats - M485E Change Queue 통계 Layout을 받을 배열
- * 반환값: M485E_OK 또는 Port/출력 버퍼 오류 코드
- */
-long M485E_Core_GetChangeQueueStats(long portSlot, long outStats[])
-{
-     return M485E_Dll_GetChangeQueueStats(gM485E_ContextHandle, portSlot,
-          elcount(outStats), outStats);
 }
 
 /*

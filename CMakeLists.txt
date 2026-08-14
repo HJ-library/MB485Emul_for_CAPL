@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Modbus485Emulator VERSION 0.3.0 LANGUAGES CXX)
+project(Modbus485Emulator VERSION 0.4.0 LANGUAGES CXX)
 
 if(NOT WIN32)
   message(FATAL_ERROR "Modbus485Emulator supports Windows x86 and x64 only.")
@@ -114,6 +114,7 @@ add_executable(M485E.Core.Tests
   tests/M485E.Core.Tests/M485E_CoreTests.cpp
 )
 target_compile_features(M485E.Core.Tests PRIVATE cxx_std_17)
+target_include_directories(M485E.Core.Tests PRIVATE src/M485E.Dll)
 target_link_libraries(M485E.Core.Tests PRIVATE M485E.Core)
 
 add_executable(M485E.IntegrationTests

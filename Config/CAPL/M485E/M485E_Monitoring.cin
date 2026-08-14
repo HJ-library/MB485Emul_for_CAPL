@@ -1,6 +1,6 @@
 /*@!Encoding:949*/
 
-// Monitoring은 ReadOption, Snapshot의 CAN 변환, Timer와 Port별 스케줄링을 담당한다.
+// Monitoring은 ReadOption, Rule Data의 CAN 변환, Timer와 Port별 스케줄링을 담당한다.
 // DLL은 Core Wrapper로만 호출하며 System Variable 선택값은 UI를 통해 전달받는다.
 
 variables
@@ -16,6 +16,9 @@ variables
           long candidateEnabled;
           long appliedEnabled;
           long pendingGeneration;
+          long lastSentGeneration;
+          long missedCycleCount;
+          long frameCost;
      };
 
      // 전체 모니터링 스케줄러의 진행 위치와 On/Off 상태를 보관한다.
@@ -24,30 +27,37 @@ variables
           long readOptionCount;
           long generation;
           long periodicCursor[M485E_PORT_SLOT_COUNT];
+          long periodicPendingCount[M485E_PORT_SLOT_COUNT];
           long periodicStartPort;
-          long changeStartPort;
           long enabled;
           long candidateDirty;
           long candidateRollbackPending;
           long candidateResult;
+          long missedSampleCount;
+          long deadlineMissCount;
+          long budgetOverrunCount;
+          long lastBudgetDiagnosticGeneration;
      };
 
      // 1초마다 새 주기를 만들고 10ms Pump가 CAN Frame 예산만큼 나누어 출력한다.
      const long M485E_MONITORING_CYCLE_MS = 1000;
      const long M485E_OUTPUT_PUMP_MS = 10;
+     const long M485E_OUTPUT_PUMP_BUDGET_TICKS = M485E_OUTPUT_PUMP_MS * 100;
      const long M485E_MAX_FRAMES_PER_TICK = 66;
-     const long M485E_MAX_CHANGE_FRAMES_PER_TICK = 33;
+     const long M485E_MAX_FRAMES_PER_CYCLE = 6600;
      const long M485E_MAX_READ_OPTIONS = 200;
 
-     // Snapshot 버퍼는 DLL에서 받은 한 Rule의 Header 정보와 Register 값을 임시 보관한다.
+     // Rule Data 버퍼는 DLL에서 받은 Header 정보와 현재 Register 값을 임시 보관한다.
      struct M485E_ReadOption gM485E_ReadOptions[200];
      long gM485E_CandidatePortSlots[200];
+     long gM485E_CandidateFrameCosts[200];
      struct M485E_MonitoringState gM485E_MonitoringState;
      msTimer tM485E_MonitoringCycle;
      msTimer tM485E_OutputPump;
      message * gM485E_MonitoringMessage;
-     long gM485E_SnapshotMeta[11];
-     word gM485E_SnapshotRegisters[125];
+     long gM485E_MonitoringLifecycleStatus[M485E_LIFECYCLE_STATUS_COUNT];
+     long gM485E_RuleDataMeta[M485E_RULE_DATA_META_COUNT];
+     word gM485E_RuleDataRegisters[125];
 }
 
 /*
@@ -185,29 +195,40 @@ long M485E_Monitoring_SetCandidate(long slot, long enabled)
  * 함수명: M485E_Monitoring_ApplyCandidates
  * 기능: ReadOption 후보 전체를 검증한 뒤 현재 Cycle 적용 상태로 원자적으로 확정한다.
  * 파라미터: 없음
- * 반환값: M485E_OK 또는 활성 Rule Snapshot 검증 오류 코드
+ * 반환값: M485E_OK 또는 활성 Rule Data 검증 오류 코드
  */
 long M485E_Monitoring_ApplyCandidates()
 {
      long slot;
      long result;
+     long requiredPeriodicFrames;
      if (gM485E_MonitoringState.candidateDirty == 0) return M485E_OK;
+     requiredPeriodicFrames = 0;
      for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
      {
           if (gM485E_ReadOptions[slot].configured != 0 &&
                gM485E_ReadOptions[slot].candidateEnabled != 0)
           {
-               result = M485E_Core_ReadRuleSnapshot(gM485E_ReadOptions[slot].index,
-                    gM485E_ReadOptions[slot].ruleId,
-                    gM485E_SnapshotMeta,
-                    gM485E_SnapshotRegisters);
+               result = M485E_Core_ReadRuleData(gM485E_ReadOptions[slot].index,
+                     gM485E_ReadOptions[slot].ruleId,
+                     gM485E_RuleDataMeta,
+                     gM485E_RuleDataRegisters);
                if (result != M485E_OK)
                {
                     M485E_Monitoring_RejectCandidates(result);
                     return result;
                }
                gM485E_CandidatePortSlots[slot] =
-                    gM485E_SnapshotMeta[M485E_SM_PORT_SLOT];
+                    gM485E_RuleDataMeta[M485E_RDM_PORT_SLOT];
+               gM485E_CandidateFrameCosts[slot] = 1 +
+                    ((gM485E_RuleDataMeta[M485E_RDM_QUANTITY] + 3) / 4);
+               requiredPeriodicFrames = requiredPeriodicFrames +
+                    gM485E_CandidateFrameCosts[slot];
+               if (requiredPeriodicFrames > M485E_MAX_FRAMES_PER_CYCLE)
+               {
+                    M485E_Monitoring_RejectCandidates(M485E_ERR_PERIODIC_BUDGET);
+                    return M485E_ERR_PERIODIC_BUDGET;
+               }
           }
      }
      for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
@@ -215,9 +236,15 @@ long M485E_Monitoring_ApplyCandidates()
           gM485E_ReadOptions[slot].appliedEnabled =
                gM485E_ReadOptions[slot].candidateEnabled;
           if (gM485E_ReadOptions[slot].appliedEnabled != 0)
+          {
                gM485E_ReadOptions[slot].portSlot = gM485E_CandidatePortSlots[slot];
+               gM485E_ReadOptions[slot].frameCost = gM485E_CandidateFrameCosts[slot];
+          }
           if (gM485E_ReadOptions[slot].appliedEnabled == 0)
+          {
                gM485E_ReadOptions[slot].pendingGeneration = 0;
+               gM485E_ReadOptions[slot].frameCost = 0;
+          }
      }
      gM485E_MonitoringState.candidateDirty = 0;
      return M485E_OK;
@@ -235,14 +262,84 @@ long M485E_Monitoring_FrameCost(long quantity)
 }
 
 /*
- * 함수명: M485E_Monitoring_OutputSnapshot
- * 기능: DLL Snapshot을 Extended CAN Header/Data Message 묶음으로 변환해 출력한다.
- * 파라미터:
- *   meta - M485E_SM_* Layout의 Snapshot 메타데이터
- *   registers - meta Quantity 이상의 Register word 배열
- *   prefix - 0이면 주기 Frame(0x80), 1이면 변경 Frame(0x81)
+ * 함수명: M485E_Monitoring_ScheduleAppliedRules
+ * 기능: 새 Generation을 만들고 Applied Rule을 최신 Periodic 송출 대기로 표시한다.
+ *       이전 Pending이 남은 Rule은 과거 요청을 저장하지 않고 Missed Cycle로 진단한다.
+ * 파라미터: 없음
  */
-void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
+void M485E_Monitoring_ScheduleAppliedRules()
+{
+     long slot;
+     long missedRuleCount;
+     long firstMissedSlot;
+     long firstPortPending;
+     missedRuleCount = 0;
+     firstMissedSlot = -1;
+     firstPortPending = -1;
+     for (slot = 0; slot < M485E_PORT_SLOT_COUNT; slot++)
+          gM485E_MonitoringState.periodicPendingCount[slot] = 0;
+     gM485E_MonitoringState.generation++;
+     // generation 0은 '송출 대기 없음' 표식이므로 wrap 후에도 1부터 다시 사용한다.
+     if (gM485E_MonitoringState.generation <= 0)
+          gM485E_MonitoringState.generation = 1;
+
+     for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
+     {
+          if (gM485E_ReadOptions[slot].appliedEnabled == 0) continue;
+          if (gM485E_ReadOptions[slot].pendingGeneration != 0)
+          {
+               if (gM485E_ReadOptions[slot].missedCycleCount < 2147483647)
+                    gM485E_ReadOptions[slot].missedCycleCount++;
+               if (gM485E_MonitoringState.missedSampleCount < 2147483647)
+                    gM485E_MonitoringState.missedSampleCount++;
+               missedRuleCount++;
+               if (firstMissedSlot < 0) firstMissedSlot = slot;
+          }
+          // Latest-Wins: 과거 Generation을 Queue에 보관하지 않고 최신 요청 하나만 유지한다.
+          gM485E_ReadOptions[slot].pendingGeneration =
+               gM485E_MonitoringState.generation;
+          if (gM485E_ReadOptions[slot].portSlot >= 0 &&
+               gM485E_ReadOptions[slot].portSlot < M485E_PORT_SLOT_COUNT)
+               gM485E_MonitoringState.periodicPendingCount[
+                    gM485E_ReadOptions[slot].portSlot]++;
+     }
+     if (missedRuleCount > 0)
+     {
+          if (gM485E_MonitoringState.deadlineMissCount < 2147483647)
+               gM485E_MonitoringState.deadlineMissCount++;
+          if (gM485E_ReadOptions[firstMissedSlot].portSlot >= 0 &&
+               gM485E_ReadOptions[firstMissedSlot].portSlot < M485E_PORT_SLOT_COUNT)
+               firstPortPending = gM485E_MonitoringState.periodicPendingCount[
+                    gM485E_ReadOptions[firstMissedSlot].portSlot];
+          // 한 Cycle에 한 번만 요약해 Write Window 부하가 추가 Deadline Miss를 만들지 않게 한다.
+          write("M485E Periodic deadline missed: error=%d operation=%d generation=%d missedRules=%d deadlineMisses=%d missedSamples=%d firstIndex=%d firstRule=%d firstPort=%d firstFrameCost=%d firstPortPending=%d pending0=%d pending1=%d pending2=%d pending3=%d firstLastSent=%d",
+               M485E_ERR_OUTPUT_DEADLINE_MISSED,
+               M485E_OPERATION_MONITORING_WORKER,
+               gM485E_MonitoringState.generation,
+               missedRuleCount,
+               gM485E_MonitoringState.deadlineMissCount,
+               gM485E_MonitoringState.missedSampleCount,
+               gM485E_ReadOptions[firstMissedSlot].index,
+               gM485E_ReadOptions[firstMissedSlot].ruleId,
+               gM485E_ReadOptions[firstMissedSlot].portSlot,
+               gM485E_ReadOptions[firstMissedSlot].frameCost,
+               firstPortPending,
+               gM485E_MonitoringState.periodicPendingCount[0],
+               gM485E_MonitoringState.periodicPendingCount[1],
+               gM485E_MonitoringState.periodicPendingCount[2],
+               gM485E_MonitoringState.periodicPendingCount[3],
+               gM485E_ReadOptions[firstMissedSlot].lastSentGeneration);
+     }
+}
+
+/*
+ * 함수명: M485E_Monitoring_OutputRuleData
+ * 기능: DLL Rule Data를 0x80 Extended CAN Header/Data Message 묶음으로 변환해 출력한다.
+ * 파라미터:
+ *   meta - M485E_RDM_* Layout의 Rule Data 메타데이터
+ *   registers - meta Quantity 이상의 Register word 배열
+ */
+void M485E_Monitoring_OutputRuleData(long meta[], word registers[])
 {
      long arbitrationId;
      long registerOffset;
@@ -250,41 +347,40 @@ void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
      long count;
      long byteIndex;
 
-     if (meta[M485E_SM_PORT_SLOT] < 0 ||
-          meta[M485E_SM_PORT_SLOT] >= gM485E_ActivePortCount)
+     if (meta[M485E_RDM_PORT_SLOT] < 0 ||
+          meta[M485E_RDM_PORT_SLOT] >= gM485E_ActivePortCount)
      {
-          write("M485E Snapshot rejected: invalid PortSlot=%d ActivePortCount=%d",
-               meta[M485E_SM_PORT_SLOT], gM485E_ActivePortCount);
+          write("M485E Rule Data rejected: invalid PortSlot=%d ActivePortCount=%d",
+               meta[M485E_RDM_PORT_SLOT], gM485E_ActivePortCount);
           return;
      }
 
-     // 0x80/0x81은 CAPL Extended ID 내부 표현에서 bit 24의 prefix로 구분한다.
-     arbitrationId = ((prefix & 0x01) << 24) |
-          ((meta[M485E_SM_DEVICE_INDEX] & 0xFF) << 16) |
-          ((meta[M485E_SM_RULE_ID] & 0xFF) << 8) | 1;
+     // 실제 Arbitration ID 0x00IIRRMM을 mkExtId로 변환하면 Vector 내부에는
+     // Extended Flag가 포함된 0x80IIRRMM으로 표시된다.
+     arbitrationId = ((meta[M485E_RDM_DEVICE_INDEX] & 0xFF) << 16) |
+          ((meta[M485E_RDM_RULE_ID] & 0xFF) << 8) | 1;
      gM485E_MonitoringMessage.CAN =
-          gM485E_VirtualCanChannels[meta[M485E_SM_PORT_SLOT]];
+          gM485E_VirtualCanChannels[meta[M485E_RDM_PORT_SLOT]];
      gM485E_MonitoringMessage.ID = mkExtId(arbitrationId);
      gM485E_MonitoringMessage.DLC = 8;
-     gM485E_MonitoringMessage.byte(0) = meta[M485E_SM_DEVICE_INDEX];
-     gM485E_MonitoringMessage.byte(1) = meta[M485E_SM_SLAVE_ID];
-     gM485E_MonitoringMessage.byte(2) = meta[M485E_SM_FUNCTION_CODE];
-     gM485E_MonitoringMessage.byte(3) = meta[M485E_SM_SOURCE_TYPE];
-     gM485E_MonitoringMessage.byte(4) = (meta[M485E_SM_ADDRESS] >> 8) & 0xFF;
-     gM485E_MonitoringMessage.byte(5) = meta[M485E_SM_ADDRESS] & 0xFF;
-     gM485E_MonitoringMessage.byte(6) = (meta[M485E_SM_QUANTITY] >> 8) & 0xFF;
-     gM485E_MonitoringMessage.byte(7) = meta[M485E_SM_QUANTITY] & 0xFF;
+     gM485E_MonitoringMessage.byte(0) = meta[M485E_RDM_DEVICE_INDEX];
+     gM485E_MonitoringMessage.byte(1) = meta[M485E_RDM_SLAVE_ID];
+     gM485E_MonitoringMessage.byte(2) = meta[M485E_RDM_FUNCTION_CODE];
+     gM485E_MonitoringMessage.byte(3) = 0;
+     gM485E_MonitoringMessage.byte(4) = (meta[M485E_RDM_ADDRESS] >> 8) & 0xFF;
+     gM485E_MonitoringMessage.byte(5) = meta[M485E_RDM_ADDRESS] & 0xFF;
+     gM485E_MonitoringMessage.byte(6) = (meta[M485E_RDM_QUANTITY] >> 8) & 0xFF;
+     gM485E_MonitoringMessage.byte(7) = meta[M485E_RDM_QUANTITY] & 0xFF;
      output(gM485E_MonitoringMessage);
 
      registerOffset = 0;
      messageIndex = 2;
-     while (registerOffset < meta[M485E_SM_QUANTITY])
+     while (registerOffset < meta[M485E_RDM_QUANTITY])
      {
-          count = meta[M485E_SM_QUANTITY] - registerOffset;
+          count = meta[M485E_RDM_QUANTITY] - registerOffset;
           if (count > 4) count = 4;
-          arbitrationId = ((prefix & 0x01) << 24) |
-               ((meta[M485E_SM_DEVICE_INDEX] & 0xFF) << 16) |
-               ((meta[M485E_SM_RULE_ID] & 0xFF) << 8) | messageIndex;
+          arbitrationId = ((meta[M485E_RDM_DEVICE_INDEX] & 0xFF) << 16) |
+               ((meta[M485E_RDM_RULE_ID] & 0xFF) << 8) | messageIndex;
           gM485E_MonitoringMessage.ID = mkExtId(arbitrationId);
           gM485E_MonitoringMessage.DLC = count * 2;
           for (byteIndex = 0; byteIndex < count; byteIndex++)
@@ -298,38 +394,6 @@ void M485E_Monitoring_OutputSnapshot(long meta[], word registers[], long prefix)
           registerOffset = registerOffset + count;
           messageIndex++;
      }
-}
-
-/*
- * 함수명: M485E_Monitoring_TryOneChange
- * 기능: 활성 Port의 Change Queue를 Round-robin으로 확인하여 Snapshot을 최대 한 건 출력한다.
- * 파라미터: 없음
- * 반환값: 출력에 사용한 CAN Frame 수, 출력할 Snapshot이 없으면 0
- */
-long M485E_Monitoring_TryOneChange()
-{
-     long offset;
-     long portSlot;
-     long result;
-     long portCount;
-     portCount = gM485E_ActivePortCount;
-     if (portCount < 1 || portCount > M485E_PORT_SLOT_COUNT) return 0;
-     for (offset = 0; offset < portCount; offset++)
-     {
-          portSlot = (gM485E_MonitoringState.changeStartPort + offset) % portCount;
-          result = M485E_Core_TryDequeueChangeSnapshot(portSlot, gM485E_SnapshotMeta,
-               gM485E_SnapshotRegisters);
-          if (result == M485E_OK)
-          {
-               M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
-                    gM485E_SnapshotRegisters, 1);
-               gM485E_MonitoringState.changeStartPort = (portSlot + 1) % portCount;
-               return M485E_Monitoring_FrameCost(gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
-          }
-     }
-     gM485E_MonitoringState.changeStartPort =
-          (gM485E_MonitoringState.changeStartPort + 1) % portCount;
-     return 0;
 }
 
 /*
@@ -356,17 +420,21 @@ long M485E_Monitoring_TryOnePeriodic(long portSlot, long remainingFrames)
                gM485E_ReadOptions[slot].pendingGeneration != 0 &&
                gM485E_ReadOptions[slot].portSlot == portSlot)
           {
-               result = M485E_Core_ReadRuleSnapshot(gM485E_ReadOptions[slot].index,
-                    gM485E_ReadOptions[slot].ruleId,
-                    gM485E_SnapshotMeta,
-                    gM485E_SnapshotRegisters);
+               result = M485E_Core_ReadRuleData(gM485E_ReadOptions[slot].index,
+                     gM485E_ReadOptions[slot].ruleId,
+                     gM485E_RuleDataMeta,
+                     gM485E_RuleDataRegisters);
                if (result != M485E_OK) continue;
                cost = M485E_Monitoring_FrameCost(
-                    gM485E_SnapshotMeta[M485E_SM_QUANTITY]);
+                    gM485E_RuleDataMeta[M485E_RDM_QUANTITY]);
                if (cost > remainingFrames) return 0;
-               M485E_Monitoring_OutputSnapshot(gM485E_SnapshotMeta,
-                    gM485E_SnapshotRegisters, 0);
+               M485E_Monitoring_OutputRuleData(gM485E_RuleDataMeta,
+                    gM485E_RuleDataRegisters);
+               gM485E_ReadOptions[slot].lastSentGeneration =
+                    gM485E_ReadOptions[slot].pendingGeneration;
                gM485E_ReadOptions[slot].pendingGeneration = 0;
+               if (gM485E_MonitoringState.periodicPendingCount[portSlot] > 0)
+                    gM485E_MonitoringState.periodicPendingCount[portSlot]--;
                gM485E_MonitoringState.periodicCursor[portSlot] =
                     (slot + 1) % gM485E_MonitoringState.readOptionCount;
                return cost;
@@ -377,25 +445,27 @@ long M485E_Monitoring_TryOnePeriodic(long portSlot, long remainingFrames)
 
 /*
  * 함수명: M485E_Monitoring_PumpOnce
- * 기능: Change 우선 및 Port Round-robin 정책으로 한 Tick의 CAN Frame 예산을 처리한다.
+ * 기능: Port Round-robin 정책으로 한 Tick의 Periodic CAN Frame 예산을 처리한다.
  * 파라미터: 없음
  */
 void M485E_Monitoring_PumpOnce()
 {
+     dword pumpStartedAt;
+     dword elapsedTicks;
      long usedFrames;
-     long changeFrames;
      long portCount;
      long startPort;
      long offset;
      long portSlot;
      long cost;
      long madeProgress;
+     long timeBudgetReached;
      if (gM485E_MonitoringState.enabled == 0) return;
 
+     // timeNow()는 CANalyzer 9.x에서 지원되는 10us 단위 dword CAPL 시간이다.
+     pumpStartedAt = timeNow();
      usedFrames = 0;
-     changeFrames = M485E_Monitoring_TryOneChange();
-     if (changeFrames <= M485E_MAX_CHANGE_FRAMES_PER_TICK)
-          usedFrames = changeFrames;
+     timeBudgetReached = 0;
      portCount = gM485E_ActivePortCount;
      if (portCount < 1 || portCount > M485E_PORT_SLOT_COUNT) return;
      startPort = gM485E_MonitoringState.periodicStartPort % portCount;
@@ -404,6 +474,12 @@ void M485E_Monitoring_PumpOnce()
           madeProgress = 0;
           for (offset = 0; offset < portCount; offset++)
           {
+               elapsedTicks = timeNow() - pumpStartedAt;
+               if (elapsedTicks >= M485E_OUTPUT_PUMP_BUDGET_TICKS)
+               {
+                    timeBudgetReached = 1;
+                    break;
+               }
                portSlot = (startPort + offset) % portCount;
                cost = M485E_Monitoring_TryOnePeriodic(portSlot,
                     M485E_MAX_FRAMES_PER_TICK - usedFrames);
@@ -413,11 +489,33 @@ void M485E_Monitoring_PumpOnce()
                     madeProgress = 1;
                }
           }
+          if (timeBudgetReached != 0) break;
           if (madeProgress == 0) break;
           startPort = (startPort + 1) % portCount;
      }
      gM485E_MonitoringState.periodicStartPort =
           (gM485E_MonitoringState.periodicStartPort + 1) % portCount;
+     // dword 뺄셈은 timeNow() wrap에서도 경과 Tick을 유지한다.
+     elapsedTicks = timeNow() - pumpStartedAt;
+     if (elapsedTicks > M485E_OUTPUT_PUMP_BUDGET_TICKS)
+     {
+          if (gM485E_MonitoringState.budgetOverrunCount < 2147483647)
+               gM485E_MonitoringState.budgetOverrunCount++;
+          if (gM485E_MonitoringState.lastBudgetDiagnosticGeneration !=
+               gM485E_MonitoringState.generation)
+          {
+               gM485E_MonitoringState.lastBudgetDiagnosticGeneration =
+                    gM485E_MonitoringState.generation;
+               write("M485E Output Pump budget overrun: error=%d operation=%d generation=%d usedFrames=%d elapsed10us=%d budget10us=%d overruns=%d",
+                    M485E_ERR_OUTPUT_BUDGET_OVERRUN,
+                    M485E_OPERATION_MONITORING_WORKER,
+                    gM485E_MonitoringState.generation,
+                    usedFrames,
+                    elapsedTicks,
+                    M485E_OUTPUT_PUMP_BUDGET_TICKS,
+                    gM485E_MonitoringState.budgetOverrunCount);
+          }
+     }
 }
 
 /*
@@ -427,47 +525,46 @@ void M485E_Monitoring_PumpOnce()
  */
 void M485E_Monitoring_NewCycle()
 {
-     long slot;
      long result;
      if (gM485E_MonitoringState.enabled == 0) return;
      result = M485E_Monitoring_ApplyCandidates();
      if (result != M485E_OK)
-     {
           write("M485E ReadOption candidate rejected: %d", result);
-          return;
-     }
-     gM485E_MonitoringState.generation++;
-     // generation 0은 '송출 대기 없음' 표식이므로 wrap 후에도 1부터 다시 사용한다.
-     if (gM485E_MonitoringState.generation <= 0)
-          gM485E_MonitoringState.generation = 1;
-     for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
-          if (gM485E_ReadOptions[slot].appliedEnabled != 0)
-          gM485E_ReadOptions[slot].pendingGeneration =
-          gM485E_MonitoringState.generation;
+     // 실행 중 후보 거부와 관계없이 기존 Applied Rule의 현재 Cycle은 계속 생성한다.
+     M485E_Monitoring_ScheduleAppliedRules();
 }
 
 /*
  * 함수명: M485E_Monitoring_Start
- * 기능: DLL Monitoring과 첫 Cycle을 시작하고 CAPL 출력 Timer를 활성화한다.
+ * 기능: ReadOption을 검증하고 첫 Cycle과 CAPL 출력 Timer를 활성화한다.
  * 파라미터: 없음
  * 반환값: M485E_OK 또는 연결/ReadOption 검증 오류 코드
  */
 long M485E_Monitoring_Start()
 {
      long result;
-     result = M485E_Core_StartMonitoring();
+     if (gM485E_MonitoringState.enabled != 0) return M485E_OK;
+
+     // 이전 실패 경로에서 남은 Timer가 없도록 시작 검증 전에 항상 정리한다.
+     cancelTimer(tM485E_MonitoringCycle);
+     cancelTimer(tM485E_OutputPump);
+     result = M485E_Core_GetLifecycleStatus(gM485E_MonitoringLifecycleStatus);
      if (result != M485E_OK) return result;
-     gM485E_MonitoringState.enabled = 1;
+     if (gM485E_MonitoringLifecycleStatus[M485E_LS_STATE] != M485E_STATE_CONNECTED)
+          return M485E_ERR_INVALID_STATE;
+
      // Refresh 후 Device-to-Port 매핑이 바뀌었을 수 있으므로 활성 후보를 다시 검증한다.
      gM485E_MonitoringState.candidateDirty = 1;
      result = M485E_Monitoring_ApplyCandidates();
      if (result != M485E_OK)
      {
-          // 잘못된 ReadOption으로 CAN 타이머만 실행되는 상태를 만들지 않는다.
+          // 검증에 실패하면 어떤 Timer도 시작하지 않아 부분 시작 상태를 남기지 않는다.
           gM485E_MonitoringState.enabled = 0;
-          M485E_Core_StopMonitoring();
+          cancelTimer(tM485E_MonitoringCycle);
+          cancelTimer(tM485E_OutputPump);
           return result;
      }
+     gM485E_MonitoringState.enabled = 1;
      M485E_Monitoring_NewCycle();
      setTimer(tM485E_MonitoringCycle, M485E_MONITORING_CYCLE_MS);
      setTimer(tM485E_OutputPump, M485E_OUTPUT_PUMP_MS);
@@ -476,16 +573,21 @@ long M485E_Monitoring_Start()
 
 /*
  * 함수명: M485E_Monitoring_Stop
- * 기능: CAPL 출력 Timer를 먼저 중지한 뒤 DLL Monitoring을 비활성화한다.
+ * 기능: CAPL의 Periodic CAN Cycle과 Output Pump Timer를 중지한다.
  * 파라미터: 없음
- * 반환값: M485E_OK 또는 DLL Monitoring 중지 오류 코드
+ * 반환값: M485E_OK
  */
 long M485E_Monitoring_Stop()
 {
+     long slot;
      gM485E_MonitoringState.enabled = 0;
      cancelTimer(tM485E_MonitoringCycle);
      cancelTimer(tM485E_OutputPump);
-     return M485E_Core_StopMonitoring();
+     for (slot = 0; slot < gM485E_MonitoringState.readOptionCount; slot++)
+          gM485E_ReadOptions[slot].pendingGeneration = 0;
+     for (slot = 0; slot < M485E_PORT_SLOT_COUNT; slot++)
+          gM485E_MonitoringState.periodicPendingCount[slot] = 0;
+     return M485E_OK;
 }
 
 // 타이머명: tM485E_MonitoringCycle
@@ -499,7 +601,7 @@ on timer tM485E_MonitoringCycle
 }
 
 // 타이머명: tM485E_OutputPump
-// 기능: 10ms마다 Change/Periodic Snapshot을 Frame 예산 안에서 CAN으로 출력한다.
+// 기능: 10ms마다 Periodic Rule Data를 Frame 예산 안에서 CAN으로 출력한다.
 on timer tM485E_OutputPump
 {
      if (gM485E_MonitoringState.enabled == 0) return;

@@ -12,7 +12,7 @@ from docx.shared import Cm, Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "05_Test" / "External_Verification_Guide.docx"
-RELEASE_VERSION = "0.3.0"
+RELEASE_VERSION = "0.4.0"
 
 NAVY = "17365D"
 BLUE = "2F75B5"
@@ -173,22 +173,22 @@ def main():
 
     add_heading(doc, "3. 필수 시험 순서", 1)
     rows = [
-        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 27개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
+        ("EV-001", "1/2", "CANalyzer 9.x x86 직접 DLL 및 CANalyzer 18 x64 .vmodule CAPL Compile/로드", "두 환경에서 23개 API가 중복/누락 없이 Compile되고 Measurement가 시작됨", "Compile log"),
         ("EV-002", "3/8", "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh 상태 Polling", "Disconnected, ConfigurationValid=1, LastResult=0", "Write/Status"),
         ("EV-003", "7/8", "1~4개 활성 COM Port 전체 Connect", "모든 활성 Port가 열릴 때만 Connected; 일부 실패 시 전체 Rollback", "Status/handle"),
         ("EV-004", "5/7", "Port별 Slave에 FC03 Quantity 1/125 요청", "직접 Address의 Holding 값, CRC Low/High 정상 응답", "Serial trace"),
         ("EV-005", "5/7", "FC04 정상/권한 공백 요청", "정상값 또는 Exception 0x02, 부분 응답 없음", "Serial trace"),
-        ("EV-006", "4/5/7", "FC10 정상 Write, 동일값 Write, 권한 공백 Write", "원자 적용; 동일값 Snapshot 없음; 공백은 0x02 및 무변경", "Serial/CAN"),
+        ("EV-006", "4/5/7", "FC10 정상 Write, 동일값 Write, 권한 공백 Write", "원자 적용; 다음 선택된 0x80에 최종값 반영; 공백은 0x02 및 무변경", "Serial/CAN"),
         ("EV-007", "5/7", "CRC 오류, FC06, Quantity/ByteCount 오류", "CRC 오류 무응답; FC06=0x01; 값 오류=0x03", "Serial trace"),
-        ("EV-008", "6/9", "Periodic Snapshot Quantity 6", "0x80 Header 1 + Data 2, 마지막 DLC 4", "CAN trace"),
-        ("EV-009", "6/9", "RTU/Direct/Reset 변경 Snapshot", "0x81 SourceType 01/02/03 및 변경 당시 값 보존", "CAN trace"),
-        ("EV-010", "6/9", "여러 활성 Port 동시 Change Burst", "활성 Port Round-robin, Port 내부 FIFO, Snapshot 묶음 비분할", "CAN trace"),
+        ("EV-008", "6/9", "Periodic Rule Data Quantity 6", "0x80 Header 1 + Data 2, Header Byte 3=0, 마지막 DLC 4", "CAN trace"),
+        ("EV-009", "6/9", "RTU/Direct/Reset 뒤 최종값 확인", "0x81 미출력, 다음 선택된 0x80에 최종값 반영, 중간 상태 재생 없음", "CAN trace"),
+        ("EV-010", "6/9", "여러 활성 Port Periodic 출력", "활성 Port Round-robin, Rule Data 묶음 비분할, 0x80만 출력", "CAN trace"),
         ("EV-011", "9/10", "ReadSwitch OFF/ON 및 ReadOption 변경", "OFF 중 RTU 유지·CAN 억제, 다음 Cycle에 Candidate 원자 반영", "CAN/Write"),
         ("EV-012", "10", "Panel Manual Write Data[122] 및 Signal Control", "Send 시 요청 Snapshot 사용, Quantity 1~122와 word 범위 검증, ResultCode 표시", "Panel capture"),
         ("EV-013", "10", "Panel Signal Float/Signed Read/Write", "12.5 등 물리값이 그대로 왕복하고 실패 시 호출 전 출력 유지", "Panel capture"),
         ("EV-014", "7/8", "한 USB-RS485 Port 제거 후 복구", "전체 정리 후 3초 간격 최대 10회; 복구 시 모든 활성 Port Connected", "Timestamp log"),
         ("EV-015", "8", "Disconnect/Connect와 Finalize", "Disconnect는 값 보존, Finalize는 2초 목표 내 Join/Close 후 Context 폐기", "Status/Process"),
-        ("EV-016", "9/10", "200 Rule, 최대 Quantity, 0x81 Burst 성능 Profile", "RTU 영향 없이 0x81 100ms/0x80 1000ms 목표와 bounded Queue 진단; Error Queue DropCount 변화/Overflow 최초 전환은 누적 통계 한 번 출력", "Trace/metrics"),
+        ("EV-016", "9/10", "200 Rule, 최대 Quantity, 66 Frame/Tick 성능 Profile", "RTU 영향 없이 선택 Rule의 0x80을 1000ms Cycle로 처리; Error Queue DropCount 변화/Overflow 최초 전환은 누적 통계 한 번 출력", "Trace/metrics"),
         ("EV-017", "5/7/10", "Index별 RTU 통신 OFF/ON", "비활성 Index는 FC03/04/10에 무응답·무변경, 동일 Port의 다른 Slave와 Direct/CAN 제어는 유지; Refresh 성공 후 활성화", "Panel/Serial/CAN"),
         ("EV-018", "7/10", "RTU Log Switch와 CSV 기록", "OFF→ON마다 새 파일, REQ/RES 또는 REQ/NO_RES 동일 Sequence, 12개 Column·전체 ADU·DroppedCount·ActiveLed 확인", "CSV/Panel"),
     ]
@@ -196,8 +196,8 @@ def main():
 
     add_heading(doc, "4. CAN Trace 판독 기준", 1)
     add_bullets(doc, [
-        "실제 Arbitration ID는 0x00IIRRMM(Periodic), 0x01IIRRMM(Change)이고 Vector 내부 Extended 표시는 0x80IIRRMM, 0x81IIRRMM이다.",
-        "Header DLC는 8이며 Index, Slave ID, FC, SourceType, Address High/Low, Quantity High/Low 순서다.",
+        "실제 Arbitration ID는 0x00IIRRMM(Periodic)이고 Vector 내부 Extended 표시는 0x80IIRRMM이다. 0x81 변경 Message는 출력하지 않는다.",
+        "Header DLC는 8이며 Index, Slave ID, FC, 고정값 0x00, Address High/Low, Quantity High/Low 순서다.",
         "Data는 Address 오름차순 Register를 High Byte/Low Byte로 최대 4개씩 저장하며 마지막 Message는 패딩하지 않는다.",
         "가상 CAN이므로 물리 Bus Load, CAN BaudRate, 75/85/90% 자동 정지를 평가하지 않는다. Output Pump 실행시간, Deadline Miss, Queue 상태와 RTU 영향으로 판정한다.",
     ])
@@ -207,7 +207,7 @@ def main():
         "결과 Workbook의 Actual Result, Result, Evidence, Notes를 즉시 갱신하고 원본 Trace/로그 파일은 변경하지 않는다.",
         "CSV 오류는 FileType, Row, Column, ErrorCode 및 CAPL Write 문장을 함께 저장한다.",
         "Serial 오류는 PortSlot, COM 이름, Stage, Win32 OsError와 발생 시각을 함께 저장한다.",
-        "성능 실패는 활성 Rule 목록, Rule별 Quantity, Change Burst 수, Pump Tick 실행시간, Queue Stats 및 Board Timeout을 함께 저장한다.",
+        "성능 실패는 활성 Rule 목록, Rule별 Quantity, Pump Tick 실행시간, Periodic Pending 및 Board Timeout을 함께 저장한다.",
         "Error Queue DropCount 또는 Overflow Latch가 변하면 Write Window의 Pending, Capacity, High-water Mark, DropCount 및 Overflow 누적 통계를 저장한다.",
     ])
 

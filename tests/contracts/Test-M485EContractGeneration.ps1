@@ -52,6 +52,13 @@ try {
     $generatedCppText = [IO.File]::ReadAllText($cpp)
     $generatedCaplText = [IO.File]::ReadAllText($capl)
 
+    if ($generatedCaplText -match "(?<!`r)`n" -or $generatedCaplText -notmatch "`r`n") {
+        throw "Generated CAPL contract must use CRLF line endings."
+    }
+    if ($generatedCaplText.Contains("`t")) {
+        throw "Generated CAPL contract must not contain tab characters."
+    }
+
     foreach ($constantRow in $constantRows) {
         if (-not $generatedCppText.Contains("$($constantRow.Symbol) = $($constantRow.Value);")) {
             throw "C++ generated contract is missing $($constantRow.Symbol)."
@@ -78,10 +85,10 @@ try {
         }
     }
 
-    if ($errorRows.Count -lt 90) {
-        throw "The 90-code Phase 2 baseline is incomplete."
+    if ($errorRows.Count -ne 91) {
+        throw "The v0.4 error contract must contain exactly 91 definitions."
     }
-    $baselineText = (($errorRows | Select-Object -First 90 | ForEach-Object {
+    $baselineText = (($errorRows | ForEach-Object {
         '{0}|{1}|{2}|{3}|{4}' -f $_.Code, $_.Symbol, $_.Severity, $_.Message_Key, $_.Meaning
     }) -join "`n")
     $sha256 = [Security.Cryptography.SHA256]::Create()
@@ -93,14 +100,14 @@ try {
     finally {
         $sha256.Dispose()
     }
-    if ($baselineHash -cne 'b2830518109061aeda9c5b593ffac21f0bd783025eaf03a322947f5de7cae551') {
-        throw "A released Phase 2 baseline error definition was changed or reordered."
+    if ($baselineHash -cne '44982a3b07f94690ae3f2e19477f025a88085247cff3ed5c029fbcc7f0e97b50') {
+        throw "A released v0.4 error definition was changed or reordered."
     }
 
-    if ($constantRows.Count -lt 185) {
-        throw "The Phase 2 public constant baseline is incomplete."
+    if ($constantRows.Count -ne 189) {
+        throw "The v0.4 public constant contract must contain exactly 189 definitions."
     }
-    $constantBaselineText = (($constantRows | Select-Object -First 185 | ForEach-Object {
+    $constantBaselineText = (($constantRows | ForEach-Object {
         '{0}|{1}|{2}|{3}' -f $_.Group, $_.Symbol, $_.Value, $_.Meaning
     }) -join "`n")
     $constantSha256 = [Security.Cryptography.SHA256]::Create()
@@ -112,8 +119,8 @@ try {
     finally {
         $constantSha256.Dispose()
     }
-    if ($constantBaselineHash -cne '7b0242ada23fc5eb73d019c57d4e55bd33cac703b608067411ffff3df06b3c58') {
-        throw "A Phase 2 public constant definition was changed or reordered."
+    if ($constantBaselineHash -cne '01813a8644b651c09a5a0620a35bcd032b3ca88111e656ee07a155d15c37d508') {
+        throw "A v0.4 public constant definition was changed or reordered."
     }
 
     $extendedErrors = Join-Path $tempRoot 'ExtendedErrors.csv'

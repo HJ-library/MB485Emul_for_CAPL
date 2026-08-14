@@ -57,8 +57,8 @@ class PortWorker final
   using FatalCallback = std::function<void(std::uint8_t, std::int32_t, std::uint32_t)>;
 
   PortWorker(std::uint8_t portSlot, RtuTiming timing, ISerialTransport& transport,
-             RuntimeModel& runtime, SnapshotQueueService& snapshots, ErrorQueue& errors,
-             RtuLogQueue& rtuLog, FatalCallback fatalCallback);
+             RuntimeModel& runtime, ErrorQueue& errors, RtuLogQueue& rtuLog,
+             FatalCallback fatalCallback);
   ~PortWorker();
   PortWorker(const PortWorker&) = delete;
   PortWorker& operator=(const PortWorker&) = delete;
@@ -80,7 +80,6 @@ class PortWorker final
   RtuTiming timing_;
   ISerialTransport& transport_;
   RuntimeModel& runtime_;
-  SnapshotQueueService& snapshots_;
   ErrorQueue& errors_;
   RtuLogQueue& rtuLog_;
   FatalCallback fatalCallback_;

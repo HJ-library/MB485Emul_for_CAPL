@@ -53,6 +53,8 @@ OFF→ON마다 `Logs/M485E/M485E_RTU_YYYYMMDD_HHMMSS.csv` 새 파일을 만든�
 | Result | `M485E::Monitoring::ResultCode` | Read-only Numeric |
 
 기본 예제는 Rule 3개를 사용하므로 `Check_ReadOption[0]`, `[1]`, `[2]`만 배치해도 된다.
+Monitoring은 `ReadSwitch`와 선택된 ReadOption에 따라 `0x80` Periodic Rule Data만 출력한다.
+값 변경 알림용 `0x81` Message나 Change Queue 상태를 표시하는 Panel Control은 만들지 않는다.
 
 ## Manual Register Write
 

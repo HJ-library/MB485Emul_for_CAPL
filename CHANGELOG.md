@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.4.0] - 2026-08-13
+
+### Changed
+
+- 가상 CAN Monitoring을 CAPL이 스케줄링하는 `0x80IIRRMM` Periodic 출력으로 단순화했다.
+- `M485E_Dll_ReadRuleSnapshot`을 현재 Register 값을 읽는 `M485E_Dll_ReadRuleData`로 변경했다.
+- Rule Data Metadata를 Version 1, 9개 필드로 고정하고 Change Sequence와 SourceType 필드를 제거했다.
+- CAPL-visible API를 27개에서 23개로 변경했다.
+
+### Removed
+
+- `0x81IIRRMM` 변경 Snapshot 생성과 CAN 출력
+- DLL의 Change Snapshot Queue, Dequeue·Stats API 및 Monitoring Start·Stop API
+- Change Queue의 Sequence, Drop, Suppressed, Overflow 진단 계약
+
+### Compatibility
+
+- v0.4.0은 CAPL DLL ABI가 변경된 Breaking Release다.
+- v0.3 CAPL과 v0.4 DLL 또는 v0.4 CAPL과 v0.3 DLL을 혼용하지 않고 같은 배포 묶음으로 교체해야 한다.
+- Modbus Master 요청·응답·무응답 이력은 기존 RTU CSV 로그를 사용한다.
+
+### Verification
+
+- x86/x64 Build, ABI Probe, 계약·Core·Integration 자동 시험으로 23개 API와 제거 Export 부재를 검증한다.
+- CANalyzer 9.x SP8 및 CANalyzer 18의 CAPL Compile·Measurement는 실환경 검증 대상으로 유지한다.
+
 ## [0.3.0] - 2026-08-13
 
 ### Added

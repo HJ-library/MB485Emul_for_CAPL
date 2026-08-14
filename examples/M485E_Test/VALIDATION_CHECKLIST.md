@@ -22,7 +22,7 @@
 - [ ] Slave 1 FC03 Address 10000 Read 응답
 - [ ] Slave 1 FC04 Address 10006 Read 응답
 - [ ] Slave 2 FC03 Address 20000 Read 응답
-- [ ] Slave 1 FC10 Write 및 변경 Snapshot 확인
+- [ ] Slave 1 FC10 Write 후 다음 `0x80` Periodic Rule Data에 변경값 반영
 - [ ] Slave ID 0 FC10 Broadcast는 적용되지만 응답하지 않음
 - [ ] Address 0을 별도 시험 Map에서 사용할 경우 그대로 처리됨
 - [ ] 잘못된 CRC, Function Code, Address, Quantity의 정책 확인
@@ -34,8 +34,8 @@
 - [ ] `Check_ReadOption[0..2]=1`
 - [ ] `ReadSwitch=1`
 - [ ] Header/Data Frame Extended ID와 DLC 확인
-- [ ] Device/Rule별 주기 Snapshot 확인
-- [ ] Direct Write 후 `0x81` 변경 Snapshot 확인
+- [ ] Device/Rule별 `0x80` Periodic Rule Data 확인
+- [ ] Direct Write 후 다음 `0x80` 출력에 최신값 반영, `0x81` 미출력 확인
 - [ ] `ReadSwitch=0`에서 Monitoring 출력 중지
 
 ## Panel

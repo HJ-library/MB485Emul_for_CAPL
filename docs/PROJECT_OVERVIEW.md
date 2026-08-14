@@ -1,6 +1,6 @@
 # Modbus485Emulator 한눈에 보기
 
-> Release baseline: v0.3.0 (2026-08-12)
+> Release baseline: v0.4.0 (2026-08-13)
 
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
 그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 Windows x86/x64 CAPL DLL이다.
@@ -19,8 +19,8 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | Board | Modbus RTU Master로 FC03·FC04 Read와 FC10 Write 요청 전송 |
 | SystemBase Multi USB-485 | 자동 방향 제어 방식으로 PC와 Board의 RS-485 연결 |
 | `M485E.dll` | CSV 검증, 장치/Register 상태, RTU Slave, Queue와 연결 수명주기 처리 |
-| CAPL Core | 27개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
-| CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 Snapshot을 가상 CAN Message로 변환 |
+| CAPL Core | 23개 저수준 DLL API를 CAPL용 함수로 감싸고 Context·공통 오류를 관리 |
+| CAPL Monitoring | ReadOption과 출력 Timer를 관리하고 현재 Rule Data를 가상 CAN Message로 변환 |
 | CAPL ReadOption | 프로젝트 FrameRule의 `slot ↔ Index + Rule_ID` 고정 목록을 한곳에서 관리 |
 | CAPL Connection | ConnectSwitch, 500ms 자동 연결 Timer와 Connect/Disconnect 요청을 관리 |
 | CAPL Control | Refresh와 100ms Lifecycle 상태를 LED·문자열 System Variable로 변환 |
@@ -82,7 +82,7 @@ FC04 범위는 외부 RTU Write가 허용되지 않는다. CAPL의 Direct Read/W
 
 CSV Refresh는 Disconnected 상태에서만 허용한다. Refresh에 성공하면 기존 Runtime
 Register 값은 폐기되고 새 CSV의 `Init_Value`로 전체 Register Memory가 재구성된다.
-Periodic Pending과 Change Queue 관련 상태도 초기화되므로, 보존할 값은 Refresh 전에
+Periodic Pending 관련 상태도 초기화되므로, 보존할 값은 Refresh 전에
 사용자가 별도로 기록해야 한다.
 
 새 CSV에 오류가 있으면 임시 Configuration과 Memory를 적용하지 않고 Last-good
@@ -101,7 +101,7 @@ Core가 Write Window 메시지로 정리한다.
 3. 수신 Port와 Slave ID로 Device Index를 찾는다.
 4. Function Code와 Address 범위를 `M485E_FrameRule.csv` 권한과 대조한다.
 5. CRC 유효 요청 뒤 계산된 t3.5 Guard를 보장하고 FC03·FC04는 Register를 읽어 응답하며, FC10은 Register를 쓴 뒤 정상 응답한다.
-6. FC10에서 값이 실제로 바뀌면 변경 범위와 겹치는 모든 Rule의 Change Snapshot을 Port Queue에 넣는다.
+6. FC10으로 바뀐 값은 다음에 선택된 `0x80` Periodic Monitoring에서 최신 Rule Data로 출력된다. RTU 로그가 켜져 있으면 요청과 응답 또는 무응답 결과는 CSV에 기록된다.
 
 미등록 Slave에는 응답하지 않는다. Slave ID 0의 FC10 Broadcast는 수신 Port에 구성된 모든
 통신 활성 Device를 전체 검증 후 원자 적용하고 응답은 보내지 않으며, Broadcast FC03/FC04는 무응답·무적용이다.
@@ -157,21 +157,19 @@ Signal Type은 `Signed`, `Unsigned`, `IEEE Float`, `IEEE Double`을 지원한다
 값은 첫 Address에 High Word가 오는 `HighWordFirst`로 고정한다. `Byte_Order=LittleEndian`은
 각 16bit Register 내부의 High/Low Byte만 바꾸며 Register 사이의 Word 순서는 바꾸지 않는다.
 
-Direct Write와 Signal Write로 값이 바뀌면 `SourceType=0x02`, Reset이면 `0x03`, Board의
-FC10 Write이면 `0x01` Change Snapshot이 만들어진다.
+Direct Write, Signal Write, Reset과 Board의 FC10 Write는 Register Memory만 변경한다. 별도
+변경 CAN Event는 만들지 않으며 다음에 선택된 `0x80` Periodic 출력이 최신값을 반영한다.
 
 ## 7. 가상 CAN Monitoring
 
 Monitoring은 DLL이 스스로 주기 송신하지 않는다. CAPL이 활성화된 `ReadOption`을 관리하고
-DLL에서 Rule Snapshot을 읽어 CAN Message를 생성한다.
+DLL에서 현재 Rule Data를 읽어 CAN Message를 생성한다.
 
 - Monitoring Cycle: CAPL 코드의 공통 1,000ms Timer
 - Output Pump: 10ms Timer
 - Rule 선택: `M485E::Monitoring::Check_ReadOption[]`
-- Change Queue: 매 Pump마다 시작 Port를 순환하는 활성 Port Round-robin
 - Periodic Rule: Port별로 Cycle이 끝나도 이어지는 ReadOption Cursor와 시작 Port Round-robin
-- Periodic Snapshot: `0x80IIRRMM`
-- Change Snapshot: `0x81IIRRMM`
+- Periodic Monitoring: `0x80IIRRMM`
 
 `II`는 Device Index, `RR`은 Rule ID, `MM`은 Message Index다. 모든 Message는 Extended
 CAN으로 출력한다.
@@ -179,7 +177,7 @@ CAN으로 출력한다.
 ### Header Message
 
 - `MM=0x01`, DLC 8
-- Index, Slave ID, Function Code, SourceType
+- Index, Slave ID, Function Code, 고정 SourceType `0x00`
 - 시작 Address와 Quantity
 
 ### Data Message
@@ -190,9 +188,8 @@ CAN으로 출력한다.
 - 마지막 Message DLC는 실제 Register 수 x 2이며 빈 공간을 Padding하지 않음
 - 총 Frame 수는 `1 + ceil(Quantity / 4)`
 
-Monitoring을 켤 때 별도 `SourceType=0x04` Init Snapshot은 만들지 않는다. 선택된 Rule은
-기존 `0x80` Periodic 경로에서 첫 Cycle부터 처리한다. 값 변경 Snapshot은 다음 Output
-Pump에서 우선 처리한다.
+Monitoring을 켤 때 별도 Init 또는 Change Event는 만들지 않는다. 선택된 Rule은
+Header Byte 3을 `0x00`으로 기록하는 `0x80` Periodic 경로에서 첫 Cycle부터 처리한다.
 
 프로젝트에 적용할 때 `M485E_FrameRule.csv`의 각 Device Rule 구간을
 `M485E_ReadOption.cin`의 `M485E_ReadOption_ConfigureAll()`에서
@@ -200,7 +197,7 @@ Pump에서 우선 처리한다.
 함수는 해당 Device의 Rule ID를 1부터 연속 생성한다.
 Slot은 0부터 빈칸 없이 증가해야 하고 같은 `Index + Rule_ID`의 중복 등록은 거부된다.
 
-Periodic과 Change Queue 모두 시작 Port를 순환한다. Periodic은 Port별 Cursor를 별도로
+Periodic 출력은 시작 Port를 순환하고 Port별 Cursor를 별도로
 유지하므로 한 Port에 Rule이 집중되어도 다른 Port의 Rule이 영구적으로 밀리지 않는다.
 
 ## 8. 연결 끊김과 오류 복구
@@ -268,7 +265,7 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 - COM 분리·복구와 3초 x 10회 자동 재연결
 - 두 가상 CAN Channel의 Extended Header/Data Message
 - 프로젝트별 Device, Rule 및 Register CSV의 실제 Address 매핑
-- 최대 200 Rule, Change Burst와 장시간 안정성
+- 최대 200 Rule의 Periodic 출력과 장시간 안정성
 - SystemBase Multi USB 485와 실제 Board에서 RTU Chunk 분할·병합, 응답 Timing 및 Noise 재동기화 검증
 - 장치별 탭을 포함한 실제 CANalyzer Panel `.xvp`
 

@@ -26,6 +26,10 @@
 
 CAPL의 `M485E_ReadOption_ConfigureAll()`도 이 순서로 구성되어 있다.
 
+CAN Monitoring은 선택된 Rule을 `0x80IIRRMM` Periodic Message로만 출력한다. Register 값이
+바뀌어도 별도 `0x81` Message는 생성하지 않으며 다음 Periodic 출력이 최신값을 반영한다.
+Board Master의 실제 요청·응답 이력은 RTU CSV Log에서 확인한다.
+
 ## 빠른 시작
 
 1. [START_HERE.md](START_HERE.md)에 따라 DLL, CAPL, System Variable DB와 CSV를 배치한다.

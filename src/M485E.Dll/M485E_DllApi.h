@@ -92,66 +92,21 @@ M485E_API M485E_Dll_GetLifecycleStatus(std::uint32_t contextHandle,
                                        std::int32_t* outStatus);
 
 /**
- * @brief Enables change-snapshot collection for the connected context.
- * @param contextHandle Active CAPL context handle.
- * @return M485E_OK on success, otherwise a negative M485E error code.
- */
-M485E_API M485E_Dll_StartMonitoring(std::uint32_t contextHandle);
-
-/**
- * @brief Disables monitoring and discards pending change snapshots.
- * @param contextHandle Active CAPL context handle.
- * @return M485E_OK on success, otherwise a negative M485E error code.
- */
-M485E_API M485E_Dll_StopMonitoring(std::uint32_t contextHandle);
-
-/**
  * @brief Reads the current values for one enabled periodic monitoring Rule.
  * @param contextHandle Active CAPL context handle.
  * @param index Device Index in the range 0..255.
  * @param ruleId Rule ID in the range 0..255.
  * @param metaCapacity Number of std::int32_t elements in outMeta.
- * @param outMeta Versioned snapshot metadata described by M485E_SM_*.
+ * @param outMeta Versioned Rule Data metadata described by M485E_RDM_*.
  * @param dataCapacity Number of std::uint16_t elements in outRegisters.
  * @param outRegisters Register values in ascending address order.
  * @return M485E_OK on success, otherwise a status or negative error code.
  * @note Both caller-owned output buffers remain unchanged on failure.
  */
-M485E_API M485E_Dll_ReadRuleSnapshot(std::uint32_t contextHandle, std::int32_t index,
-                                     std::int32_t ruleId, std::uint32_t metaCapacity,
-                                     std::int32_t* outMeta, std::uint32_t dataCapacity,
-                                     std::uint16_t* outRegisters);
-
-/**
- * @brief Removes one change-triggered Rule snapshot from a port queue.
- * @param contextHandle Active CAPL context handle.
- * @param portSlot Logical port slot in the range 0..3.
- * @param metaCapacity Number of std::int32_t elements in outMeta.
- * @param outMeta Versioned snapshot metadata described by M485E_SM_*.
- * @param dataCapacity Number of std::uint16_t elements in outRegisters.
- * @param outRegisters Register values in ascending address order.
- * @return M485E_OK, M485E_STATUS_NO_DATA, or a negative M485E error code.
- * @note The queue item is retained if either output buffer is too small.
- */
-M485E_API M485E_Dll_TryDequeueChangeSnapshot(std::uint32_t contextHandle,
-                                             std::int32_t portSlot,
-                                             std::uint32_t metaCapacity,
-                                             std::int32_t* outMeta,
-                                             std::uint32_t dataCapacity,
-                                             std::uint16_t* outRegisters);
-
-/**
- * @brief Copies statistics for one change-snapshot queue.
- * @param contextHandle Active CAPL context handle.
- * @param portSlot Logical port slot in the range 0..3.
- * @param statsCapacity Number of std::int32_t elements in outStats.
- * @param outStats Versioned statistics described by M485E_CS_*.
- * @return M485E_OK on success, otherwise a negative M485E error code.
- */
-M485E_API M485E_Dll_GetChangeQueueStats(std::uint32_t contextHandle,
-                                        std::int32_t portSlot,
-                                        std::uint32_t statsCapacity,
-                                        std::int32_t* outStats);
+M485E_API M485E_Dll_ReadRuleData(std::uint32_t contextHandle, std::int32_t index,
+                                 std::int32_t ruleId, std::uint32_t metaCapacity,
+                                 std::int32_t* outMeta, std::uint32_t dataCapacity,
+                                 std::uint16_t* outRegisters);
 
 /**
  * @brief Reads allocated register memory without applying an RTU function-code filter.
@@ -178,7 +133,6 @@ M485E_API M485E_Dll_ReadRegisters(std::uint32_t contextHandle, std::int32_t inde
  * @param inCount Number of valid elements in inRegisters; it must cover quantity.
  * @param inRegisters Caller-owned input buffer.
  * @return M485E_OK on success, otherwise a negative M485E error code.
- * @note Overlapping Rules produce Direct Write change snapshots when monitoring is enabled.
  */
 M485E_API M485E_Dll_WriteRegisters(std::uint32_t contextHandle, std::int32_t index,
                                    std::int32_t startAddress, std::int32_t quantity,
@@ -190,7 +144,6 @@ M485E_API M485E_Dll_WriteRegisters(std::uint32_t contextHandle, std::int32_t ind
  * @param contextHandle Active CAPL context handle.
  * @param index Device Index in the range 0..255.
  * @return M485E_OK on success, otherwise a negative M485E error code.
- * @note Only Rules whose values actually change produce Reset snapshots.
  */
 M485E_API M485E_Dll_ResetDevice(std::uint32_t contextHandle, std::int32_t index);
 

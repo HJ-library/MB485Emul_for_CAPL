@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <cdll.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -80,6 +81,9 @@ int main(int argc, char** argv)
   using WriteRegisters = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t,
                                                   std::int32_t, std::uint32_t,
                                                   const std::uint16_t*);
+  using RuleData = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::int32_t,
+                                            std::uint32_t, std::int32_t*, std::uint32_t,
+                                            std::uint16_t*);
   using ReadSignal = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t,
                                               const char*, double*);
   using WriteSignal = std::int32_t(__stdcall*)(std::uint32_t, std::int32_t, std::uint32_t,
@@ -106,6 +110,7 @@ int main(int argc, char** argv)
     const auto setPath = Load<SetPath>(table, "M485E_Dll_SetCsvPath");
     const auto setPort = Load<SetPort>(table, "M485E_Dll_SetPortConfig");
     const auto getStatus = Load<Status>(table, "M485E_Dll_GetLifecycleStatus");
+    const auto readRuleData = Load<RuleData>(table, "M485E_Dll_ReadRuleData");
     const auto readRegisters = Load<ReadRegisters>(table, "M485E_Dll_ReadRegisters");
     const auto writeRegisters = Load<WriteRegisters>(table, "M485E_Dll_WriteRegisters");
     const auto readSignal = Load<ReadSignal>(table, "M485E_Dll_ReadSignal");
@@ -142,6 +147,20 @@ int main(int argc, char** argv)
     Require(lifecycle[M485E_LS_LAST_RESULT] == M485E_OK &&
                 lifecycle[M485E_LS_CONFIGURATION_VALID] == 1,
             "asynchronous Refresh failed");
+
+    std::array<std::int32_t, M485E_RULE_DATA_META_COUNT> ruleMeta{};
+    std::array<std::uint16_t, 125> ruleRegisters{};
+    ruleMeta.fill(0x5A5A5A5A);
+    ruleRegisters.fill(0xA55AU);
+    Require(readRuleData(handle, 0, 1,
+                         static_cast<std::uint32_t>(ruleMeta.size()), ruleMeta.data(),
+                         static_cast<std::uint32_t>(ruleRegisters.size()),
+                         ruleRegisters.data()) == M485E_ERR_INVALID_STATE &&
+                std::all_of(ruleMeta.begin(), ruleMeta.end(),
+                            [](const std::int32_t value) { return value == 0x5A5A5A5A; }) &&
+                std::all_of(ruleRegisters.begin(), ruleRegisters.end(),
+                            [](const std::uint16_t value) { return value == 0xA55AU; }),
+            "Rule Data disconnected-state guard changed caller-owned output");
 
     std::array<std::int32_t, M485E_MAX_DEVICES> deviceStates{};
     Require(getDeviceStates(handle, static_cast<std::uint32_t>(deviceStates.size()),

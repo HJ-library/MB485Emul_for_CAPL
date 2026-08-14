@@ -1,6 +1,6 @@
 #pragma once
 
-#include "M485E_Runtime.h"
+#include "M485E_Contracts.generated.h"
 
 #include <array>
 #include <cstddef>
@@ -10,82 +10,6 @@
 
 namespace m485e::core
 {
-struct RuleSnapshot
-{
-  std::uint32_t sequence = 0;
-  std::uint8_t portSlot = 0;
-  std::uint8_t deviceIndex = 0;
-  std::uint8_t ruleId = 0;
-  std::uint8_t slaveId = 0;
-  std::uint8_t functionCode = 0;
-  std::uint8_t sourceType = 0;
-  std::uint16_t address = 0;
-  std::uint16_t quantity = 0;
-  std::array<std::uint16_t, 125> values{};
-};
-
-struct ChangeQueueStats
-{
-  std::uint8_t portSlot = 0;
-  std::uint32_t pending = 0;
-  std::uint32_t highWaterMark = 0;
-  std::uint32_t enqueuedCount = 0;
-  std::uint32_t dequeuedCount = 0;
-  std::uint32_t droppedCount = 0;
-  std::uint32_t suppressedCount = 0;
-  bool overflowLatch = false;
-  std::uint32_t lastSequence = 0;
-};
-
-/**
- * @brief Creates periodic snapshots and buffers value-change snapshots per port.
- * @note Each queue is bounded. On overflow the oldest snapshot is dropped so the
- *       consumer receives the most recent emulator state rather than stale history.
- */
-class SnapshotQueueService final
-{
- public:
-  explicit SnapshotQueueService(std::shared_ptr<const ActiveConfiguration> configuration);
-
-  void StartMonitoring() noexcept;
-  void StopMonitoring() noexcept;
-  void ResetForRefresh() noexcept;
-  /**
-   * @brief Enqueues one snapshot for every Rule overlapping a completed write.
-   * @note Writes while monitoring is disabled are counted as suppressed, not queued.
-   */
-  void RecordChange(std::uint8_t deviceIndex, WriteSource source,
-                    const RegisterWriteResult& write) noexcept;
-  std::int32_t TryDequeue(std::uint8_t portSlot, std::uint16_t dataCapacity,
-                          RuleSnapshot& output) noexcept;
-  ChangeQueueStats GetStats(std::uint8_t portSlot) const noexcept;
-  std::int32_t CreatePeriodic(RuntimeModel& runtime, std::uint8_t deviceIndex,
-                              std::uint8_t ruleId, RuleSnapshot& output) const;
-
- private:
-  struct PortQueue
-  {
-    std::array<RuleSnapshot, M485E_CHANGE_QUEUE_CAPACITY> items{};
-    std::size_t head = 0;
-    std::size_t size = 0;
-    std::uint32_t nextSequence = 1;
-    ChangeQueueStats stats{};
-    mutable std::mutex mutex;
-  };
-
-  static std::uint32_t SaturatingAdd(std::uint32_t value, std::uint32_t add) noexcept;
-  static std::uint32_t NextSequence(std::uint32_t sequence) noexcept;
-  std::int32_t PortForDevice(std::uint8_t deviceIndex, std::uint8_t& portSlot) const noexcept;
-  RuleSnapshot MakeSnapshot(std::uint8_t portSlot, std::size_t ruleIndex,
-                            std::uint8_t sourceType,
-                            const std::vector<std::uint16_t>& values) const noexcept;
-
-  std::shared_ptr<const ActiveConfiguration> configuration_;
-  std::array<PortQueue, M485E_PORT_SLOT_COUNT> queues_{};
-  bool monitoringEnabled_ = false;
-  mutable std::mutex stateMutex_;
-};
-
 struct ErrorEvent
 {
   std::uint32_t sequence = 0;
