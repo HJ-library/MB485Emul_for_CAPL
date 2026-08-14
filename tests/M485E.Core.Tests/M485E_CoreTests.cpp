@@ -553,6 +553,57 @@ void TestRuleDataQuantitiesAndAtomicReads()
           "concurrent Rule Data read observed a torn multi-Register write");
 }
 
+void TestBroadcastWriteAndRuleDataConcurrency()
+{
+  Fixture fixture;
+  const std::string rules = std::string(kRuleHeader) +
+                            "0,1,0x03,10000,4,First Broadcast Rule\n"
+                            "1,1,0x03,10000,4,Second Broadcast Rule\n";
+  const auto built = ConfigurationLoader{}.Build(
+      fixture.Write(OnePortDevices(), rules, ValidSignals()));
+  Require(built.Succeeded(), "Broadcast concurrency fixture build failed");
+  m485e::core::RuntimeModel runtime(built.configuration);
+
+  const std::vector<std::uint16_t> first(4, 0x1111U);
+  const std::vector<std::uint16_t> second(4, 0xEEEEU);
+  Require(runtime.WriteBroadcastRegisters(0, 10000, first) == M485E_OK,
+          "Broadcast concurrency setup failed");
+
+  std::atomic<bool> writerDone{false};
+  std::atomic<bool> failure{false};
+  std::thread writer([&] {
+    for (std::uint32_t iteration = 0; iteration < 20000U; ++iteration)
+    {
+      const auto& next = (iteration & 1U) == 0U ? second : first;
+      if (runtime.WriteBroadcastRegisters(0, 10000, next) != M485E_OK)
+      {
+        failure.store(true);
+        break;
+      }
+    }
+    writerDone.store(true);
+  });
+
+  std::uint32_t readCount = 0;
+  while (!writerDone.load() || readCount < 20000U)
+  {
+    for (const std::uint8_t index : std::array<std::uint8_t, 2>{0U, 1U})
+    {
+      const auto current = ReadRuleValues(runtime, index, 1);
+      if (current != first && current != second)
+      {
+        failure.store(true);
+        break;
+      }
+    }
+    if (failure.load()) break;
+    ++readCount;
+  }
+  writer.join();
+  Require(!failure.load(),
+          "concurrent Broadcast Write and Rule Data read observed torn Registers");
+}
+
 std::vector<std::uint8_t> Rtu(std::initializer_list<std::uint8_t> bytes)
 {
   std::vector<std::uint8_t> frame(bytes);
@@ -860,6 +911,8 @@ void TestRtuLogQueue()
 
 void TestDiagnosticQueue()
 {
+  constexpr std::uint32_t capacity =
+      static_cast<std::uint32_t>(M485E_ERROR_QUEUE_CAPACITY);
   m485e::core::ErrorQueue errors;
   m485e::core::ErrorEvent event;
   event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED;
@@ -868,8 +921,11 @@ void TestDiagnosticQueue()
   errors.Push(event, "bad CRC");
   errors.Push(event, "bad CRC");
   auto errorStats = errors.GetStats();
-  Require(errorStats.pending == 1 && errorStats.coalescedCount == 1,
-          "identical Error Events were not coalesced");
+  Require(errorStats.pending == 1 && errorStats.highWaterMark == 1 &&
+              errorStats.enqueuedCount == 1 && errorStats.dequeuedCount == 0 &&
+              errorStats.coalescedCount == 1 && errorStats.droppedCount == 0 &&
+              !errorStats.overflowLatch && errorStats.lastSequence == 1,
+          "initial Error Queue counters or coalescing contract failed");
   m485e::core::ErrorEvent output;
   Require(errors.TryDequeue(512, output) == M485E_OK && output.repeatCount == 2 &&
               std::string(output.text.data()) == "bad CRC",
@@ -877,21 +933,26 @@ void TestDiagnosticQueue()
   errors.Push(event, "first detail");
   errors.Push(event, "second detail");
   errorStats = errors.GetStats();
-  Require(errorStats.pending == 2 && errorStats.coalescedCount == 1,
-          "Error Events with different text were incorrectly coalesced");
+  Require(errorStats.pending == 2 && errorStats.highWaterMark == 2 &&
+              errorStats.enqueuedCount == 3 && errorStats.dequeuedCount == 1 &&
+              errorStats.coalescedCount == 1 && errorStats.lastSequence == 3,
+          "distinct Error Event counters or coalescing contract failed");
   Require(errors.TryDequeue(512, output) == M485E_OK &&
               std::string(output.text.data()) == "first detail" &&
               errors.TryDequeue(512, output) == M485E_OK &&
               std::string(output.text.data()) == "second detail",
           "Error Event text ordering was not preserved");
-  for (int index = 0; index < 257; ++index)
+  for (std::uint32_t index = 0; index < capacity + 1U; ++index)
   {
-    event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED - index;
+    event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED - static_cast<std::int32_t>(index);
     errors.Push(event, "distinct");
   }
   errorStats = errors.GetStats();
-  Require(errorStats.pending == 256 && errorStats.droppedCount == 1 &&
-              errorStats.overflowLatch,
+  Require(errorStats.pending == capacity && errorStats.highWaterMark == capacity &&
+              errorStats.enqueuedCount == capacity + 4U &&
+              errorStats.dequeuedCount == 3 && errorStats.coalescedCount == 1 &&
+              errorStats.droppedCount == 1 && errorStats.overflowLatch &&
+              errorStats.lastSequence == capacity + 4U,
           "Error Queue oldest-drop diagnostics failed");
 }
 
@@ -1140,6 +1201,7 @@ int main()
     TestAtomicRefresh();
     TestRuntimeRegisterAndSignalOperations();
     TestRuleDataQuantitiesAndAtomicReads();
+    TestBroadcastWriteAndRuleDataConcurrency();
     TestPortCardinalityAndSlot3Routing();
     TestModbusRtuEngine();
     TestRtuLogQueue();

@@ -310,6 +310,12 @@ int main(int argc, char** argv)
   if (ruleData(handle, 1, 1, 8, longs.data(), 125, words.data()) != -105 ||
       !AllEqual(longs, 0x5A5A5A5A) || !AllEqual(words, static_cast<std::uint16_t>(0xA55A)))
     return Fail("Rule Data capacity or output invariance failed.");
+  longs.fill(0x5A5A5A5A);
+  words.fill(0xA55AU);
+  if (ruleData(handle, 1, 1, 9, longs.data(), 0, words.data()) != -105 ||
+      !AllEqual(longs, 0x5A5A5A5A) ||
+      !AllEqual(words, static_cast<std::uint16_t>(0xA55A)))
+    return Fail("Rule Data zero-capacity call changed caller-owned output.");
   if (ruleData(handle, 1, 1, 9, longs.data(), 125, words.data()) != -2000 ||
       !AllEqual(longs, 0x5A5A5A5A) ||
       !AllEqual(words, static_cast<std::uint16_t>(0xA55A)))

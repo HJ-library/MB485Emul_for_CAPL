@@ -212,7 +212,7 @@ Require-Match $monitoring 'cancelTimer\s*\(\s*tM485E_MonitoringCycle\s*\)[\s\S]*
     'Monitoring Start/Stop must leave no partially active CAPL timer.'
 Require-Match $monitoring 'M485E_Monitoring_RejectCandidates\s*\(\s*result\s*\)' `
     'A rejected ReadOption set must roll Candidate values back to Applied values.'
-Require-Match $monitoring 'requiredPeriodicFrames\s*=\s*requiredPeriodicFrames\s*\+\s*1\s*\+[\s\S]*M485E_RDM_QUANTITY' `
+Require-Match $monitoring 'gM485E_CandidateFrameCosts\[slot\]\s*=\s*1\s*\+[\s\S]*M485E_RDM_QUANTITY[\s\S]*requiredPeriodicFrames\s*=\s*requiredPeriodicFrames\s*\+[\r\n\s]*gM485E_CandidateFrameCosts\[slot\]' `
     'Monitoring must sum Header and Data frame costs for every active candidate.'
 Require-Match $monitoring 'requiredPeriodicFrames\s*>\s*M485E_MAX_FRAMES_PER_CYCLE[\s\S]*M485E_Monitoring_RejectCandidates\s*\(\s*M485E_ERR_PERIODIC_BUDGET\s*\)' `
     'Monitoring must atomically reject a candidate set that exceeds the cycle budget.'
@@ -220,6 +220,49 @@ Require-Match $monitoring 'candidateRollbackPending\s*=\s*1' `
     'A rejected ReadOption set must request a Panel checkbox rollback.'
 Require-Match $monitoring 'long\s+M485E_Monitoring_TakeCandidateRollback\s*\(' `
     'Monitoring must expose the pending Applied-state rollback to the UI adapter.'
+Require-Match $monitoring 'void\s+M485E_Monitoring_NewCycle\s*\(\s*\)[\s\S]*result\s*=\s*M485E_Monitoring_ApplyCandidates\s*\(\s*\)[\s\S]*if\s*\(\s*result\s*!=\s*M485E_OK\s*\)\s*write\s*\([\s\S]*M485E_Monitoring_ScheduleAppliedRules\s*\(\s*\)' `
+    'A runtime candidate rejection must still schedule the existing Applied rules for that cycle.'
+if ($monitoring -match 'M485E_Monitoring_ApplyCandidates\s*\(\s*\)\s*;[\s\S]{0,300}M485E ReadOption candidate rejected[\s\S]{0,100}\breturn\s*;') {
+    throw 'A runtime candidate rejection must not skip the existing Applied periodic cycle.'
+}
+Require-Match $monitoring 'long\s+lastSentGeneration\s*;' `
+    'Each ReadOption must retain its last successfully sent generation.'
+Require-Match $monitoring 'long\s+missedCycleCount\s*;' `
+    'Each ReadOption must retain its missed periodic cycle count.'
+Require-Match $monitoring 'long\s+frameCost\s*;' `
+    'Each applied ReadOption must retain its validated CAN bundle frame cost.'
+Require-Match $monitoring 'periodicPendingCount\s*\[\s*M485E_PORT_SLOT_COUNT\s*\]' `
+    'Monitoring diagnostics must retain the current Periodic Pending count per Port.'
+Require-Match $monitoring 'gM485E_CandidateFrameCosts\[slot\]\s*=\s*1\s*\+[\s\S]*M485E_RDM_QUANTITY[\s\S]*gM485E_ReadOptions\[slot\]\.frameCost\s*=\s*gM485E_CandidateFrameCosts\[slot\]' `
+    'Frame cost must be validated in Candidate state and committed atomically with Applied state.'
+Require-Match $monitoring 'pendingGeneration\s*!=\s*0[\s\S]*missedCycleCount\s*\+\+[\s\S]*missedSampleCount\s*\+\+[\s\S]*missedRuleCount\s*\+\+' `
+    'An unsent pending generation must increment rule and aggregate missed-sample diagnostics.'
+Require-Match $monitoring 'if\s*\(\s*missedRuleCount\s*>\s*0\s*\)[\s\S]*deadlineMissCount\s*\+\+[\s\S]*write\s*\(\s*"M485E Periodic deadline missed:' `
+    'A missed periodic deadline must emit one aggregate diagnostic after scheduling the cycle.'
+Require-Match $monitoring 'M485E_ERR_OUTPUT_DEADLINE_MISSED[\s\S]*M485E_OPERATION_MONITORING_WORKER' `
+    'A missed periodic deadline must use the existing CAPL scheduler diagnostic contract.'
+Require-Match $monitoring 'firstPort=%d firstFrameCost=%d firstPortPending=%d pending0=%d pending1=%d pending2=%d pending3=%d' `
+    'The once-per-cycle deadline summary must expose the first missed Rule scheduling context.'
+Require-Match $monitoring 'M485E_OUTPUT_PUMP_BUDGET_TICKS\s*=\s*M485E_OUTPUT_PUMP_MS\s*\*\s*100' `
+    'Output Pump elapsed time must use timeNow 10-us ticks and the existing 10-ms budget.'
+Require-Match $monitoring 'pumpStartedAt\s*=\s*timeNow\s*\(\s*\)[\s\S]*elapsedTicks\s*=\s*timeNow\s*\(\s*\)\s*-\s*pumpStartedAt' `
+    'Output Pump must measure elapsed handler time through the CANalyzer 9.x-compatible timeNow API.'
+Require-Match $monitoring 'for\s*\(\s*offset[\s\S]*elapsedTicks\s*=\s*timeNow\s*\(\s*\)\s*-\s*pumpStartedAt[\s\S]*elapsedTicks\s*>=\s*M485E_OUTPUT_PUMP_BUDGET_TICKS[\s\S]*timeBudgetReached\s*=\s*1[\s\S]*M485E_Monitoring_TryOnePeriodic' `
+    'Output Pump must check the remaining time budget before starting each indivisible Rule bundle.'
+Require-Match $monitoring 'timeBudgetReached\s*!=\s*0\s*\)\s*break\s*;' `
+    'Output Pump must defer remaining Rule bundles to the next Tick after the time budget is reached.'
+Require-Match $monitoring 'elapsedTicks\s*>\s*M485E_OUTPUT_PUMP_BUDGET_TICKS[\s\S]*budgetOverrunCount\s*\+\+[\s\S]*M485E_ERR_OUTPUT_BUDGET_OVERRUN' `
+    'Output Pump budget overruns must increment the scheduler counter and emit the existing diagnostic.'
+Require-Match $monitoring 'lastBudgetDiagnosticGeneration\s*!=[\s\S]*gM485E_MonitoringState\.generation[\s\S]*lastBudgetDiagnosticGeneration\s*=[\s\S]*gM485E_MonitoringState\.generation[\s\S]*write\s*\(\s*"M485E Output Pump budget overrun:' `
+    'Output Pump must rate-limit overrun summaries to once per generation while retaining every overrun count.'
+Require-Match $monitoring 'lastSentGeneration\s*=\s*[\r\n\s]*gM485E_ReadOptions\[slot\]\.pendingGeneration\s*;[\s\S]*pendingGeneration\s*=\s*0' `
+    'A Rule must record its generation only after successful output and before clearing Pending.'
+Require-Match $monitoring 'Latest-Wins:[\s\S]*pendingGeneration\s*=\s*[\r\n\s]*gM485E_MonitoringState\.generation' `
+    'Deadline handling must coalesce Pending to the latest generation without a catch-up queue.'
+Require-Match $monitoring 'long\s+M485E_Monitoring_Stop\s*\(\s*\)[\s\S]*pendingGeneration\s*=\s*0' `
+    'Monitoring Stop must clear CAPL-only Pending generations.'
+Require-Match $monitoring 'long\s+M485E_Monitoring_Start\s*\(\s*\)[\s\S]*candidateDirty\s*=\s*1[\s\S]*result\s*=\s*M485E_Monitoring_ApplyCandidates\s*\(\s*\)[\s\S]*if\s*\(\s*result\s*!=\s*M485E_OK\s*\)\s*\{[\s\S]*enabled\s*=\s*0[\s\S]*cancelTimer\s*\(\s*tM485E_MonitoringCycle\s*\)[\s\S]*cancelTimer\s*\(\s*tM485E_OutputPump\s*\)[\s\S]*return\s+result\s*;[\s\S]*enabled\s*=\s*1' `
+    'Initial Monitoring Start validation failure must remain disabled with both timers stopped.'
 
 Require-Match $core 'M485E_Dll_ReadRuleData\s*\(' `
     'CAPL Core must expose the renamed Rule Data API.'
