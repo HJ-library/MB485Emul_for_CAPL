@@ -1,0 +1,6 @@
+# Generated C++ contract must match the generator's LF output byte-for-byte.
+generated/cpp/M485E_Contracts.generated.h text eol=lf
+
+# CAPL sources require CRLF for the validated CANalyzer source contract.
+*.can text eol=crlf
+*.cin text eol=crlf
