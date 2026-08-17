@@ -44,17 +44,28 @@ Manual/Signal 제어와 가상 CAN Monitoring은 계속 동작한다. Available 
 OFF→ON마다 `Logs/M485E/M485E_RTU_YYYYMMDD_HHMMSS.csv` 새 파일을 만든다. Active LED는
 파일이 열려 있거나 남은 Queue를 기록하는 동안 1이고, OFF 뒤 배출과 파일 Close가 끝나면 0이다.
 
+### CAPL Output View
+
+1. Panel Designer에서 `CAPL Output View` Control을 추가한다.
+2. Panel Name을 `M485E`, Control Name을 `RtuLogOutput`으로 지정한다.
+3. Output Mode를 `Overwrite`로 지정한다.
+4. `M485E_Main.can`의 `gM485E_RtuLogPanelName`과 `gM485E_RtuLogOutputControlName`이 위 이름과 정확히 일치하는지 확인한다.
+
+Logging Session 중 CSV에 기록된 같은 문자열의 최근 10줄이 최대 200ms마다 한 번 표시된다. 새 Session은 표시 Buffer를 비우고, OFF 뒤에는 마지막 표시가 남는다. Panel은 최근 상태 확인용이므로 전체 REQ/RES/NO_RES 원본과 DroppedCount 판단은 CSV를 사용한다. Panel·Control 이름이 틀려도 CSV 기록은 계속된다. 저장소에는 실제 `.xvp`를 만들지 않으며 대상 Configuration의 Panel Designer에서 이 Control을 추가한다.
+
 ## Monitoring
 
 | 표시/제어 | System Variable | Control |
 | --- | --- | --- |
 | Monitoring | `M485E::Monitoring::ReadSwitch` | Toggle |
+| ReadOption 편의 버튼 | `M485E::Monitoring::Btn_ReadOption` | Momentary Button |
 | Rule 0~199 | `M485E::Monitoring::Check_ReadOption[]` | Checkbox |
 | Result | `M485E::Monitoring::ResultCode` | Read-only Numeric |
 
 기본 예제는 Rule 3개를 사용하므로 `Check_ReadOption[0]`, `[1]`, `[2]`만 배치해도 된다.
 Monitoring은 `ReadSwitch`와 선택된 ReadOption에 따라 `0x80` Periodic Rule Data만 출력한다.
 값 변경 알림용 `0x81` Message나 Change Queue 상태를 표시하는 Panel Control은 만들지 않는다.
+`Btn_ReadOption`은 Checkbox를 누르기 편하게 배치하는 Scalar Control일 뿐 별도 CAPL Handler가 없다. 실제 선택 상태와 적용 시점은 기존 `Check_ReadOption[]`의 100ms Candidate 동기화와 1,000ms Cycle 정책을 그대로 따른다.
 
 ## Manual Register Write
 

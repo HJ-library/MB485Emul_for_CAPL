@@ -1,6 +1,6 @@
 # Modbus485Emulator 한눈에 보기
 
-> Release baseline: v0.4.0 (2026-08-13)
+> Release baseline: v0.5.0 (2026-08-17)
 
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
 그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 Windows x86/x64 CAPL DLL이다.
@@ -25,7 +25,7 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | CAPL Connection | ConnectSwitch, 500ms 자동 연결 Timer와 Connect/Disconnect 요청을 관리 |
 | CAPL Control | Refresh와 100ms Lifecycle 상태를 LED·문자열 System Variable로 변환 |
 | CAPL DeviceCommunication | Index별 외부 RTU 응답 On/Off와 Available LED를 100ms마다 동기화 |
-| CAPL RtuLog | bounded DLL Queue를 배출해 요청·응답 CSV 파일을 기록하고 Log LED를 관리 |
+| CAPL RtuLog | bounded DLL Queue를 한 번만 배출해 전체 요청·응답 CSV를 기록하고, 같은 문자열의 최근 10줄을 CAPL Output View에 표시 |
 | CAPL UI | Manual Write, Signal과 Monitoring System Variable 요청을 캡처해 공개 진입점에 전달 |
 | CAPL Main | 프로젝트 경로·Port 초기 설정과 Measurement 시작·종료 순서를 관리 |
 | CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
@@ -126,6 +126,13 @@ Master 요청과 Emulator 결과를 Transaction별 두 행으로 기록한다. D
 - 같은 Transaction의 REQ와 결과는 같은 Sequence를 사용하고 각 파일에서 1부터 시작
 - OFF 시 신규 capture를 중지하고 남은 쌍을 모두 기록한 후 닫으며 `ActiveLed`를 끔
 
+CSV에 성공적으로 기록한 동일한 로그 문자열은 별도 Queue Consumer 없이 최근 10줄 bounded
+Buffer에도 추가한다. Panel Designer의 CAPL Output View는 Output Mode를 `Overwrite`로 두고,
+기본 Panel Name `M485E`와 Control Name `RtuLogOutput`을 `M485E_Main.can` 설정값과 정확히
+일치시킨다. 표시는 최대 200ms에 한 번만 갱신하며 이름 불일치나 Panel 표시 실패가 CSV
+Queue Drain을 중단하지 않는다. Log OFF 후에도 마지막 표시 내용은 유지된다. 최근 상태는
+Panel에서 확인하되 전체 원본과 손실 진단은 CSV 및 `DroppedCount`를 기준으로 한다.
+
 별도의 CAN ID는 만들지 않는다. 가상 CAN Monitoring은 Register 상태 관찰용이고 RTU CSV는
 실제 Master 요청/응답 추적용이라 서로 독립적으로 켜고 끌 수 있다.
 
@@ -146,6 +153,7 @@ M485E.dll Runtime Register Model
 ```
 
 - Manual Write: `Index + StartAddress + Quantity + Data[122]`를 전달해 최대 122개의 16bit Register를 한 번에 쓴다. 값 편집만으로는 쓰지 않고 `Send`에서 요청 전체를 적용한다.
+- ReadOption 편의 버튼: `M485E::Monitoring::Btn_ReadOption`은 `int32` Scalar Control 배치를 위한 변수일 뿐 별도 CAPL Handler나 동작이 없다. 실제 선택은 기존 `Check_ReadOption[200]`의 100ms Candidate 동기화와 다음 1,000ms Cycle 원자 적용을 사용한다.
 - Signal Read: `Index + SignalName`을 요청하고 `PhysicalValue`로 물리값을 받는다.
 - Signal Write: `Index + SignalName + PhysicalValue`를 전달하며 Scale·Offset과 자료형 변환을 적용한다.
 

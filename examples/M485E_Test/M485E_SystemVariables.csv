@@ -17,6 +17,7 @@ M485E::RtuLog,ResultCode,M485E::RtuLog::ResultCode,int32,,0,Numeric display,Last
 M485E::RtuLog,DroppedCount,M485E::RtuLog::DroppedCount,int32,,0,Numeric display,Dropped RTU transaction count
 M485E::RtuLog,CurrentFileName,M485E::RtuLog::CurrentFileName,string,,,Text display,Last RTU CSV file name
 M485E::Monitoring,ReadSwitch,M485E::Monitoring::ReadSwitch,int32,,0,Toggle,Monitoring master switch
+M485E::Monitoring,Btn_ReadOption,M485E::Monitoring::Btn_ReadOption,int32,,0,Momentary button,ReadOption checkbox convenience button without CAPL handler
 M485E::Monitoring,Check_ReadOption,M485E::Monitoring::Check_ReadOption,int32[],200,0,Rule checkboxes,Periodic Rule selection
 M485E::Monitoring,ResultCode,M485E::Monitoring::ResultCode,int32,,0,Numeric display,Last monitoring result
 M485E::ManualWrite,Index,M485E::ManualWrite::Index,int32,,0,Numeric input,Device Index

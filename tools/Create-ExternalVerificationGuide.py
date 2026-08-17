@@ -12,7 +12,7 @@ from docx.shared import Cm, Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "docs" / "05_Test" / "External_Verification_Guide.docx"
-RELEASE_VERSION = "0.4.0"
+RELEASE_VERSION = "0.5.0"
 
 NAVY = "17365D"
 BLUE = "2F75B5"
@@ -161,6 +161,8 @@ def main():
         "tools/Prepare-M485EPackage.ps1 -Configuration Release를 실행해 DLL과 생성 계약을 Config/CAPL에 배치한다.",
         "CAPL Program Node에 Config/CAPL/M485E/M485E_Main.can을 연결한다. Main은 생성 계약, Core, Monitoring, UI를 포함한다.",
         "Config/System Variables/M485E.vsysvar를 Configuration에 추가한다.",
+        "M485E::Monitoring::Btn_ReadOption을 int32 Scalar 편의 Button에 연결한다. 이 변수에는 별도 CAPL Handler가 없으며 Check_ReadOption[200], 100ms Candidate 동기화와 1,000ms Cycle 적용 정책을 그대로 사용한다.",
+        "Panel Designer에 CAPL Output View Control을 추가하고 Output Mode를 Overwrite로 설정한다. Main.can 설정값의 Panel Name 'M485E'와 Control Name 'RtuLogOutput'을 실제 Panel/Control 이름과 정확히 일치시킨다.",
         "Main.can에서 DeviceMap과 FrameRule 상대경로를 지정한다. Core가 getAbsFilePath()로 절대경로를 DLL에 전달하고 Register Map은 DeviceMap의 CSV_DB_Name으로 선택한다.",
         "gM485E_ActivePortCount를 DeviceMap 고유 Port 수와 같은 1~4로 설정하고 앞쪽 PortSlot의 COM 번호와 BaudRate/DataBits/Parity/StopBits를 설정한다. 기본 배포 Source Contract가 두 수의 일치를 검사하며, Refresh 완료를 Polling한 뒤 Connect한다.",
         "ReadOption 정적 매핑을 설정하고 ReadSwitch ON에서 Monitoring을 시작한다.",
@@ -191,6 +193,7 @@ def main():
         ("EV-016", "9/10", "200 Rule, 최대 Quantity, 66 Frame/Tick 성능 Profile", "RTU 영향 없이 선택 Rule의 0x80을 1000ms Cycle로 처리; Error Queue DropCount 변화/Overflow 최초 전환은 누적 통계 한 번 출력", "Trace/metrics"),
         ("EV-017", "5/7/10", "Index별 RTU 통신 OFF/ON", "비활성 Index는 FC03/04/10에 무응답·무변경, 동일 Port의 다른 Slave와 Direct/CAN 제어는 유지; Refresh 성공 후 활성화", "Panel/Serial/CAN"),
         ("EV-018", "7/10", "RTU Log Switch와 CSV 기록", "OFF→ON마다 새 파일, REQ/RES 또는 REQ/NO_RES 동일 Sequence, 12개 Column·전체 ADU·DroppedCount·ActiveLed 확인", "CSV/Panel"),
+        ("EV-019", "10", "Btn_ReadOption과 RTU Log CAPL Output View", "Btn_ReadOption은 int32 Scalar/no-handler이고 기존 Check_ReadOption 정책을 유지한다. LogSwitch ON에서 전체 REQ/RES/NO_RES는 CSV에 보존하며 동일 Drain 문자열의 최근 10줄만 200ms 이상 간격으로 Output View에 Overwrite한다. Panel/Control 이름 불일치가 CSV 기록을 실패시키지 않으며 OFF 후 마지막 표시는 유지된다.", "Panel capture/CSV/timing"),
     ]
     add_test_table(doc, rows)
 
@@ -232,7 +235,7 @@ def main():
     doc.core_properties.category = "Software Engineering"
     doc.core_properties.keywords = "Modbus485Emulator, M485E, Modbus RTU, CAPL"
     doc.core_properties.created = datetime(2026, 8, 12)
-    doc.core_properties.modified = datetime(2026, 8, 12)
+    doc.core_properties.modified = datetime(2026, 8, 17)
     doc.core_properties.version = RELEASE_VERSION
     doc.save(OUTPUT)
     print(OUTPUT)

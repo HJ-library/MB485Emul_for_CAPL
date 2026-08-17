@@ -4,3 +4,6 @@ generated/cpp/M485E_Contracts.generated.h text eol=lf
 # CAPL sources require CRLF for the validated CANalyzer source contract.
 *.can text eol=crlf
 *.cin text eol=crlf
+
+# Published Vector module files keep exact CRLF bytes across checkouts and source archives.
+*.vmodule -text -diff

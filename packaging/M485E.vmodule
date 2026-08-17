@@ -2,7 +2,7 @@
 <Module xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="CANoe_vmodule_1.1.xsd">
   <Name>M485E</Name>
-  <Version>0.4.0</Version>
+  <Version>0.5.0</Version>
   <Application>CANoe</Application>
   <Application>CANalyzer</Application>
   <ModuleType>CAPL-DLL</ModuleType>

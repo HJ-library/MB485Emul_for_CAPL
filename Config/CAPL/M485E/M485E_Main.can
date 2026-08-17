@@ -35,6 +35,9 @@ variables
      // 아래 상대 경로는 CANalyzer 구성 파일 기준으로 절대 경로로 변환되어 DLL에 전달된다.
      char gM485E_DeviceMapPath[128] = ".\\Maps\\M485E\\M485E_Device.csv";
      char gM485E_FrameRulePath[128] = ".\\Maps\\M485E\\M485E_FrameRule.csv";
+     // RTU 최근 로그를 표시할 Panel과 CAPL Output View Control 이름이다.
+     char gM485E_RtuLogPanelName[64] = "M485E";
+     char gM485E_RtuLogOutputControlName[64] = "RtuLogOutput";
      struct M485E_PortConfig gM485E_PortConfigs[4];
      // DeviceMap의 고유 Port 수와 같은 값으로 설정한다. 현재 예제는 한 Port를 사용한다.
      long gM485E_ActivePortCount = 1;

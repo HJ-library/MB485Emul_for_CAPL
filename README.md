@@ -1,6 +1,6 @@
 # Modbus485Emulator
 
-## v0.4.0 Periodic-only CAN Monitoring
+## v0.5.0 RTU Log Panel View
 
 - CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드합니다.
 - CANalyzer 13 이상(CANalyzer 18 포함)은 `M485E.vmodule`에서 실행 환경에 맞는 x86/x64 DLL을 선택합니다.
@@ -21,7 +21,9 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 양쪽 Release 빌드 후 `Prepare-M485EPackage.ps1`을 실행하면 CAPL Config에 `.vmodule`과 두 DLL을 함께 배치합니다.
 
-현재 릴리스는 **v0.4.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+현재 릴리스는 **v0.5.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+
+v0.5.0은 기존 RTU CSV Logging Session에서 기록한 동일한 REQ/RES/NO_RES 문자열의 최근 10줄을 CANalyzer Panel의 CAPL Output View에 최대 200ms마다 한 번 Overwrite합니다. Panel 표시는 최근 상태 확인용이며 전체 원본은 계속 CSV에 보존됩니다. `M485E::Monitoring::Btn_ReadOption`은 ReadOption Checkbox를 누르기 편하게 배치하는 `int32` Scalar 편의 버튼으로, CAPL Handler나 별도 동작은 없습니다. 공개 DLL ABI는 v0.4.0과 동일한 23개 API입니다.
 
 v0.4.0은 CAN Monitoring을 CAPL이 스케줄링하는 `0x80IIRRMM` Periodic 출력으로 단순화한 Breaking Release입니다. `0x81IIRRMM` 변경 Snapshot과 DLL Change Queue를 제거했으며 `M485E_Dll_ReadRuleSnapshot`은 `M485E_Dll_ReadRuleData`로 변경했습니다. v0.3 CAPL과 v0.4 DLL 또는 v0.4 CAPL과 v0.3 DLL을 혼용하지 말고 같은 배포 묶음으로 교체해야 합니다. 실제 Modbus Master 요청·응답 이력은 `RtuLog::LogSwitch`로 생성하는 CSV에서 확인합니다.
 
@@ -184,6 +186,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass `
 ```
 
 CANalyzer Program Node에는 `Config/CAPL/M485E/M485E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하고, FrameRule별 Monitoring 목록은 `M485E_ReadOption.cin`에서 관리합니다. Measurement 시작 시 Main이 500ms 연결 제어 Timer로 `ConnectSwitch`를 자동 ON 하며, Panel에서는 같은 Switch로 수동 Disconnect/재연결할 수 있습니다.
+
+RTU 최근 로그를 Panel에서 보려면 Panel Designer에 CAPL Output View Control을 추가하고 Control Name을 `RtuLogOutput`, Output Mode를 `Overwrite`로 설정합니다. Panel Name 기본값은 `M485E`입니다. 두 이름은 `M485E_Main.can`의 `gM485E_RtuLogPanelName`, `gM485E_RtuLogOutputControlName`과 글자까지 정확히 일치해야 하며 프로젝트에 맞게 그 두 설정값만 변경합니다. 이름이 틀려 Panel 표시가 갱신되지 않아도 CSV 기록·Queue Drain·파일 종료는 계속됩니다. 실제 `.xvp`는 저장소에 포함하지 않습니다.
 
 기본 Main의 CSV 경로는 `".\\Maps\\M485E\\M485E_Device.csv"`와 `".\\Maps\\M485E\\M485E_FrameRule.csv"`입니다. `getAbsFilePath()`는 CANalyzer Configuration 파일 위치를 기준으로 해석하므로 `.cfg`는 배포 구성의 `Config` 또는 `ProjectConfig` 루트에 저장합니다. 같은 루트의 `Maps/M485E`에는 Device와 FrameRule뿐 아니라 Device의 `CSV_DB_Name`이 참조하는 모든 Register Map도 함께 있어야 합니다.
 
