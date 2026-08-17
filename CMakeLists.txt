@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Modbus485Emulator VERSION 0.4.0 LANGUAGES CXX)
+project(Modbus485Emulator VERSION 0.5.0 LANGUAGES CXX)
 
 if(NOT WIN32)
   message(FATAL_ERROR "Modbus485Emulator supports Windows x86 and x64 only.")

@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0] - 2026-08-17
+
+### Added
+
+- `M485E::Monitoring::Btn_ReadOption` int32 Scalar 편의 System Variable. 별도 CAPL Handler 없이 기존 `Check_ReadOption[200]` 정책을 사용한다.
+- RTU CSV에 기록한 동일한 REQ/RES/NO_RES 문자열의 최근 10줄을 CANalyzer CAPL Output View에 표시하는 bounded Panel View.
+
+### Changed
+
+- CAPL Output View는 최대 200ms에 한 번만 갱신하며 Panel/Control 이름을 `M485E_Main.can` 설정값으로 분리했다.
+- RTU CSV는 기존 단일 Queue Drain에서 모든 행을 계속 기록하고, Panel 표시는 최근 상태 확인용으로만 유지한다.
+- Windows checkout과 배포 manifest의 줄바꿈 계약을 `.gitattributes`로 고정했다.
+
+### Compatibility
+
+- CAPL-visible DLL API 23개, Rule Data Metadata 9개 필드와 `0x80` Periodic Monitoring 계약은 v0.4.0과 동일하다.
+- CANalyzer 9.x SP8 x86 및 CANalyzer 18 x64 Panel/Measurement 시험은 외부 실환경 검증 대상으로 유지한다.
+
+### Verification
+
+- Btn_ReadOption Scalar/no-handler, 기존 Check_ReadOption[200], RTU Log 단일 Consumer, 최근 10줄, 200ms 갱신과 CSV 우선 정책을 CAPL Source Contract로 검증한다.
+- Windows x86/x64 Debug/Release Build, CTest, ABI, Contract, Core, Integration과 CANalyzer 13 Exec32 Probe를 회귀 검증한다.
+
 ## [0.4.0] - 2026-08-13
 
 ### Changed

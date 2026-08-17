@@ -27,6 +27,7 @@
       </namespace>
       <namespace name="Monitoring" comment="CAN monitoring controls">
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ReadSwitch" comment="Master monitoring switch" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Btn_ReadOption" comment="Panel convenience button for ReadOption checkbox interaction; no CAPL handler" bitcount="32" isSigned="true" encoding="65001" type="int" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Check_ReadOption" comment="Periodic Rule selection" bitcount="32" isSigned="true" encoding="65001" type="intarray" arrayLength="200" />
         <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Last monitoring command result" bitcount="32" isSigned="true" encoding="65001" type="int" />
       </namespace>

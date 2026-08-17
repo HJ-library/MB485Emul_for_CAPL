@@ -26,8 +26,9 @@ ProjectConfig/
 2. Program Node에 `Config/CAPL/M485E/M485E_Main.can`을 연결한다.
 3. `tools/Prepare-M485EPackage.ps1 -Configuration Release`를 실행해 `.vmodule`과 x86/x64 DLL을 `Config/CAPL/DLL`에 배치한다.
 4. 이 폴더의 네 CSV를 `Config/Maps/M485E`에 배치한다.
-5. `M485E_Main.can`의 `gM485E_PortConfigs[0].port = 8`과 `gM485E_ActivePortCount = 1`을 확인한다.
-6. CAPL을 Compile하고 Measurement를 시작한다.
+5. Panel Designer에 Panel Name `M485E`, Control Name `RtuLogOutput`, Output Mode `Overwrite`인 CAPL Output View를 추가한다.
+6. `M485E_Main.can`의 Port 설정, `gM485E_ActivePortCount = 1`과 RTU Log Panel/Control 이름을 확인한다.
+7. CAPL을 Compile하고 Measurement를 시작한다.
 
 ## 3. 기본 예제 구성
 
@@ -47,7 +48,7 @@ ProjectConfig/
 5. Manual Write에서 `Index=0`, `StartAddress=10000`, `Quantity=1`, `Data[0]` 값을 설정한 뒤 `Send`를 누른다.
 6. `ResultCode=0`을 확인하고 다음 `0x80IIRRMM` Periodic 출력에 변경값이 반영되는지 확인한다. 별도 `0x81` 변경 Message는 출력되지 않는다.
 7. `DeviceCommunication::Enabled[0]`을 0으로 내리고 Slave 1 요청이 무응답이며 Slave 2는 계속 응답하는지 확인한다. `AvailableLed[0]`은 0, `[1]`은 1이어야 한다.
-8. `RtuLog::LogSwitch`를 ON하고 요청을 전송한 뒤 OFF한다. `Logs/M485E`의 새 CSV에서 같은 Sequence의 REQ/RES 또는 REQ/NO_RES 쌍을 확인한다.
+8. `RtuLog::LogSwitch`를 ON하고 요청을 전송한 뒤 최근 10줄이 CAPL Output View에 표시되는지 확인한다. OFF 후 `Logs/M485E`의 새 CSV에서 전체 Sequence의 REQ/RES 또는 REQ/NO_RES 쌍을 확인한다.
 
 ## 5. 실제 장비 적용
 

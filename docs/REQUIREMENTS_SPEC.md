@@ -1,7 +1,7 @@
 # Modbus485Emulator 요구사항 명세
 
-> 상태: v0.4.0 Release Baseline
-> 기준: 2026-08-13까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
+> 상태: v0.5.0 Release Baseline
+> 기준: 2026-08-17까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
 > 주의: 본 문서의 **제안** 및 **미확정** 항목은 확정 요구사항이 아니다.
 
 ## 1. 프로젝트 목적
@@ -27,7 +27,7 @@
 | ENV-006 | COM Port의 Baud Rate, Data Bits, Stop Bits 등 통신 설정은 CAPL에서 DLL로 전달한다. |
 | ENV-007 | CAN Monitoring 메시지는 Extended CAN을 사용한다. |
 | ENV-008 | CAPL Register 배열은 Address당 16bit인 `word` 배열을 사용한다. |
-| ENV-009 | v0.4.0은 x86/x64 구현 및 자동 검증 대상 Release Baseline이며 CANalyzer 9.x SP8, CANalyzer 18, USB-RS485 Adapter와 실제 Board를 사용하는 대상 실환경 검증은 별도로 수행한다. |
+| ENV-009 | v0.5.0은 x86/x64 구현 및 자동 검증 대상 Release Baseline이며 CANalyzer 9.x SP8, CANalyzer 18, USB-RS485 Adapter와 실제 Board를 사용하는 대상 실환경 검증은 별도로 수행한다. |
 | ENV-010 | CANalyzer 13 설치 환경과 공식 CAPL DLL Sample은 `.vmodule`, x86/x64 Export Table 및 CAPL 연동 구조의 자동 검증 기준으로 사용한다. |
 | ENV-011 | 현재 개발·검증·배포 대상 아키텍처는 Windows x86과 Windows x64이며 두 바이너리는 동일한 CAPL-visible 논리 API를 제공한다. |
 | ENV-012 | CAN Monitoring은 가상 CAN 채널만 사용하며 물리 CAN 채널 또는 외부 CAN 장치로 송출하지 않는다. |
@@ -306,6 +306,15 @@
 | FR-UI-019 | `DeviceCommunication::Enabled[256]`은 Index별 외부 RTU 통신 명령이며 `DeviceCommunication::AvailableLed[256]`은 실제 통신 가능 상태를 표시한다. LED는 구성되고 활성화되었으며 전체 Lifecycle이 Connected일 때만 1이다. |
 | FR-UI-020 | `DeviceCommunication::ResultCode`는 마지막 Index별 통신 명령 또는 상태 조회 결과를 게시한다. 구성되지 않은 Index의 명령은 오류를 반환하고 직전 명령값으로 복원한다. |
 | FR-UI-021 | `RtuLog::LogSwitch`는 RTU CSV 로그 캡처를 제어하고 `ActiveLed`는 파일이 열려 있거나 capture/drain 중일 때만 1이다. `DroppedCount`, `ResultCode`, `CurrentFileName`은 각각 손실 수, 마지막 작업 결과와 마지막 생성 파일명을 표시한다. |
+| FR-UI-022 | `M485E::Monitoring::Btn_ReadOption`은 Panel에서 ReadOption Checkbox를 조작하기 편하게 배치하는 `int32` Scalar System Variable로 제공한다. 이 변수에는 CAPL Handler나 별도 동작을 연결하지 않으며 `Check_ReadOption[200]`, 100ms Candidate 동기화와 1,000ms Cycle 경계 적용 정책을 변경하지 않는다. |
+| FR-UI-023 | RTU CSV Logging Session 중 CAPL은 CSV에 성공적으로 기록한 동일한 REQ/RES/NO_RES 문자열의 최근 10줄을 bounded Buffer에 보존하고, 설정된 Panel Name과 CAPL Output View Control Name을 사용해 최대 200ms마다 한 번 `putValueToControl()`로 Overwrite한다. Panel 표시 실패는 CSV 기록·Queue Drain·파일 종료 결과에 영향을 주지 않는다. |
+
+#### 설계 결정
+
+| ID | 결정 |
+| --- | --- |
+| DES-UI-001 | `Btn_ReadOption`은 사용자 편의용 Scalar만 추가하고 Handler, Timer 또는 DLL 호출을 만들지 않는다. 실제 Rule 선택 상태의 단일 기준은 기존 `Check_ReadOption[200]` Candidate/Applied 경로다. |
+| DES-UI-002 | RTU Panel 표시는 별도 DLL Queue나 System Variable 문자열을 만들지 않고 기존 10ms CSV Drain의 성공 경로에서 같은 문자열을 10줄 ring buffer로 복사한다. 별도 200ms CAPL Timer가 하나의 bounded 문자열을 구성해 CAPL Output View를 갱신한다. Panel·Control 이름은 `M485E_Main.can`의 단일 설정 영역에서 관리한다. |
 
 ### 3.6 CAN Monitoring
 
@@ -548,7 +557,7 @@
 | IF-CORE-005 | Signal 범주는 `Index + SignalName` 기반 Physical Read와 Physical Write 기능을 제공한다. |
 | IF-CORE-006 | 진단 범주는 Versioned Lifecycle Status, Context Handle별 최근 동기 오류 상세 Context, 비동기 Error Event FIFO 및 FIFO 손실 상태 조회 기능을 제공한다. |
 | IF-CORE-007 | 1차 CAPL 공개 API 범위는 `IF-CORE-001~006`으로 제한하며 DLL 내부 Worker, Queue, Register Memory 및 Serial Handle을 직접 조작하는 API는 공개하지 않는다. |
-| IF-CORE-008 | 모든 공개 Core API 이름은 `M485E_Core_` Prefix를 사용하고 `IF-RET-001~009`의 공통 상태·출력 계약을 따른다. v0.4.0의 23개 CAPL-visible API는 x86/x64에서 동일한 이름·순서·Signature를 사용하며 실제 CAPL DLL ABI는 CANalyzer 9.x와 18 시험에서 검증한다. |
+| IF-CORE-008 | 모든 공개 Core API 이름은 `M485E_Core_` Prefix를 사용하고 `IF-RET-001~009`의 공통 상태·출력 계약을 따른다. v0.5.0의 23개 CAPL-visible API는 x86/x64에서 동일한 이름·순서·Signature를 사용하며 실제 CAPL DLL ABI는 CANalyzer 9.x와 18 시험에서 검증한다. |
 | IF-CORE-009 | 공개 Core CSV 설정 API는 `DeviceMap`, `ModbusRule`, `Modbus485EmulMap`의 논리 파일 종류와 프로젝트 상대경로를 입력받고 `getAbsFilePath()`로 변환한다. 저수준 DLL Export는 논리 파일 종류와 변환된 절대경로를 입력받는다. 별도 Base Directory 설정 API는 제공하지 않으며 FileType과 문자열 ABI는 `IF-CONST-001`, `IF-ABI-001~011` 및 `TBD-021`을 따른다. |
 
 #### CAPL 공개 API와 저수준 DLL Export 목록
@@ -1102,6 +1111,10 @@
 | LOG-022 | LogSwitch OFF→ON마다 `Logs/M485E/M485E_RTU_YYYYMMDD_HHMMSS.csv` 새 파일을 생성한다. 같은 초의 파일명이 있으면 `_001`부터 `_999`까지 접미사를 사용하고 기존 파일을 덮어쓰지 않는다. |
 | LOG-023 | DLL Serial Worker는 파일 I/O를 수행하지 않고 완결된 REQ/결과 쌍을 256 Transaction bounded Queue에 게시한다. Queue가 가득 차면 이미 REQ가 배출된 쌍을 고아로 만들지 않으면서 가장 오래된 미배출 Transaction을 제거하고 DroppedCount를 증가시킨다. |
 | LOG-024 | LogSwitch OFF와 Measurement 종료는 신규 Capture를 먼저 중지하고 처리 중 Transaction의 완료를 최대 2,000ms 기다린 뒤 CAPL에서 완료 행을 배출하고 파일을 닫는다. 로그 파일 Open은 DLL Capture Enable보다 먼저 성공해야 한다. Timeout 시 `ERR-044`를 기록하되 이미 완료된 행을 배출하고 종료를 계속한다. `CurrentFileName`은 마지막 파일명을 유지하고 파일이 닫히면 ActiveLed를 0으로 만든다. |
+| LOG-025 | CAPL Output View는 최근 상태 확인용이며 전체 RTU Transaction 원본은 CSV다. CSV에는 Session 동안 Dequeue한 모든 REQ/RES/NO_RES 행을 기록하고 Panel에는 마지막 10줄만 표시한다. |
+| LOG-026 | Panel 표시는 RTU CSV Queue의 별도 Consumer가 아니며 CSV 기록에 성공한 동일 문자열만 재사용한다. Panel Name·Control Name 불일치나 `putValueToControl()` 실패는 CSV 기록 성공 여부와 분리한다. |
+| LOG-027 | 새 Logging Session은 Panel ring buffer와 표시 내용을 초기화한다. Logging OFF는 Capture 중지·Queue Drain·파일 종료를 우선하며 마지막 Panel 표시 내용은 다음 Session 시작 전까지 유지한다. |
+| LOG-028 | CAPL Output View 갱신은 로그 한 줄마다 수행하지 않고 200ms 이상 간격으로 제한한다. 문자열 결합은 고정 크기 Buffer와 경계가 명시된 복사·연결 함수를 사용하며 10ms CSV Drain 주기를 장시간 차단하지 않는다. |
 
 ### 제안
 
@@ -1438,7 +1451,10 @@
 | AC-241 | PERF-022, DES-THREAD-005 | Disconnected, Connected 및 진행 중 Lifecycle 작업의 취소 가능한 I/O 상태에서 Finalize가 2,000ms 이내 완료된다. 지연 강제 시험에서도 Thread Detach·강제 종료와 Join 전 Context 해제가 발생하지 않고 목표 초과를 진단한다. |
 | AC-242 | DES-BUILD-005 | 깨끗한 개발 PC에서 지정한 Vector 설치 경로 Build Property와 Visual Studio/MSBuild 또는 CMake Win32/x64 Configuration으로 빌드할 수 있고 저장소에 재배포가 확인되지 않은 Vector SDK 파일이 포함되지 않는다. |
 | AC-243 | IF-CODE-019~020, DES-CODE-004 | 확정 오류 코드와 C++·CAPL 상수·Message Key가 일치한다. 시험용 신규 오류 코드를 해당 영역의 미사용 번호에 추가해도 기존 코드의 숫자·이름·의미가 바뀌지 않고 기준 목록, 양쪽 언어 매핑, 문서와 시험이 함께 갱신된다. |
-| AC-254 | IF-API-001~008, IF-API-011, IF-API-014~027, COMP-009 | x86/x64 ABI Probe가 v0.4의 23개 API 이름·순서·파라미터 방향·Capacity 보호와 제거 Export 부재를 확인한다. |
+| AC-254 | IF-API-001~008, IF-API-011, IF-API-014~027, COMP-009 | x86/x64 ABI Probe가 v0.5의 23개 API 이름·순서·파라미터 방향·Capacity 보호와 제거 Export 부재를 확인한다. |
+| AC-255 | FR-UI-022, DES-UI-001 | System Variable DB에 `Btn_ReadOption`이 `int32` Scalar로 존재하고 `Check_ReadOption[200]`은 그대로 유지되며, 저장소 CAPL에 `Btn_ReadOption` Handler가 존재하지 않는다. |
+| AC-256 | FR-UI-023, DES-UI-002, LOG-025~028 | 하나의 RTU Log Queue Dequeue 경로가 모든 CSV 행을 기록하고 같은 성공 문자열만 최근 10줄 ring buffer에 추가한다. Panel 갱신은 200ms 이상 간격의 `putValueToControl()` Overwrite이며 Panel 실패가 CSV Drain·Shutdown·DroppedCount에 영향을 주지 않는다. |
+| AC-257 | FR-UI-023, LOG-025~028 | 새 Session에서 Panel buffer가 초기화되고 OFF·Measurement 종료 시 CSV Queue를 기존 정책대로 배출·종료한 뒤 마지막 Panel 표시가 유지된다. CANalyzer 9.x와 18에서 Panel Name·Control Name 일치, Overwrite Mode, 10줄 경계와 갱신 주기를 실환경 확인한다. |
 
 ## 12. 확정 설계 및 검증 추적
 
@@ -1465,7 +1481,7 @@
 | TBD-012 ◆ | 가상 CAN에는 물리 Bus Load를 적용하지 않고 Performance Monitor의 Simulation/Analysis Main Queue Load도 M485E 자동 제어 또는 필수 합격 기준으로 사용하지 않는다. | Performance Monitor 활성·비활성 및 임의 Queue Load에서 동일한 Start/Stop 동작 시험 |
 | TBD-013 ◆ | 1차 구현은 Performance Monitor 기반 Critical Overload 자동 정지·재개와 Critical Latch를 제공하지 않는다. ReadSwitch Handler와 다른 CAPL 코드는 같은 CAPL 내부 Start/Stop 진입점을 사용하며 DLL Monitoring 상태는 두지 않는다. | 75/85/90% 값 주입, Deadline Miss 및 명시적 ReadSwitch OFF/ON 시험 |
 | TBD-029 ◆ | Performance Monitor는 Connect·RTU·CAN Monitoring의 필수 조건이 아니며 비활성·미갱신 상태에서도 Monitoring을 허용한다. 기존 75/85/90% Warning·정지 대신 Output Pump 예산, Latest-Wins Pending과 Deadline 진단을 사용한다. | Performance Monitor 부재, ReadSwitch, ReadOption 적용과 RTU 독립성 시험 |
-| TBD-026 ◆ | v0.4에서는 변경 CAN Event와 변경 FIFO를 제거하고 `0x80` Periodic Rule Data만 사용한다. | 제거 Export 부재, Write 후 변경 Message 미출력 및 다음 Periodic 최신값 시험 |
+| TBD-026 ◆ | v0.4부터 변경 CAN Event와 변경 FIFO를 제거하고 `0x80` Periodic Rule Data만 사용한다. | 제거 Export 부재, Write 후 변경 Message 미출력 및 다음 Periodic 최신값 시험 |
 | TBD-027 ◆ | `0x80` Pending은 Rule별 최신 Generation 한 개로 병합하고 Port별 지속 Rule Cursor로 처리하며 과거 Cycle을 Catch-up 재생하지 않는다. | 200 Rule과 1~4개 가상 채널의 Periodic 공정성 시험 |
 | TBD-031 ◆ | CSV, CAPL API, DLL, RTU PDU 및 CAN Header는 동일한 16bit 직접 Address를 사용한다. `40000`은 그대로 `40000`이며 Function Code 기반 변환과 `±1` 보정을 하지 않는다. | Address `0`, `40000`, `65535` 및 Address+Quantity 경계 시험 |
 | TBD-019 ◆ | 외부 `0x03/0x04` Quantity는 1~125, 외부 `0x10`은 1~123, `M485E_FrameRule.csv` Rule Quantity는 1~125로 제한한다. 초과 Quantity는 `0x03`, Address 범위 초과는 `0x02` Exception으로 처리한다. | Function별 경계값, Byte Count 불일치 및 최대 33개 CAN Message 시험 |
@@ -1513,7 +1529,8 @@
 | TBD-039 ◆ | RTU 응답시간은 요청 Frame 완료부터 응답 첫 Byte 송신 시작까지 Board Master Response Timeout의 50% 이내로 하고, 정상 지원 부하의 활성 `0x80`은 1,000ms Generation 안에 전체 묶음 출력을 시작한다. | 실제 Board Timeout 기록, CANalyzer 9.x SP8·USB-RS485 환경의 RTU 및 Monitoring 지연 실측 |
 | TBD-065 ◆ | 정상 및 취소 가능한 I/O 조건의 동기 Finalize 완료 목표는 2,000ms로 고정한다. 초과 시 진단하되 Worker Detach·강제 종료 또는 Join 전 Context 해제를 허용하지 않는다. | 각 Lifecycle 상태, 취소 가능한 Serial I/O, USB 제거 및 지연 강제 시험 |
 | TBD-059 ◆ | 1차 공식 Build는 Visual Studio/MSBuild Win32를 기준으로 하고 Vector SDK/Sample 의존성은 설치 경로 Build Property로 주입하며 저장소에 임의 복사하지 않는다. | CANalyzer 9.x 설치 경로 변경, 깨끗한 PC Build 및 Vector 파일 재배포 조건 확인 |
-| TBD-064 ◆ | v0.4 공개 오류 코드 91개의 숫자·상수명·기본 Severity·CAPL Message Key를 Baseline으로 고정한다. 제거된 Monitoring State와 Change Queue Overflow 번호는 예약 상태로 재사용하지 않고 이후 신규 오류는 미사용 번호에 추가한다. | C++/CAPL 기준 목록 일치, 모든 코드 강제 실패, 제거 번호 부재와 신규 코드 추가 시 기존 ABI 불변 시험 |
+| TBD-064 ◆ | v0.4 이후 공개 오류 코드 91개의 숫자·상수명·기본 Severity·CAPL Message Key를 Baseline으로 고정한다. 제거된 Monitoring State와 Change Queue Overflow 번호는 예약 상태로 재사용하지 않고 이후 신규 오류는 미사용 번호에 추가한다. | C++/CAPL 기준 목록 일치, 모든 코드 강제 실패, 제거 번호 부재와 신규 코드 추가 시 기존 ABI 불변 시험 |
+| TBD-066 ◆ | RTU CSV Logging Session 중 CAPL Output View는 설정된 Panel Name과 Control Name을 사용해 최근 10줄만 200ms 이상 간격으로 Overwrite하며, 전체 원본은 CSV에 보존한다. Panel 표시 실패는 CSV 결과와 분리한다. | CANalyzer 9.x SP8 x86·CANalyzer 18 x64에서 실제 Panel/Control 이름, Output Mode Overwrite, 고속 로그·10줄 경계·200ms 갱신, OFF Drain와 Measurement Stop 시험 |
 
 ### 12.2 공개 오류 코드 확정표
 
@@ -1676,6 +1693,7 @@
 | CON-019 | ReadSwitch는 CAPL UI에서 Monitoring Start/Stop 진입점을 호출하는 입력으로만 사용하고, Monitoring은 CAPL Timer와 Periodic Pending을 제어하며 DLL Start/Stop API와 MonitoringEnabled 상태를 두지 않는다. | `FR-LIFE-004`~`006`, `AC-230` |
 | CON-020 | Port별 Worker 단독 COM 소유, Device별 Register Lock과 Context별 Error/RTU Log Queue Lock으로 동시성 구조를 확정하고 Runtime Queue는 사전 할당된 bounded 저장소를 사용한다. | `DES-REG-006`, `DES-THREAD-001`~`005`, `AC-232`, `TBD-057` |
 | CON-021 | DBC 변환기, UNC CSV 경로 및 범용 Driver Plug-in 구조는 1차 Emulator 범위에서 제외하고 필요한 데이터와 최소 시험 경계만 유지한다. | `DES-RTU-005`, `NFR-012`, `COMP-006`, `OOS-013`, `OOS-015`, `AC-233`, `AC-235`~`236` |
+| CON-022 | RTU Log의 전체 기록 책임은 기존 DLL Queue와 CSV Drain에 유지하고, Panel은 동일 Drain 성공 문자열의 최근 10줄만 표시하는 비필수 View로 확정했다. `Btn_ReadOption`은 Handler 없는 편의 Scalar이며 기존 ReadOption Candidate/Applied 정책의 입력이나 상태로 사용하지 않는다. | `FR-UI-022`~`023`, `DES-UI-001`~`002`, `LOG-025`~`028`, `AC-255`~`257`, `TBD-066` |
 
 #### 채택된 제안
 
@@ -1715,6 +1733,7 @@
 | RISK-016 | 공개 `M485E_ERR_*` 숫자와 Message Key는 `12.2 공개 오류 코드 확정표`로 승인됐다. 개발 중 신규 오류 추가 시 기존 번호를 변경·재사용하거나 C++·CAPL·문서·시험 중 일부만 갱신하면 ABI가 어긋날 수 있으므로 `IF-CODE-020`, `AC-243`으로 방지한다. |
 | RISK-017 | Finalize 2,000ms 목표는 확정했지만 안전을 위해 모든 Worker Join 전 반환할 수 없으므로 취소 불가능한 Driver I/O가 있으면 CANalyzer 종료가 지연될 수 있다. 실제 Adapter 동작을 `TBD-065`에서 검증한다. |
 | RISK-018 | 자동 방향 제어가 아닌 RS-485 Adapter를 연결하면 응답 송신 또는 Local Echo 처리에 실패할 수 있다. 지원 Adapter 조건을 배포 문서와 연결 전 진단에 명시하고 `AC-229`로 검증한다. |
+| RISK-019 | CANalyzer Configuration의 Panel Name 또는 CAPL Output View Control Name이 CAPL 설정값과 다르면 최근 로그 표시가 갱신되지 않을 수 있다. CSV는 독립적으로 계속 기록되므로 전체 원본 손실 위험은 없으며, 이름 일치·Overwrite Mode·고속 갱신 지연은 `TBD-066`에서 실환경 검증한다. |
 
 ## 14. 범위에서 제외할 내용
 

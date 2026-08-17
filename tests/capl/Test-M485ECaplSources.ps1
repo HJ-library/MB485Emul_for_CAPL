@@ -126,8 +126,8 @@ Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\M485E\.vmodule"\)' `
     'Main must load M485E.vmodule in modern CANalyzer.'
 Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\Windows-x86\\\\M485E\.dll"\)' `
     'Main must keep the direct Windows-x86 DLL path for CANalyzer 9.x.'
-Require-Match $module '<Version>0\.4\.0</Version>' `
-    'The architecture module version must match Release 0.4.0.'
+Require-Match $module '<Version>0\.5\.0</Version>' `
+    'The architecture module version must match Release 0.5.0.'
 Require-Match $module '<SupportedArchitecture\s+arch="Windows-x64 Windows-x86"\s*/>' `
     'The architecture module must advertise Windows x64 and x86.'
 Require-Match $module '<LibraryPath\s+arch="Windows-x64">\./Windows-x64/M485E\.dll</LibraryPath>' `
@@ -471,6 +471,29 @@ $manualWriteData = $systemVariables.SelectSingleNode(
 if ($null -eq $manualWriteData -or $manualWriteData.arrayLength -ne '122') {
     throw 'ManualWrite::Data must provide exactly 122 Panel elements.'
 }
+$monitoringNamespace = $systemVariables.SelectSingleNode(
+    '//namespace[@name="M485E"]/namespace[@name="Monitoring"]')
+$readOptionButton = $monitoringNamespace.SelectSingleNode("variable[@name='Btn_ReadOption']")
+if ($null -eq $readOptionButton -or
+    $readOptionButton.type -ne 'int' -or
+    $readOptionButton.bitcount -ne '32' -or
+    $readOptionButton.HasAttribute('arrayLength')) {
+    throw 'Monitoring::Btn_ReadOption must be a scalar int32 system variable.'
+}
+$checkReadOption = $monitoringNamespace.SelectSingleNode("variable[@name='Check_ReadOption']")
+if ($null -eq $checkReadOption -or
+    $checkReadOption.type -ne 'intarray' -or
+    $checkReadOption.arrayLength -ne '200') {
+    throw 'Monitoring::Check_ReadOption must remain a 200-element int32 array.'
+}
+$adapterSources = $main + $core + $monitoring + $readOption + $connection + $control +
+    $deviceCommunication + $rtuLog + $ui
+if ($adapterSources -match 'on\s+sysvar_update\s+sysvar::M485E::Monitoring::Btn_ReadOption') {
+    throw 'Monitoring::Btn_ReadOption must not have a CAPL handler.'
+}
+if ($adapterSources -match 'PanelLogText|PanelViewSwitch') {
+    throw 'RTU Panel output must not add a log text or Panel view switch system variable.'
+}
 
 $deviceNamespace = $systemVariables.SelectSingleNode(
     '//namespace[@name="M485E"]/namespace[@name="DeviceCommunication"]')
@@ -506,6 +529,41 @@ Require-Match $rtuLog 'long\s+M485E_RtuLog_Disable\s*\(\s*\)[\s\S]*?gM485E_RtuLo
     'An already inactive RTU Log OFF command must not call the DLL before CSV refresh.'
 Require-Match $rtuLog 'on\s+timer\s+tM485E_RtuLogDrain[\s\S]*?result\s*!=\s*M485E_OK[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*0\s*\)[\s\S]*?M485E_RtuLog_CloseFile\s*\(' `
     'A CSV drain failure must stop DLL capture before closing the file.'
+Require-Match $main 'char\s+gM485E_RtuLogPanelName\s*\[\s*64\s*\]\s*=\s*"M485E"' `
+    'Main must own the configurable RTU Log Panel name.'
+Require-Match $main 'char\s+gM485E_RtuLogOutputControlName\s*\[\s*64\s*\]\s*=\s*"RtuLogOutput"' `
+    'Main must own the configurable CAPL Output View control name.'
+Require-Match $rtuLog 'const\s+long\s+M485E_RTU_LOG_PANEL_MAX_LINES\s*=\s*10' `
+    'RTU Panel output must retain exactly the latest 10 lines.'
+Require-Match $rtuLog 'const\s+long\s+M485E_RTU_LOG_PANEL_REFRESH_MS\s*=\s*200' `
+    'RTU Panel output refresh interval must be at least 200 ms.'
+Require-Match $rtuLog 'char\s+gM485E_RtuLogPanelText\s*\[\s*16000\s*\]' `
+    'RTU Panel output must use the bounded combined text buffer.'
+Require-Match $rtuLog 'strncpy\s*\(\s*gM485E_RtuLogPanelLines[\s\S]*?elcount\s*\([\s\S]*?\)\s*\)' `
+    'RTU Panel ring buffer copies must be explicitly capacity bounded.'
+Require-Match $rtuLog 'strncat\s*\(\s*gM485E_RtuLogPanelText[\s\S]*?elcount\s*\(\s*gM485E_RtuLogPanelText\s*\)' `
+    'RTU Panel text assembly must be explicitly capacity bounded.'
+Require-Match $rtuLog 'on\s+timer\s+tM485E_RtuLogPanelRefresh[\s\S]*?M485E_RtuLog_PublishPanelView\s*\(' `
+    'RTU Panel output must be published from its 200 ms timer.'
+Require-Match $rtuLog 'setTimer\s*\(\s*tM485E_RtuLogPanelRefresh\s*,\s*M485E_RTU_LOG_PANEL_REFRESH_MS\s*\)' `
+    'RTU Panel updates must be rate limited by the 200 ms constant.'
+Require-Match $rtuLog 'M485E_RtuLog_PublishPanelView\s*\([\s\S]*?putValueToControl\s*\(\s*gM485E_RtuLogPanelName\s*,\s*gM485E_RtuLogOutputControlName' `
+    'RTU Panel output must use putValueToControl with the Main settings.'
+if ([regex]::Matches($rtuLog, '\bM485E_Core_TryDequeueRtuLogLine\s*\(').Count -ne 1) {
+    throw 'RTU CSV and Panel output must share exactly one Queue consumer.'
+}
+Require-Match $rtuLog 'filePutString\s*\(\s*gM485E_RtuLogCsvLine[\s\S]*?M485E_RtuLog_AppendPanelLine\s*\(\s*gM485E_RtuLogLine\s*\)' `
+    'The same dequeued line may enter the Panel buffer only after CSV write succeeds.'
+if ($rtuLog -match '\bwrite\s*\(') {
+    throw 'RTU Log must not use the Write Window for real-time log output.'
+}
+if ([regex]::Matches($rtuLog, '\bputValueToControl\s*\(').Count -ne 2) {
+    throw 'RTU Panel output must update only on session reset and the rate-limited publish path.'
+}
+Require-Match $rtuLog 'M485E_RtuLog_OpenFile\s*\(\s*\)[\s\S]*?M485E_RtuLog_ResetPanelView\s*\(\s*\)[\s\S]*?putValueToControl[\s\S]*?M485E_Core_SetRtuLogEnabled\s*\(\s*1\s*\)' `
+    'A new RTU Logging Session must clear the Panel buffer before capture starts.'
+Require-Match $rtuLog 'on\s+timer\s+tM485E_RtuLogDrain[\s\S]*?setTimer\s*\(\s*tM485E_RtuLogDrain\s*,\s*10\s*\)' `
+    'RTU CSV Queue drain must retain its 10 ms timer.'
 
 $requiredFiles = @(
     'tests\capl\M485E_Phase1_AbiProbe.can',

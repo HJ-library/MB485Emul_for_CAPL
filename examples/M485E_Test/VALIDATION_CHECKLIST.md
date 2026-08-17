@@ -42,6 +42,8 @@
 
 - [ ] ConnectSwitch와 ConnectedLed가 독립적으로 표시됨
 - [ ] Connected/Disconnected LED와 StateText 표시가 Lifecycle 상태와 일치
+- [ ] `Btn_ReadOption`은 int32 Scalar이며 별도 CAPL 동작 없이 Checkbox 배치 편의용으로만 사용됨
+- [ ] `Check_ReadOption[200]`과 100ms Candidate/1,000ms 적용 정책이 유지됨
 - [ ] Manual Write Quantity 1 및 122 경계 확인
 - [ ] Manual Write Quantity 123은 CAPL에서 거부됨
 - [ ] Signal Read/Write와 ResultCode 확인
@@ -54,6 +56,11 @@
 - [ ] Disable·Broadcast·미등록 Slave·CRC 오류는 REQ/NO_RES 두 행
 - [ ] Header 12개 칼럼과 REQ/RES 전체 Raw ADU Hex 확인
 - [ ] DroppedCount와 CurrentFileName 표시 확인
+- [ ] Panel Name `M485E`, CAPL Output View Control Name `RtuLogOutput`과 Main 설정값이 정확히 일치
+- [ ] CAPL Output View의 Output Mode가 `Overwrite`이고 최근 10줄만 최대 200ms마다 갱신됨
+- [ ] 고속 로그에서도 CSV 전체 행은 보존되고 Panel에는 최근 10줄만 표시됨
+- [ ] Panel/Control 이름을 틀리게 설정해도 CSV 기록·OFF Drain·파일 Close가 정상 완료됨
+- [ ] 새 Session은 Panel 표시를 비우고 Logging OFF 뒤에는 마지막 표시가 유지됨
 
 ## 종료와 복구
 

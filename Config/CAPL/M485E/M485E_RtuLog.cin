@@ -5,12 +5,111 @@
 
 variables
 {
+     struct M485E_RtuLogPanelLine
+     {
+          char text[1536];
+     };
+
+     const long M485E_RTU_LOG_PANEL_MAX_LINES = 10;
+     const long M485E_RTU_LOG_PANEL_REFRESH_MS = 200;
+
      msTimer tM485E_RtuLogDrain;
+     msTimer tM485E_RtuLogPanelRefresh;
      dword gM485E_RtuLogFileHandle;
      long gM485E_RtuLogStats[9];
      char gM485E_RtuLogLine[1600];
+     char gM485E_RtuLogCsvLine[1600];
      char gM485E_RtuLogFileName[128];
      long gM485E_RtuLogDraining;
+     struct M485E_RtuLogPanelLine gM485E_RtuLogPanelLines[10];
+     char gM485E_RtuLogPanelText[16000];
+     long gM485E_RtuLogPanelLineCount;
+     long gM485E_RtuLogPanelNextLine;
+     long gM485E_RtuLogPanelDirty;
+     long gM485E_RtuLogPanelTimerScheduled;
+}
+
+/*
+ * 함수명: M485E_RtuLog_ResetPanelView
+ * 기능: 새 Logging Session을 위해 최근 10줄 bounded Buffer와 갱신 Timer를 초기화한다.
+ * 파라미터: 없음
+ */
+void M485E_RtuLog_ResetPanelView()
+{
+     long lineIndex;
+
+     cancelTimer(tM485E_RtuLogPanelRefresh);
+     gM485E_RtuLogPanelLineCount = 0;
+     gM485E_RtuLogPanelNextLine = 0;
+     gM485E_RtuLogPanelDirty = 0;
+     gM485E_RtuLogPanelTimerScheduled = 0;
+     gM485E_RtuLogPanelText[0] = 0;
+     for (lineIndex = 0; lineIndex < M485E_RTU_LOG_PANEL_MAX_LINES; lineIndex++)
+          gM485E_RtuLogPanelLines[lineIndex].text[0] = 0;
+}
+
+/*
+ * 함수명: M485E_RtuLog_AppendPanelLine
+ * 기능: CSV 기록에 성공한 동일 문자열을 최근 10줄 ring buffer에 추가하고 200ms 갱신을 예약한다.
+ * 파라미터: line - 개행을 제외한 RTU CSV 행
+ */
+void M485E_RtuLog_AppendPanelLine(char line[])
+{
+     strncpy(gM485E_RtuLogPanelLines[gM485E_RtuLogPanelNextLine].text,
+          line, elcount(gM485E_RtuLogPanelLines[gM485E_RtuLogPanelNextLine].text));
+     gM485E_RtuLogPanelLines[gM485E_RtuLogPanelNextLine].text[
+          elcount(gM485E_RtuLogPanelLines[gM485E_RtuLogPanelNextLine].text) - 1] = 0;
+     gM485E_RtuLogPanelNextLine =
+          (gM485E_RtuLogPanelNextLine + 1) % M485E_RTU_LOG_PANEL_MAX_LINES;
+     if (gM485E_RtuLogPanelLineCount < M485E_RTU_LOG_PANEL_MAX_LINES)
+          gM485E_RtuLogPanelLineCount++;
+     gM485E_RtuLogPanelDirty = 1;
+     if (gM485E_RtuLogPanelTimerScheduled == 0)
+     {
+          gM485E_RtuLogPanelTimerScheduled = 1;
+          setTimer(tM485E_RtuLogPanelRefresh, M485E_RTU_LOG_PANEL_REFRESH_MS);
+     }
+}
+
+/*
+ * 함수명: M485E_RtuLog_BuildPanelText
+ * 기능: ring buffer의 오래된 행부터 최근 행까지 하나의 bounded 문자열로 결합한다.
+ * 파라미터: 없음
+ */
+void M485E_RtuLog_BuildPanelText()
+{
+     long lineIndex;
+     long ringIndex;
+     long startIndex;
+
+     gM485E_RtuLogPanelText[0] = 0;
+     if (gM485E_RtuLogPanelLineCount == M485E_RTU_LOG_PANEL_MAX_LINES)
+          startIndex = gM485E_RtuLogPanelNextLine;
+     else
+          startIndex = 0;
+     for (lineIndex = 0; lineIndex < gM485E_RtuLogPanelLineCount; lineIndex++)
+     {
+          ringIndex = (startIndex + lineIndex) % M485E_RTU_LOG_PANEL_MAX_LINES;
+          if (lineIndex != 0)
+               strncat(gM485E_RtuLogPanelText, "\n", elcount(gM485E_RtuLogPanelText));
+          strncat(gM485E_RtuLogPanelText,
+               gM485E_RtuLogPanelLines[ringIndex].text,
+               elcount(gM485E_RtuLogPanelText));
+     }
+}
+
+/*
+ * 함수명: M485E_RtuLog_PublishPanelView
+ * 기능: 최근 로그 문자열을 설정된 CAPL Output View에 한 번 Overwrite한다.
+ * 파라미터: 없음
+ */
+void M485E_RtuLog_PublishPanelView()
+{
+     if (gM485E_RtuLogPanelDirty == 0) return;
+     M485E_RtuLog_BuildPanelText();
+     putValueToControl(gM485E_RtuLogPanelName,
+          gM485E_RtuLogOutputControlName, gM485E_RtuLogPanelText);
+     gM485E_RtuLogPanelDirty = 0;
 }
 
 /*
@@ -108,10 +207,14 @@ long M485E_RtuLog_DrainOnce()
           result = M485E_Core_TryDequeueRtuLogLine(gM485E_RtuLogLine);
           if (result == M485E_STATUS_NO_DATA) break;
           if (result != M485E_OK) return result;
-          strncat(gM485E_RtuLogLine, "\n", elcount(gM485E_RtuLogLine));
-          if (filePutString(gM485E_RtuLogLine, strlen(gM485E_RtuLogLine),
+          strncpy(gM485E_RtuLogCsvLine, gM485E_RtuLogLine,
+               elcount(gM485E_RtuLogCsvLine));
+          gM485E_RtuLogCsvLine[elcount(gM485E_RtuLogCsvLine) - 1] = 0;
+          strncat(gM485E_RtuLogCsvLine, "\n", elcount(gM485E_RtuLogCsvLine));
+          if (filePutString(gM485E_RtuLogCsvLine, strlen(gM485E_RtuLogCsvLine),
                gM485E_RtuLogFileHandle) == 0)
                return M485E_ERR_RTU_LOG_FILE_WRITE;
+          M485E_RtuLog_AppendPanelLine(gM485E_RtuLogLine);
      }
      result = M485E_Core_GetRtuLogStats(gM485E_RtuLogStats);
      if (result != M485E_OK) return result;
@@ -142,6 +245,9 @@ long M485E_RtuLog_Enable()
           return M485E_ERR_OPERATION_BUSY;
      result = M485E_RtuLog_OpenFile();
      if (result != M485E_OK) return result;
+     M485E_RtuLog_ResetPanelView();
+     putValueToControl(gM485E_RtuLogPanelName,
+          gM485E_RtuLogOutputControlName, gM485E_RtuLogPanelText);
      result = M485E_Core_SetRtuLogEnabled(1);
      if (result != M485E_OK)
      {
@@ -181,6 +287,7 @@ void M485E_RtuLog_Start()
 {
      gM485E_RtuLogFileHandle = 0;
      gM485E_RtuLogDraining = 0;
+     M485E_RtuLog_ResetPanelView();
      @sysvar::M485E::RtuLog::LogSwitch = 0;
      @sysvar::M485E::RtuLog::ActiveLed = 0;
      @sysvar::M485E::RtuLog::DroppedCount = 0;
@@ -197,6 +304,8 @@ void M485E_RtuLog_Shutdown()
      long attempt;
      long result;
      cancelTimer(tM485E_RtuLogDrain);
+     cancelTimer(tM485E_RtuLogPanelRefresh);
+     gM485E_RtuLogPanelTimerScheduled = 0;
      if (gM485E_RtuLogFileHandle == 0) return;
      result = M485E_Core_SetRtuLogEnabled(0);
      if (result == M485E_OK)
@@ -239,4 +348,12 @@ on timer tM485E_RtuLogDrain
           return;
      }
      if (gM485E_RtuLogFileHandle != 0) setTimer(tM485E_RtuLogDrain, 10);
+}
+
+// 타이머명: tM485E_RtuLogPanelRefresh
+// 기능: 최근 10줄을 최대 200ms마다 한 번 CAPL Output View에 Overwrite한다.
+on timer tM485E_RtuLogPanelRefresh
+{
+     gM485E_RtuLogPanelTimerScheduled = 0;
+     M485E_RtuLog_PublishPanelView();
 }

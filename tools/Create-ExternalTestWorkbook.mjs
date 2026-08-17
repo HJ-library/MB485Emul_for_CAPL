@@ -31,6 +31,7 @@ const tests = [
   ["EV-016", "6/9/10", "PERF-004~021, LOG-011~017, REQ-DIAG-002, TBD-027, TBD-030, TBD-039", "200 Rule stress profile", "200 Rule, Quantity 125, 66 Frame/Tick 및 Error Queue overflow", "RTU 영향 없이 선택 Rule의 0x80을 1000ms Cycle로 처리하고 DropCount 또는 OverflowLatch 변화 시 CAPL이 Pending/Capacity/High-water를 한 번 진단"],
   ["EV-017", "5/7/10", "FR-RTU-036~039, FR-UI-019~020", "CANalyzer Panel + Board + Serial trace", "Index별 RTU 통신 OFF/ON", "비활성 Index는 FC03/04/10 무응답·무변경; 동일 Port의 다른 Slave와 Direct/CAN은 유지; Refresh 성공 후 활성화"],
   ["EV-018", "7/10", "FR-UI-021, LOG-018~024, IF-API-024~027", "CANalyzer Panel + CSV", "RTU Log OFF→ON, 정상·무응답·용량·종료 경계", "파일 Open 후 Capture; REQ/RES 또는 REQ/NO_RES 동일 Sequence; 12 Column·전체 ADU·DroppedCount·2초 idle wait·ActiveLed 확인"],
+  ["EV-019", "10", "FR-UI-022~023, LOG-025~028, AC-255~257", "CANalyzer Panel + CSV", "Btn_ReadOption Scalar 계약과 RTU Log CAPL Output View 최근 표시", "Btn_ReadOption int32 Scalar/no-handler 및 Check_ReadOption[200] 정책 유지; 전체 CSV 보존; 동일 Drain 문자열 최근 10줄을 200ms 이상 간격 Overwrite; Panel/Control 불일치에도 CSV 정상; OFF 후 마지막 표시 유지"],
 ];
 
 const workbook = Workbook.create();
@@ -40,7 +41,7 @@ const summary = workbook.worksheets.add("Summary");
 
 results.showGridLines = false;
 results.mergeCells("A1:J1");
-results.getRange("A1").values = [["Modbus485Emulator v0.4.0 External Test Results"]];
+results.getRange("A1").values = [["Modbus485Emulator v0.5.0 External Test Results"]];
 results.mergeCells("A2:J2");
 results.getRange("A2").values = [["실행하지 않은 시험은 Result = Not Tested로 유지합니다."]];
 results.getRange("A4:J4").values = [["Test ID", "Phase", "Requirement ID", "Test Environment", "Test Description", "Expected Result", "Actual Result", "Result", "Evidence", "Notes"]];
@@ -89,8 +90,8 @@ environment.mergeCells("A1:D1");
 environment.getRange("A1").values = [["Test Environment"]];
 environment.getRange("A3:D3").values = [["Category", "Item", "Value", "Evidence / Notes"]];
 const environmentRows = [
-  ["Baseline", "Release Version", "0.4.0", "Release Baseline"],
-  ["Baseline", "Baseline Date", "2026-08-13", "docs/REQUIREMENTS_SPEC.md"],
+  ["Baseline", "Release Version", "0.5.0", "Release Baseline"],
+  ["Baseline", "Baseline Date", "2026-08-17", "docs/REQUIREMENTS_SPEC.md"],
   ["Baseline", "Git Commit", "", ""],
   ["Baseline", "M485E.dll SHA-256", "", ""],
   ["Baseline", "Generated Contracts", "ErrorCodes=91; PublicConstants=189", "tests/contracts/Test-M485EContractGeneration.ps1"],
@@ -127,11 +128,11 @@ summary.getRange("A1").values = [["External Verification Summary"]];
 summary.getRange("A3:B3").values = [["Result", "Count"]];
 summary.getRange("A4:A8").values = [["Not Tested"], ["PASS"], ["FAIL"], ["Blocked"], ["N/A"]];
 summary.getRange("B4:B8").formulas = [
-  ["=COUNTIF('Test Results'!$H$5:$H$22,A4)"],
-  ["=COUNTIF('Test Results'!$H$5:$H$22,A5)"],
-  ["=COUNTIF('Test Results'!$H$5:$H$22,A6)"],
-  ["=COUNTIF('Test Results'!$H$5:$H$22,A7)"],
-  ["=COUNTIF('Test Results'!$H$5:$H$22,A8)"],
+  ["=COUNTIF('Test Results'!$H$5:$H$23,A4)"],
+  ["=COUNTIF('Test Results'!$H$5:$H$23,A5)"],
+  ["=COUNTIF('Test Results'!$H$5:$H$23,A6)"],
+  ["=COUNTIF('Test Results'!$H$5:$H$23,A7)"],
+  ["=COUNTIF('Test Results'!$H$5:$H$23,A8)"],
 ];
 summary.getRange("A10:D10").values = [["Rule", "PASS", "FAIL", "Pending"]];
 summary.getRange("A11:D11").values = [["판정 원칙", "Expected Result + Evidence", "Actual Result에 원인 기록", "Not Tested는 PASS 추정 금지"]];
@@ -154,13 +155,13 @@ for (const sheet of workbook.worksheets.items) {
     }
   }
 }
-if (resultRows.length !== 18 || resultRows.some((row) => row[7] !== "Not Tested")) {
-  throw new Error("External verification status must remain 18 x Not Tested");
+if (resultRows.length !== 19 || resultRows.some((row) => row[7] !== "Not Tested")) {
+  throw new Error("External verification status must remain 19 x Not Tested");
 }
 if (tests.find((row) => row[0] === "EV-002")?.[4] !== "DeviceMap/FrameRule 두 상대경로와 참조 Register Map 준비 후 비동기 Refresh Polling") {
   throw new Error("EV-002 current configuration contract mismatch");
 }
-if (environmentRows[0][2] !== "0.4.0" || environmentRows[1][2] !== "2026-08-13") {
+if (environmentRows[0][2] !== "0.5.0" || environmentRows[1][2] !== "2026-08-17") {
   throw new Error("External verification release baseline mismatch");
 }
 if (!environmentRows.some((row) => row[1] === "Generated Contracts" && row[2] === "ErrorCodes=91; PublicConstants=189")) {
@@ -172,7 +173,7 @@ await output.save(outputPath);
 await fs.rm(`${outputPath}.inspect.ndjson`, { force: true });
 
 for (const [sheetName, range, fileName] of [
-  ["Test Results", "A1:J22", "test-results.png"],
+  ["Test Results", "A1:J23", "test-results.png"],
   ["Environment", `A1:D${3 + environmentRows.length}`, "environment.png"],
   ["Summary", "A1:D11", "summary.png"],
 ]) {

@@ -256,6 +256,14 @@ updateRequirement("REQ-FUNC-039", {
   requirementDesign: "CAPL Monitoring",
   verificationMethod: "OFF/ON Timer, RTU 유지, 과거 상태 미재생 및 최신 0x80 재시작 시험",
 });
+updateRequirement("REQ-FUNC-031", {
+  summary: "ReadOption은 최대 200개 Rule의 0x80 Periodic 선택만 제어하고 다음 1,000ms Cycle 경계에 원자 적용해야 한다. Monitoring::Btn_ReadOption은 int32 Scalar 편의 버튼으로만 제공하며 별도 CAPL Handler 없이 기존 Check_ReadOption[200], 100ms Candidate 동기화와 Cycle 적용 정책을 유지해야 한다.",
+  functionalSpecification: "FS-MON-002; FS-UI-001",
+  rtmDesign: "DC-14 CAPL Monitoring; DC-15 CAPL UI",
+  requirementDesign: "CAPL Monitoring; CAPL UI",
+  verificationMethod: "Btn_ReadOption int32 Scalar/no-handler, Check_ReadOption[200] 유지 및 Candidate/Applied 원자 적용 검사",
+  testCases: "TC-P9-STATIC-001; TC-P10-STATIC-001; EV-011; EV-019",
+});
 updateRequirement("REQ-COM-017", {
   summary: "실제 29bit ID는 Periodic 0x00IIRRMM이며 Vector API 표현은 bit31 Extended Flag를 더한 0x80IIRRMM이어야 한다. 0x81 Change Message는 출력하지 않는다.",
   verificationMethod: "0x80 실제 ID/Vector 표현 Mask와 0x81 부재 시험",
@@ -382,9 +390,9 @@ rtm.getRange("A2:H132").values = rtmValues;
 requirements.getRange("A2:G132").values = requirementValues;
 
 const cover = workbook.worksheets.getItem("Cover");
-cover.getRange("B7").values = [["0.4.0"]];
+cover.getRange("B7").values = [["0.5.0"]];
 cover.getRange("B8").values = [["Release Baseline"]];
-cover.getRange("B9").values = [["2026-08-13"]];
+cover.getRange("B9").values = [["2026-08-17"]];
 cover.getRange("B10:B11").values = [[138], [40]];
 cover.getRange("E5:E8").values = [[19], [138], [138], [138]];
 cover.getRange("F5:F8").clear({contentsOnly:true});
@@ -405,7 +413,7 @@ functionalSpecs.getRange("A2:C38").values = functionalSpecValues;
 functionalSpecs.getRange("A39:C41").values = [
   ["FS-DEVICE-001", "Index별 RTU 통신 제어", "REQ-FUNC-045~046; REQ-IF-015"],
   ["FS-CONNECTION-LED-001", "Connected/Disconnected 실제 상태 표시", "REQ-FUNC-047"],
-  ["FS-RTULOG-001", "RTU 요청·응답 CSV 기록", "REQ-FUNC-048~049; REQ-IF-015~016"],
+  ["FS-RTULOG-001", "RTU 전체 CSV 및 최근 10줄 CAPL Output View", "REQ-FUNC-048~049; REQ-IF-015~016"],
 ];
 functionalSpecs.getRange("A39:C41").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
 functionalSpecs.getRange("39:41").format.autofitRows();
@@ -414,11 +422,11 @@ const designComponents = workbook.worksheets.getItem("Design Components");
 const designValues = designComponents.getRange("A2:C18").values;
 findRow(designValues, "DC-11")[1] = "Runtime Rule Data Provider";
 findRow(designValues, "DC-11")[2] = "RuntimeModel::ReadRule 기반 동기 현재값 조회, RuleDataMeta[9], Queue 없는 caller-owned 출력 보호";
-findRow(designValues, "DC-15")[2] = "Connect/ReadSwitch, Manual Write Data[122], Signal System Variable Adapter, Register Read UI 미제공, Error Queue Stats 변화기반 진단 출력";
+findRow(designValues, "DC-15")[2] = "Connect/ReadSwitch, Btn_ReadOption int32 Scalar 편의 변수(no-handler), Manual Write Data[122], Signal System Variable Adapter, Register Read UI 미제공, Error Queue Stats 변화기반 진단 출력";
 designComponents.getRange("A2:C18").values = designValues;
 designComponents.getRange("A19:C20").values = [
   ["DC-18", "Device Communication Gate", "Index별 RTU 활성 상태, addressed 요청 사전 차단, Broadcast 대상 필터와 상태 Snapshot"],
-  ["DC-19", "RTU Log Pipeline", "PortWorker 관측점, Transaction Queue, REQ/RES·NO_RES pairing과 CAPL-only CSV Writer"],
+  ["DC-19", "RTU Log Pipeline", "PortWorker 관측점, Transaction Queue, REQ/RES·NO_RES pairing, CAPL-only 전체 CSV Writer와 동일 Drain 문자열의 최근 10줄·200ms Output View"],
 ];
 designComponents.getRange("A19:C20").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
 designComponents.getRange("19:20").format.autofitRows();
@@ -449,11 +457,11 @@ const verificationRows = [
   ["TC-P6-AUTO-001", "6", "Automated", "RuleData metadata/quantity/current-value consistency, Error Queue overflow/coalesce/drop/stats", "M485E.Core.Tests", "PASS", "EV-008~EV-010"],
   ["TC-P7-AUTO-001", "7", "Automated", "RTU timing/framing, partial I/O, cancellation, worker response", "M485E.Core.Tests + FakeSerialTransport", "PASS", "EV-003~EV-007, EV-014"],
   ["TC-P8-AUTO-001", "8", "Automated", "Async refresh/connect, 1~4 active-Port rollback, 누락 active PortSlot 거부, inactive stale Slot 무시, zero/nonzero Handle ABI integration", "M485E.IntegrationTests", "PASS", "EV-002, EV-003, EV-014, EV-015"],
-  ["TC-P9-STATIC-001", "9", "Static + CAPL Compile", "CAPL Core 23 wrappers, Error Queue Stats 변화기반 출력, 1s/10ms pump, ActivePortCount=Device CSV 고유 Port 수, Port별 Rule Cursor/round-robin, 66 Frame budget, 0x80 Extended CAN", "Test-M485ECaplSources.ps1 + CANalyzer 13 Exec32 caplcompexec", "PASS", "EV-008~EV-011, EV-016"],
-  ["TC-P10-STATIC-001", "10", "Static", "UI System Variable adapter, Manual Write Data[122], Signal Control, Register Read UI 부재 계약", "Test-M485ECaplSources.ps1; Main compile in configured CANalyzer project", "Static PASS / External Pending", "EV-011~EV-013, EV-016"],
-  ["TC-REG-AUTO-001", "1~10", "Automated", "Windows x86/x64 Debug/Release, /W4 /WX, ErrorCodes 91/PublicConstants 189, 23 API ABI, RuleDataMeta[9], RTU 로그 idle wait, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-018"],
-  ["TC-V03-AUTO-001", "5/7/10", "Automated + Static", "Index별 RTU 비활성화, Broadcast 제외, RTU Log REQ/RES/NO_RES pairing, queue overflow, CAPL Device/Log adapters", "M485E.Core.Tests + M485E.IntegrationTests + Test-M485ECaplSources.ps1", "PASS", "EV-017~EV-018"],
-  ["EV-001~EV-018", "External", "External", "CANalyzer 9.x/18, SystemBase Multi USB-485, Board, Panel, virtual CAN, RTU CSV", "External Verification Guide", "Not Tested", "대상 실환경에서 결과 기록"],
+  ["TC-P9-STATIC-001", "9", "Static + CAPL Compile", "CAPL Core 23 wrappers, Error Queue Stats 변화기반 출력, 1s/10ms pump, ActivePortCount=Device CSV 고유 Port 수, Port별 Rule Cursor/round-robin, 66 Frame budget, 0x80 Extended CAN", "Test-M485ECaplSources.ps1 + CANalyzer 13 Exec32 caplcompexec", "PASS", "EV-008~EV-011, EV-016, EV-019"],
+  ["TC-P10-STATIC-001", "10", "Static", "UI System Variable adapter, Btn_ReadOption int32 Scalar/no-handler, Check_ReadOption[200] 유지, RTU Log 단일 Drain·최근 10줄·200ms putValueToControl, Manual Write Data[122], Signal Control, Register Read UI 부재 계약", "Test-M485ECaplSources.ps1; Main compile in configured CANalyzer project", "Static PASS / External Pending", "EV-011~EV-013, EV-016, EV-019"],
+  ["TC-REG-AUTO-001", "1~10", "Automated", "Windows x86/x64 Debug/Release, /W4 /WX, ErrorCodes 91/PublicConstants 189, 23 API ABI, RuleDataMeta[9], RTU 로그 idle wait·단일 Drain Panel adapter, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-019"],
+  ["TC-V03-AUTO-001", "5/7/10", "Automated + Static", "Index별 RTU 비활성화, Broadcast 제외, RTU Log REQ/RES/NO_RES pairing, queue overflow, CAPL Device/Log adapters", "M485E.Core.Tests + M485E.IntegrationTests + Test-M485ECaplSources.ps1", "PASS", "EV-017~EV-019"],
+  ["EV-001~EV-019", "External", "External", "CANalyzer 9.x/18, SystemBase Multi USB-485, Board, Panel, CAPL Output View, virtual CAN, RTU CSV", "External Verification Guide", "Not Tested", "대상 실환경에서 결과 기록"],
   ["TC-CAPL13-COMPILE-001", "1/2/9", "Compiler", "Phase 1 ABI, Phase 2 Contracts, Phase 9 Core/Monitoring CAPL probes", "CANalyzer 13 Exec32 caplcompexec.exe", "PASS (warning-free)", "CANalyzer 9.x SP8 Compile/Measurement remains EV-001"],
 ];
 verification.getRange("A1:G13").values = verificationRows;
@@ -482,7 +490,7 @@ inputs.getRange("C2").values = [["생산 23 API + 시험 전용 ABI Fixture 자�
 inputs.getRange("B5:C5").values = [["66 Frame/Tick, 최종 실측", "200 Rule 0x80-only Periodic profile"]];
 inputs.getRange("A8:C9").values = [
   ["External Verification Guide", "작성 완료", "docs/05_Test/External_Verification_Guide.docx"],
-  ["External Test Result", "18건 Not Tested", "docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx"],
+  ["External Test Result", "19건 Not Tested", "docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx"],
 ];
 
 const v030 = workbook.worksheets.getOrAdd("v0.3.0 Traceability");
@@ -519,9 +527,9 @@ const v030RequirementRows = [
   ["REQ-FUNC-045", "UI", "Device Index별 외부 Modbus RTU 통신 활성/비활성; 비활성 Index는 FC03/04/10 무응답·무변경이며 peer Device와 Direct/CAN 기능 유지", "FR-RTU-036~039", "FS-DEVICE-001", "DC-18", "Index gate·Broadcast 필터·peer 격리·Refresh reset 자동 시험과 EV-017"],
   ["REQ-FUNC-046", "UI", "Device Index별 Unconfigured/Disabled/Disconnected/Available 상태와 AvailableLed 100ms 게시", "FR-UI-019~020", "FS-DEVICE-001", "DC-18", "CAPL source contract와 EV-017"],
   ["REQ-FUNC-047", "UI", "실제 Lifecycle Connected/Disconnected 상태를 서로 독립된 LED로 표시", "FR-UI-016~018", "FS-CONNECTION-LED-001", "DC-15", "CAPL source contract와 EV-017"],
-  ["REQ-FUNC-048", "Diagnostics", "RTU 요청과 실제 응답 또는 무응답을 동일 Sequence의 REQ/RES 또는 REQ/NO_RES CSV 행으로 기록", "LOG-018~024", "FS-RTULOG-001", "DC-19", "RtuLogQueue/PortWorker 자동 시험과 EV-018"],
-  ["REQ-FUNC-049", "Diagnostics", "RTU Log 파일 Open 성공 후 Capture를 시작하고, OFF·종료 시 최대 2,000ms Idle 대기 후 완료 행을 배출", "FR-UI-021; LOG-022~024; ERR-044", "FS-RTULOG-001", "DC-19", "Core/Integration/CAPL source contract와 EV-018"],
-  ["REQ-IF-015", "API", "CAPL DLL Export Table은 Appendix A의 v0.4.0 23개 Entry를 정확히 제공하고 제거된 Monitoring·Change Queue API를 공개하지 않는다", "IF-API-001~008; IF-API-011; IF-API-014~027; COMP-009", "FS-INIT-001; FS-MON-003; FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-11; DC-18; DC-19", "x86/x64 23-entry ABI Probe, 제거 Export 부재 검사와 EV-001"],
+  ["REQ-FUNC-048", "Diagnostics", "RTU 요청과 실제 응답 또는 무응답을 동일 Sequence의 REQ/RES 또는 REQ/NO_RES CSV 행으로 빠짐없이 기록하고, 같은 Dequeue 문자열을 별도 Consumer 없이 최근 10줄 Panel 표시에 재사용", "LOG-018~028", "FS-RTULOG-001", "DC-19", "RtuLogQueue/PortWorker 자동 시험, CAPL 단일 Consumer 정적 계약과 EV-018~019"],
+  ["REQ-FUNC-049", "Diagnostics", "RTU Log 파일 Open 성공 후 Capture를 시작하고 OFF·종료 시 최대 2,000ms Idle 대기 후 완료 행을 배출한다. CAPL Output View는 설정 이름으로 최근 10줄을 200ms 이상 간격 Overwrite하며 실패가 CSV를 중단하지 않고 OFF 후 마지막 표시를 유지", "FR-UI-021~023; LOG-022~028; ERR-044", "FS-RTULOG-001", "DC-19", "Core/Integration/CAPL source contract와 EV-018~019"],
+  ["REQ-IF-015", "API", "CAPL DLL Export Table은 Appendix A의 v0.5.0 23개 Entry를 정확히 제공하고 제거된 Monitoring·Change Queue API를 공개하지 않는다", "IF-API-001~008; IF-API-011; IF-API-014~027; COMP-009", "FS-INIT-001; FS-MON-003; FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-11; DC-18; DC-19", "x86/x64 23-entry ABI Probe, 제거 Export 부재 검사와 EV-001"],
   ["REQ-IF-016", "Buffer", "Context별 완결 Transaction 256개와 caller-owned RTU CSV line Buffer; Capture Disabled에서만 Idle 대기; DLL 파일 I/O 금지", "IF-LIMIT-009; LOG-023~024; ERR-044", "FS-RTULOG-001", "DC-19", "Queue 경계·overflow·idle wake/timeout·pair 보존 자동 시험과 EV-018"],
 ];
 requirements.getRange("A133:G139").values = v030RequirementRows;
@@ -532,8 +540,8 @@ const v030RtmRows = [
   ["REQ-FUNC-045", v030RequirementRows[0][2], "FS-DEVICE-001", "DC-18 Device Communication Gate", "Index gate·Broadcast 필터·peer 격리·Refresh reset", "TC-V03-AUTO-001; EV-017", "Automated PASS / External Pending", "FR-RTU-036~039"],
   ["REQ-FUNC-046", v030RequirementRows[1][2], "FS-DEVICE-001", "DC-18 Device Communication Gate", "CAPL 상태 Polling과 배열 게시", "TC-V03-AUTO-001; TC-P9-STATIC-001; EV-017", "Automated PASS / External Pending", "FR-UI-019~020"],
   ["REQ-FUNC-047", v030RequirementRows[2][2], "FS-CONNECTION-LED-001", "DC-15 CAPL UI", "Connected/Disconnected LED 상태표", "TC-P9-STATIC-001; EV-017", "Static PASS / External Pending", "FR-UI-016~018"],
-  ["REQ-FUNC-048", v030RequirementRows[3][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Transaction pair·overflow·send result", "TC-V03-AUTO-001; EV-018", "Automated PASS / External Pending", "LOG-018~024"],
-  ["REQ-FUNC-049", v030RequirementRows[4][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Open-before-capture·2,000ms idle wait·drain", "TC-V03-AUTO-001; TC-P9-STATIC-001; EV-018", "Automated/Static PASS / External Pending", "FR-UI-021; LOG-022~024; ERR-044"],
+  ["REQ-FUNC-048", v030RequirementRows[3][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Transaction pair·overflow·send result·single drain panel reuse", "TC-V03-AUTO-001; TC-P10-STATIC-001; EV-018~019", "Automated/Static PASS / External Pending", "LOG-018~028"],
+  ["REQ-FUNC-049", v030RequirementRows[4][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Open-before-capture·2,000ms idle wait·drain·최근10줄/200ms Output View", "TC-V03-AUTO-001; TC-P9-STATIC-001; TC-P10-STATIC-001; EV-018~019", "Automated/Static PASS / External Pending", "FR-UI-021~023; LOG-022~028; ERR-044"],
   ["REQ-IF-015", v030RequirementRows[5][2], "FS-INIT-001; FS-MON-003; FS-DEVICE-001; FS-RTULOG-001", "DC-01 CAPL ABI Adapter; DC-11 Runtime Rule Data Provider; DC-18 Device Communication Gate; DC-19 RTU Log Pipeline", "caplDllTable4 23-entry, ReadRuleData와 생존 Device/RTU Log API", "M485E.AbiProbe; TC-REG-AUTO-001; EV-001", "Automated PASS / External Pending", "IF-API-001~008; IF-API-011; IF-API-014~027; COMP-009"],
   ["REQ-IF-016", v030RequirementRows[6][2], "FS-RTULOG-001", "DC-19 RTU Log Pipeline", "Capacity/caller-owned buffer/file boundary/idle wait", "TC-V03-AUTO-001; TC-P9-STATIC-001; EV-018", "Automated/Static PASS / External Pending", "IF-LIMIT-009; LOG-023~024; ERR-044"],
 ];
@@ -553,9 +561,9 @@ for (const sheet of workbook.worksheets.items) {
     }
   }
 }
-require(cover.getRange("B7").values[0][0] === "0.4.0", "Release version mismatch");
+require(cover.getRange("B7").values[0][0] === "0.5.0", "Release version mismatch");
 require(cover.getRange("B8").values[0][0] === "Release Baseline", "Release status mismatch");
-require(cover.getRange("B9").values[0][0] === "2026-08-13", "Release baseline date mismatch");
+require(cover.getRange("B9").values[0][0] === "2026-08-17", "Release baseline date mismatch");
 require(findRow(rtmValues, "REQ-DIAG-002")[5] === "TC-P6-AUTO-001; TC-P9-STATIC-001", "REQ-DIAG-002 traceability mismatch");
 require(findRow(rtmValues, "REQ-FUNC-004")[5].includes("TC-P8-AUTO-001"), "REQ-FUNC-004 integration trace missing");
 require(findRow(rtmValues, "REQ-COM-002")[5].includes("TC-P9-STATIC-001"), "REQ-COM-002 active-Port trace missing");
