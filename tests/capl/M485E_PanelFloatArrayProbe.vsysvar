@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<systemvariables version="4">
+  <namespace name="" comment="">
+    <namespace name="M485E_PanelProbe" comment="CANalyzer 9.x 64-bit floating array Panel probe">
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SignalValue" comment="Three editable 64-bit floating values" bitcount="64" isSigned="true" encoding="65001" type="floatarray" arrayLength="3" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SetKnownValues" comment="Momentary command: publish 25.5, -12.5, and 16777217.0" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ReadPanelValues" comment="Momentary command: bulk-read SignalValue and publish Observed values" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Observed0" comment="CAPL bulk-read result for SignalValue[0]" bitcount="64" isSigned="true" encoding="65001" type="float" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Observed1" comment="CAPL bulk-read result for SignalValue[1]" bitcount="64" isSigned="true" encoding="65001" type="float" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="Observed2" comment="CAPL bulk-read result for SignalValue[2]" bitcount="64" isSigned="true" encoding="65001" type="float" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ArrayLength" comment="Length reported by SysGetVariableArrayLength" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ExactMatch" comment="1 when the three bulk-read values exactly match the known values" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="-100 not run, -1 wrong array length, 0 completed, 100 known values published" bitcount="32" isSigned="true" encoding="65001" type="int" />
+    </namespace>
+  </namespace>
+</systemvariables>

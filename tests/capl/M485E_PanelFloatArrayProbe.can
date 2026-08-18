@@ -1,0 +1,93 @@
+/*@!Encoding:1252*/
+
+// Standalone CANalyzer 9.x probe for a 64-bit floating System Variable array.
+// This file intentionally does not include or call M485E.dll.
+
+variables
+{
+     float gM485EPanelProbeValues[3];
+}
+
+void M485E_PanelProbe_SetKnownValues()
+{
+     gM485EPanelProbeValues[0] = 25.5;
+     gM485EPanelProbeValues[1] = -12.5;
+     gM485EPanelProbeValues[2] = 16777217.0;
+
+     sysSetVariableFloatArray(sysvar::M485E_PanelProbe::SignalValue,
+          gM485EPanelProbeValues,
+          elcount(gM485EPanelProbeValues));
+
+     @sysvar::M485E_PanelProbe::ExactMatch = 0;
+     @sysvar::M485E_PanelProbe::ResultCode = 100;
+     write("M485E Panel Probe: known values published.");
+}
+
+void M485E_PanelProbe_ReadPanelValues()
+{
+     long arrayLength;
+     long exactMatch;
+
+     arrayLength = SysGetVariableArrayLength(
+          sysvar::M485E_PanelProbe::SignalValue);
+     @sysvar::M485E_PanelProbe::ArrayLength = arrayLength;
+
+     if (arrayLength != elcount(gM485EPanelProbeValues))
+     {
+          @sysvar::M485E_PanelProbe::ExactMatch = 0;
+          @sysvar::M485E_PanelProbe::ResultCode = -1;
+          write("M485E Panel Probe: unexpected array length %d.", arrayLength);
+          return;
+     }
+
+     sysGetVariableFloatArray(sysvar::M485E_PanelProbe::SignalValue,
+          gM485EPanelProbeValues,
+          arrayLength);
+
+     @sysvar::M485E_PanelProbe::Observed0 = gM485EPanelProbeValues[0];
+     @sysvar::M485E_PanelProbe::Observed1 = gM485EPanelProbeValues[1];
+     @sysvar::M485E_PanelProbe::Observed2 = gM485EPanelProbeValues[2];
+
+     exactMatch = 0;
+     if (gM485EPanelProbeValues[0] == 25.5 &&
+          gM485EPanelProbeValues[1] == -12.5 &&
+          gM485EPanelProbeValues[2] == 16777217.0)
+     {
+          exactMatch = 1;
+     }
+
+     @sysvar::M485E_PanelProbe::ExactMatch = exactMatch;
+     @sysvar::M485E_PanelProbe::ResultCode = 0;
+     write("M485E Panel Probe: read %.12g, %.12g, %.12g; exact=%d.",
+          gM485EPanelProbeValues[0],
+          gM485EPanelProbeValues[1],
+          gM485EPanelProbeValues[2],
+          exactMatch);
+}
+
+on start
+{
+     @sysvar::M485E_PanelProbe::SetKnownValues = 0;
+     @sysvar::M485E_PanelProbe::ReadPanelValues = 0;
+     @sysvar::M485E_PanelProbe::Observed0 = 0.0;
+     @sysvar::M485E_PanelProbe::Observed1 = 0.0;
+     @sysvar::M485E_PanelProbe::Observed2 = 0.0;
+     @sysvar::M485E_PanelProbe::ArrayLength =
+          SysGetVariableArrayLength(sysvar::M485E_PanelProbe::SignalValue);
+     @sysvar::M485E_PanelProbe::ExactMatch = 0;
+     @sysvar::M485E_PanelProbe::ResultCode = -100;
+}
+
+on sysvar_update sysvar::M485E_PanelProbe::SetKnownValues
+{
+     if (@this == 0) return;
+     M485E_PanelProbe_SetKnownValues();
+     @this = 0;
+}
+
+on sysvar_update sysvar::M485E_PanelProbe::ReadPanelValues
+{
+     if (@this == 0) return;
+     M485E_PanelProbe_ReadPanelValues();
+     @this = 0;
+}
