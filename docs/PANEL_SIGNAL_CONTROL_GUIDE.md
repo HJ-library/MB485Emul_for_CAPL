@@ -12,14 +12,15 @@
 - Device별 `Display Update`, `Send Changed`, Default Reset 동작
 - 외부 Modbus Master와 Panel이 같은 Register Memory를 사용할 때의 주의사항
 
-이 문서의 Panel 구조는 **설계 제안**이다. 현재 저장소에는 범용 Signal Read/Write Adapter는
-있지만 Device별 전체 Signal Panel과 실제 `.xvp` 파일은 아직 없다.
+v0.6.0은 이 구조를 `Panel_Generator.exe`, 생성 CAPL/System Variable DB와 복사·붙여넣기용
+XVP Fragment로 구현한다. 저장소는 회사 전체 Panel이나 Tab을 포함하지 않으며 생성된 GroupBox를
+기존 Panel에 복사하는 방식만 제공한다.
 
 ## 2. 핵심 결론
 
-1. 사용자가 설명한 실제 대상 Register Map 기준으로 `Temperature`는 `IEEE Float`가 아니라
-   `Signed` 정수 Raw Signal이다. 현재 저장소의 예제 Map은 아직 `IEEE Float`이므로 별도
-   정합화가 필요하다.
+1. 저장소 Sample Register Map의 `Temperature`는 `IEEE Float`이며 Generator는 이를 그대로
+   사용한다. `Signed + Scale=0.1` Temperature는 Codec 설명과 자동시험용 합성 Fixture일 뿐
+   회사 Register Map의 내용을 추정하지 않는다.
 2. 이 문서의 `Scale=0.1` 설명 예시에서 Panel에는 Raw `255`가 아니라 Scale이 적용된
    물리값 `25.5`를 표시하고 입력한다.
 3. 일반 Signal의 Panel System Variable은 64bit floating 형식으로 통일한다.
@@ -69,9 +70,9 @@
 
 ### 4.1 Register Map 정의
 
-사용자가 확정한 조건은 `Temperature`의 `Type=Signed`이고 Scale 적용 결과로 Panel에
-물리값 `25.5 °C`를 표시한다는 것이다. Raw 값과 계산 과정을 구체적으로 보여주기 위해 이
-절에서는 다음 항목을 **설명용으로 가정**한다.
+이 절은 `Temperature`의 `Type=Signed`이고 Scale 적용 결과가 `25.5 °C`인 합성 Fixture를
+사용해 Raw 값과 계산 과정을 설명한다. 회사 Register Map의 실제 형식으로 간주하지 않으며
+다음 항목은 **설명용으로 가정**한다.
 
 - `Size=16`, `Length=2`
 - `Scale=0.1`, `Offset=0`
@@ -282,12 +283,12 @@ long M485E_Core_ReadSignal(long index, char signalName[],
 }
 ```
 
-현재 구현은 공개 Core와 UI에서도 CAPL `float`를 사용한다. CAPL에서는 8Byte이므로 기능상
-정밀도 손실은 없지만, 요구사항 문서의 `double` 표기 및 위 역할 규칙과 소스 명칭이 다르다.
-향후 구현 단계에서 실제 CANalyzer 9.x/18 Measurement ABI를 확인한 뒤 문서, 소스와 시험을
-함께 정렬해야 한다.
+현재 Core/UI와 생성 CAPL은 기존 프로젝트 스타일에 맞춰 CAPL `float`를 사용한다. CAPL에서는
+8Byte이므로 위 `double` 의미와 동일하다. Float Array Probe의 값 왕복은 사용자 보고로
+확인했지만 생성 XVP와 전체 Configuration의 CANalyzer 9.x/18 Measurement는 External
+Verification Pending이다.
 
-## 8. 권장 Device Panel 구조
+## 8. v0.6.0 Device Panel Generator 구조
 
 ### 8.1 Device 탭
 
@@ -297,45 +298,68 @@ Panel의 1차 구분은 Device로 한다.
 [Device A] [Device B] [Device C] ...
 ```
 
-한 Device의 Signal이 너무 많으면 Device 탭 안에서 기능 그룹별 하위 탭 또는 Page로 나눈다.
-Device 이름은 표시용으로 사용하고 System Variable Namespace에는 중복되지 않는 Index 또는
-생성된 안정 식별자를 사용하는 것이 안전하다.
+`Panel_Generator.exe`는 Device별 완성 Tab을 만들지 않고 주소 Group 단위 XVP Fragment를 만든다.
+Panel Designer에서 Fragment의 GroupBox와 Control을 전체 선택해 기존 Device Tab에 복사한다.
+Namespace는 CSV 행 번호가 아니라 실제 Device Index인 `M485E_DevicePanel::IndexN`을 사용한다.
 
 ### 8.2 Signal 행
 
 각 Signal 행은 다음 정보를 표시한다.
 
 ```text
-Temperature [ 25.5 ] degC
+Temperature | 0x41CC0000 | [ 25.5 ] | 25.5
 ```
 
-- Label: `SignalName` 또는 별도 Panel 표시명
-- 입력값: Scale이 적용된 물리값
-- Unit: Register Map의 `Unit`
-- 입력 범위: Register Map의 `Min`, `Max`
-- 표시 소수점: Panel 전용 설정 또는 프로젝트 기본 규칙
+- Signal Name과 Init Value: Static Text
+- Raw Hex: Signal 자체의 unsigned Raw Bit Pattern String, Display Only
+- Physical Value: Scale/Offset이 적용된 editable 64bit Floating Array 원소
+- Value Table: Parse 대상이지만 ComboBox/Enum Control은 생성하지 않음
 
 `Temperature` 입력칸의 System Variable은 Signed 정수형이 아니라 64bit floating으로 둔다.
 Signed는 Register Raw의 해석 방법이고 Panel 값 `25.5`는 물리값이기 때문이다.
 
-### 8.3 Device별 System Variable 예시
+### 8.3 Device별 System Variable
 
 ```text
-M485E::Panel::Device_0::Temperature
-M485E::Panel::Device_0::DisplayUpdate
-M485E::Panel::Device_0::SendChanged
-M485E::Panel::Device_0::ResetDefault
-M485E::Panel::Device_0::ResultCode
+M485E_DevicePanel::Index0::PhysicalValue[signalCount]
+M485E_DevicePanel::Index0::RawHex::S000
+M485E_DevicePanel::Index0::DisplayUpdate
+M485E_DevicePanel::Index0::SendChanged
+M485E_DevicePanel::Index0::ResetDefault
+M485E_DevicePanel::Index0::SnapshotValid
+M485E_DevicePanel::Index0::ResultCode
+M485E_DevicePanel::Index0::WrittenCount
+M485E_DevicePanel::Index0::FailedSignalIndex
+M485E_DevicePanel::Index0::FailedSignalName
 ```
 
-`Temperature`는 다음 형식으로 생성한다.
+`PhysicalValue`는 다음 형식으로 생성한다.
 
 ```xml
-type="float" bitcount="64"
+type="floatarray" bitcount="64" arrayLength="signalCount"
 ```
 
-`type="float"`라는 XML 이름만 보고 32bit로 판단하지 않는다. 실제 System Variable 크기는
+`type="floatarray"`라는 XML 이름만 보고 32bit로 판단하지 않는다. 실제 원소 크기는
 `bitcount="64"`가 결정한다.
+
+### 8.4 Raw Hex 정의
+
+Raw Hex는 Register Word 문자열이 아니라 Byte_Order를 정상화한 논리 Signal Frame에서
+Start_Bit과 Size로 추출한 Signal 자체의 unsigned Raw Bit Pattern이다. 대문자 `0x` Prefix와
+`ceil(Size/4)`자리 Leading Zero를 유지한다.
+
+```text
+Signed -125 (16bit)       → 0xFF83
+Signed 255, Scale 0.1     → Raw 0x00FF / Physical 25.5
+IEEE Float 25.5           → 0x41CC0000
+64bit Pattern             → 0xFEDCBA9876543210
+```
+
+생성 CAPL은 `word[]` Bit/Nibble 루프를 사용하므로 Size=64에서도 qword Shift나 double 정밀도에
+의존하지 않는다. LittleEndian은 각 16bit Word 내부 Byte를 Swap하며 Word 순서는
+HighWordFirst다. IEEE Float/Double Physical 편집은 지원한다. Signed/Unsigned 정수 Physical은
+기존 double Signal API 때문에 ±2^53 범위까지만 정확하며 v0.6.0은 Raw Hex 편집과 full-range
+64bit Integer Write를 지원하지 않는다.
 
 ## 9. Display Update
 
@@ -344,10 +368,12 @@ type="float" bitcount="64"
 
 ```text
 Display Update
-→ Device의 Signal 목록 순회
-→ M485E_Core_ReadSignal(Index, SignalName, Value)
-→ 성공한 값만 각 System Variable에 게시
-→ Panel 표시 갱신
+→ SnapshotValid=0, Frame Cache 초기화
+→ 최대 15 Signal씩 Timer Chunk 처리
+→ M485E_Core_ReadRegisters로 Raw Hex 생성
+→ M485E_Core_ReadSignal로 Physical 값 조회
+→ 전체 성공 후 PhysicalValue 배열과 CAPL Baseline 게시
+→ SnapshotValid=1
 ```
 
 이 명령은 기존 `Connection::Refresh`와 다르다.
@@ -363,36 +389,18 @@ Device의 Signal 수가 매우 많으면 한 CAPL Event에서 전부 읽지 않�
 나누어 처리한다. On-demand 방식은 주기적으로 모든 System Variable을 갱신하는 구조보다
 평상시 부하가 낮다.
 
-### 9.1 Display Update와 Dirty 보호
+### 9.1 Display Update와 편집값 정책
 
-하나의 System Variable을 현재 표시값과 편집값으로 함께 사용하면 CAPL이 Display Update
-값을 게시할 때도 `sysvar_update` 이벤트가 발생할 수 있다. 이를 사용자 편집으로 오인하면
-읽어온 모든 Signal이 Dirty가 되는 문제가 생긴다.
+v0.6.0은 별도 Dirty Event나 Current/Edit 이중 배열을 만들지 않는다. Display Update는 사용자가
+명시적으로 현재 Runtime 값을 요청한 동작이므로 미전송 Panel 편집값을 포함해 Physical 배열을
+전체 덮어쓰고 그 결과를 새 Baseline으로 저장한다. 전체 Signal이 성공하기 전에는 배열과
+Baseline을 게시하지 않는다.
 
-CAPL UI는 Device별 Display Update 처리 중임을 나타내는 내부 Guard를 두고, Guard가 활성화된
-동안 발생한 System Variable Update를 Dirty로 표시하지 않아야 한다.
+Raw Read가 실패하면 해당 Raw Hex를 `N/A`로 바꾸고 SnapshotValid=0을 유지한다. Raw는 읽었지만
+Physical Decode가 실패해도 Raw 표시는 남길 수 있으나 Send Changed는 허용하지 않는다.
 
-```capl
-gM485E_DisplayUpdateInProgress[deviceIndex] = 1;
-
-// ReadSignal 성공값을 System Variable에 게시
-
-gM485E_DisplayUpdateInProgress[deviceIndex] = 0;
-```
-
-또한 이미 사용자가 편집하여 Dirty인 Signal을 Display Update가 덮으면 미전송 입력값이
-사라진다. 하나의 Value System Variable을 유지하는 1차 구조에서는 다음 정책을 권장한다.
-
-1. Display Update는 Dirty가 아닌 Signal만 최신값으로 갱신한다.
-2. Dirty Signal은 사용자의 편집값을 보존한다.
-3. Result에는 갱신한 Signal 수와 Dirty로 건너뛴 Signal 수를 남긴다.
-4. 사용자가 Dirty 값을 폐기하고 전체 최신값을 다시 받고 싶다면 별도의
-   `Discard Changes + Display Update` 동작을 제공한다.
-5. Send 성공 후 해당 Signal의 Dirty를 해제하고 필요하면 Read-back으로 표시값을 확인한다.
-
-현재값과 편집값을 항상 동시에 보여줘야 한다면 `CurrentValue`와 `EditValue` System Variable을
-분리하는 대안을 사용한다. 이 방식은 명확하지만 Signal 수가 많을 때 System Variable과 Panel
-Control 수가 두 배가 되므로 1차 기본안에서는 사용하지 않는다.
+외부 Master가 Raw Register Read와 Physical Signal Read 사이에 Write할 수 있으므로 이 동작은
+Device 전체의 동일 시점 원자 Snapshot을 보장하지 않는다.
 
 ## 10. Send Changed와 외부 Master
 
@@ -417,21 +425,22 @@ Panel 입력칸 하나를 표시값과 편집값으로 함께 사용할 때 모�
 - 여러 Signal 중 하나가 실패해도 앞에서 성공한 Signal은 이미 적용되어 있다.
 - Signal별 DLL 호출 사이에 Master Write가 끼어들 수 있다.
 
-따라서 1차 구조는 CAPL이 편집 이벤트를 감지해 Dirty 상태를 별도로 관리하고 Device 버튼에서
-Dirty Signal만 보내는 `Send Changed`가 적합하다.
+v0.6.0은 편집 이벤트별 Dirty Flag 대신 마지막 성공 Display/Read-back Baseline과 현재
+`PhysicalValue[]`를 비교한다. Device 버튼은 Baseline과 다른 Signal만 보내는 `Send Changed`다.
 
 ```text
 Signal 편집
-→ CAPL Dirty 표시
 → Send Changed
-→ 입력 Snapshot 생성
-→ Dirty Signal만 M485E_Core_WriteSignal 호출
-→ Signal별 성공/실패 기록
-→ 성공한 Signal의 Dirty 해제
+→ PhysicalValue 배열을 한 번 읽음
+→ Baseline과 다른 Signal만 CSV 순서로 M485E_Core_WriteSignal 호출
+→ 성공 Signal Physical/Raw Read-back과 Baseline 갱신
+→ WrittenCount/실패 Mapping Index/SignalName 게시
 ```
 
-현재 `WriteSignal`은 Signal 하나만 원자적으로 처리한다. Device의 모든 Signal을
-All-or-Nothing으로 적용해야 한다면 CAPL 반복 호출이 아니라 신규 DLL Batch API가 필요하다.
+현재 `WriteSignal`은 Signal 하나만 원자적으로 처리한다. Device 전체 Send는 원자적이지 않고
+첫 실패에서 중단한다. 앞에서 성공한 Write는 유지하며 이번 범위에 신규 DLL Batch API를
+추가하지 않는다. SnapshotValid=0이면 `M485E_ERR_INVALID_STATE`, 진행 중 재진입이면
+`M485E_ERR_OPERATION_BUSY`를 반환한다.
 
 ## 11. Default 기능
 
@@ -440,20 +449,19 @@ All-or-Nothing으로 적용해야 한다면 CAPL 반복 호출이 아니라 신�
 현재 `M485E_Core_ResetDevice(Index)`를 통해 한 Device를 CSV `Init_Value` 상태로 원자 복원할
 수 있다. Panel에는 이를 `Reset to CSV Default`로 표시하는 것이 명확하다.
 
-Reset은 미전송 편집값까지 폐기하는 동작이므로 Dirty Signal이 있으면 먼저 사용자 확인을
-받아야 한다. 성공하면 해당 Device의 Dirty를 모두 해제하고 `Display Update` 또는 Signal
-read-back을 수행해 System Variable과 Panel 표시를 실제 Reset 결과로 맞춘다.
+Reset은 미전송 편집값을 폐기한다. 성공하면 자동으로 Display Update를 수행하여 Physical,
+Raw Hex와 Baseline을 실제 CSV Init Image에 맞춘다.
 
 ### 11.2 모든 Device Default Reset
 
 현재 모든 Device를 한 번에 Reset하는 공개 API는 없다. CAPL에서 구성된 Device Index를
 순회해 `ResetDevice`를 호출할 수 있지만 Device 전체 집합 기준으로는 원자적이지 않다.
 
-1차 Panel에서 순차 Reset을 허용한다면 중간 실패 시 어느 Device까지 완료됐는지 Result에
-남겨야 한다. 성공한 Device는 Dirty를 해제하고 read-back하며, 실패한 Device의 편집 상태는
-유지한다. 모든 Device의 All-or-Nothing Reset이 필요하면 별도의 DLL API가 필요하다.
+생성 CAPL은 실제 Device Index 오름차순으로 Reset과 Read-back을 수행한다. 중간 실패 시
+`CompletedDeviceCount`, `FailedDeviceIndex`, `ResultCode`를 남기고 이미 성공한 Device는
+Rollback하지 않는다. 전체 Device All-or-Nothing API는 이번 범위에 추가하지 않는다.
 
-## 12. 현재 저장소와 제안 구조의 차이
+## 12. 현재 구현 상태와 적용 범위
 
 ### 12.1 현재 구현된 기능
 
@@ -461,27 +469,24 @@ read-back을 수행해 System Variable과 Panel 표시를 실제 Reset 결과로
 - 개별 Signal 물리값 Read/Write
 - Address/Quantity 기반 Manual Register Write
 - Device별 CSV Init 상태 Reset Core API
-- `PhysicalValue` 64bit floating System Variable
+- Device별 `PhysicalValue[]` 64bit Floating Array와 Raw Hex String
+- Display Update, Send Changed, Device/All Reset Generated CAPL
+- Register Map 기반 XVP/System Variable/CAPL Generator와 one-file EXE
+- Sample CSV 기준 Config Generated Artifact와 stale 자동시험
 
-### 12.2 아직 구현되지 않은 기능
+### 12.2 실환경 검증 대기
 
-- Device별 전체 Signal System Variable
-- Device별 `Display Update`
-- Dirty Signal 관리 및 `Send Changed`
-- Default Reset Panel Handler
-- 모든 Device Reset
-- 실제 Device 탭 `.xvp` Panel
-- Register Map 기반 Panel/System Variable/CAPL Mapping 자동생성기
+- CANalyzer 9.x/18 Generated XVP Import와 GroupBox 복사·붙여넣기
+- Generated String/GroupBox Control과 전체 CAPL Compile/Measurement
+- 실제 Panel Display Update, Send Changed, Device/All Reset
+- 외부 Master 동시 Write 시 비원자 Display 정책과 150 Signal UI 응답성
 
 ### 12.3 현재 샘플 Register Map과의 차이
 
 현재 [Device A 샘플 Register Map](../Config/Maps/M485E/M485E_DeviceA_RegisterMap.csv)의
-`Temperature`는 `IEEE Float`로 정의되어 있다. 이 문서는 사용자가 설명한 실제 대상 Map의
-`Type=Signed`를 설계 기준으로 반영했으며, `Scale=0.1`, `Offset=0`, `Size=16`, Address와
-Min/Max는 변환 과정을 설명하기 위한 가정이다.
-
-따라서 샘플 CSV를 실제 프로젝트 기준으로 사용할 경우 다음 단계에서 `Temperature` 행을
-요구사항과 일치시켜야 한다. 이 문서 작업에서는 기존 CSV와 실행 코드를 변경하지 않는다.
+`Temperature`는 `IEEE Float`이며 Generator는 이를 그대로 유지한다. Signed Temperature,
+Scale 0.1 예제는 `tests/panel_generator/fixtures`의 합성 Fixture로만 검증하며 Sample이나 회사
+Map을 임의 변경하지 않는다.
 
 ### 12.4 Panel 전용 CSV 정보
 
@@ -494,29 +499,28 @@ Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_
 따라서 `Panel_Group`, `Display_Order`, `Decimals`, `Visible` 같은 Panel 전용 칼럼을 기존
 Register Map에 바로 추가하면 현재 DLL Load가 실패한다.
 
-기존 칼럼만으로 기본 Panel을 생성하고, 추가 Layout 정보가 필요할 때 별도의
-`PanelMap.csv`를 두는 방식을 권장한다. 현재 Register Map의 `Length`는 배열 길이가 아니므로
-Signal 배열 정보도 별도 명시가 필요하다.
+Generator는 기존 14개 칼럼만 사용한다. Signal 배열 인덱스는 Header를 제외한 CSV 행 순서이며,
+Layout 전용 칼럼이나 별도 PanelMap을 이번 버전에 추가하지 않는다.
 
-## 13. 1차 권장안
+## 13. 생성·회사 적용 절차
 
-1. Register Map은 Signal 변환의 단일 원본으로 유지한다.
-2. 일반 Signal System Variable은 `type="float", bitcount="64"`로 통일한다.
-3. CAPL 공개 물리값에는 의미가 명확한 `double` 표기를 사용한다.
-4. 저수준 Vector `F` ABI Adapter에만 CAPL `float`를 사용한다.
-5. Device별 `Display Update`, `Send Changed`, `Reset to CSV Default`를 제공한다.
-6. Display Update 중에는 CAPL Guard로 프로그램 갱신을 Dirty 처리하지 않고, 기존 Dirty
-   Signal의 편집값은 덮어쓰지 않는다.
-7. CAPL 내부 Dirty 상태를 사용해 사용자가 변경한 Signal만 전송한다.
-8. Device 전체 Send는 1차에서 순차 처리와 부분 성공을 명시한다.
-9. 전체 원자 Write가 필수로 결정되면 DLL Batch API를 별도 설계한다.
-10. 정확한 전체 범위 64bit 정수와 Signal이 없는 Register는 Manual Raw `word[]` 경로로
-   처리한다.
-11. Panel Layout 정보가 필요하면 기존 Register Map이 아니라 별도 `PanelMap.csv`로 관리한다.
+1. `M485E_Device.csv`를 선택한다.
+2. Analyze 결과의 실제 Index, Map, Signal/XVP 수를 확인한다.
+3. Generate로 EXE 옆 `Output`을 만든다.
+4. Output System Variable DB를 CANalyzer Configuration에 추가 또는 교체한다.
+5. Output `CAPL\M485E\DevicePanel`을 Config의 같은 위치에 교체한다.
+6. 생성 XVP를 Panel Designer에서 열고 GroupBox를 해당 Device Tab에 복사·붙여넣기한다.
+7. `M485E_DevicePanel::IndexN` Binding을 확인한다.
+8. CANalyzer 9.x에서 전체 Configuration을 Compile한다.
+9. Display Update, 편집, Send Changed, Device Reset과 Reset All을 시험한다.
+10. CSV Schema 또는 Signal 행 순서가 바뀌면 반드시 재생성한다.
+
+Generated XVP/CAPL/System Variable/Manifest를 직접 편집하지 않는다. Output은 transaction 방식으로
+교체하며 Manifest가 없는 기존 Output은 덮어쓰지 않는다.
 
 ## 14. 검증 항목
 
-구현 단계에서는 최소 다음 항목을 확인한다.
+자동시험과 실환경에서 다음 항목을 구분해 확인한다.
 
 - Signed Temperature `Raw 255 → 25.5 °C` Read
 - Panel `25.5 °C → Raw 255 → Register 0x00FF` Write
@@ -525,18 +529,20 @@ Signal 배열 정보도 별도 명시가 필요하다.
 - Min/Max 경계 `-40`, `125` 허용 및 범위 밖 Write 거부
 - Write 실패 시 Register 값 유지
 - Master Write 후 Display Update에서 최신 물리값 표시
-- Display Update의 프로그램 갱신이 Dirty를 발생시키지 않음
-- Dirty 편집값이 Display Update에 의해 덮어써지지 않음
-- Dirty Signal만 Send하고 미수정 Signal의 Master 값 유지
+- Display Update가 미전송 편집값을 현재 Runtime 값으로 덮고 새 Baseline을 생성
+- Baseline과 다른 Signal만 Send하고 미수정 Signal의 Master 값 유지
 - Device Send 중간 실패의 부분 성공 Result 표시
 - CANalyzer 9.x/18에서 CAPL `F`와 C++ `double` 왕복
 - Float32로는 정확히 표현할 수 없는 `16777217.0`을 사용한 8Byte ABI 정밀도 검증
-- 정확한 64bit 정수의 Direct Register `word[4]` 왕복
+- 64bit Raw `0xFEDCBA9876543210` Hex 보존과 ±2^53 정수 Physical 제한
+- Generator Header/경로/중복/주소 Group/Page/XML/Manifest/deterministic/transaction 계약
+- one-file EXE tkinter 시작과 다른 Working Directory에서 EXE 옆 Output 생성
 
 ## 15. 관련 요구사항과 코드
 
 - `FR-SIG-025~041`: Init 물리값, Scale/Offset, 반올림, 범위 및 Double 정밀도
-- `FR-UI-001~021`: Panel/System Variable과 CAPL UI 역할
+- `FR-UI-001~023`: Panel/System Variable과 CAPL UI 역할
+- `FR-DPG-001~020`: Device Panel Generator, XVP, Raw Hex와 동작 계약
 - `IF-API-017~018`: Signal Read/Write Core 및 DLL API
 - [요구사항 명세](REQUIREMENTS_SPEC.md)
 - [프로젝트 개요](PROJECT_OVERVIEW.md)
@@ -544,3 +550,6 @@ Signal 배열 정보도 별도 명시가 필요하다.
 - [CAPL Core](../Config/CAPL/M485E/M485E_Core.cin)
 - [DLL Signal API](../src/M485E.Dll/M485E_DllApi.cpp)
 - [Signal Codec](../src/M485E.Core/M485E_SignalCodec.cpp)
+- [Generator Core](../tools/panel_generator/core.py)
+- [Sample Generated Mapping](../Config/CAPL/M485E/DevicePanel/M485E_DevicePanel_Mapping.cin)
+- [Float Array Probe](CANALYZER9_PANEL_FLOAT_ARRAY_PROBE.md)

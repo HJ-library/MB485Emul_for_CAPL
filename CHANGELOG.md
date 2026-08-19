@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.6.0] - 2026-08-20
+
+### Added
+
+- `M485E_Device.csv`와 참조 Register Map에서 Device/주소별 XVP Fragment, Device별 CAPL Mapping,
+  64bit Floating System Variable DB, 모든 Device Default Reset Fragment, Manifest와 회사 적용 가이드를
+  생성하는 CANalyzer 9.x Device Signal Panel Generator.
+- Python 설치 없이 실행하는 `Panel_Generator.exe` GUI와 동일 Parser/Generator Core를 사용하는
+  Analyze/Generate CLI.
+- Signal Raw Bit Pattern을 HighWordFirst, per-word Byte Order와 Start Bit/Size 기준으로 정확히 표시하는
+  bounded CAPL Raw Hex 처리와 Device별 Display Update, Send Changed, Reset Default, Reset All 동작.
+
+### Changed
+
+- Sample Configuration에 Sample CSV로 생성한 `M485E_DevicePanel` System Variable DB와 Generated CAPL을
+  연결하고 성공한 CSV Refresh 뒤 Device Panel Snapshot을 무효화한다.
+- Device Panel 작업은 최대 15 Signal씩 Timer Chunk로 처리하며 Send Changed는 마지막 성공 Baseline과
+  다른 Signal만 CSV 행 순서로 전송한다.
+- 배포 패키지에 one-file Generator, Sample 생성 계약, 회사 적용용 Portable Package와 SHA-256 목록을
+  포함한다.
+
+### Compatibility
+
+- CAPL-visible DLL API는 23개로 유지하며 신규 DLL API나 ABI 변경은 없다.
+- 기존 `M485E.vsysvar`, Monitoring ReadOption, RTU CSV Log, Error Queue와 Modbus Runtime 계약은 변경하지
+  않는다.
+- Signed/Unsigned Physical 값은 기존 double Signal API의 ±2^53 정밀도 범위이며 전체 64bit Raw Pattern은
+  Raw Hex 표시에서 보존한다.
+
+### Verification
+
+- Generator CSV/XVP/Raw Hex/transaction/deterministic/manifest, Sample stale, PyInstaller one-file 실행과
+  다른 Working Directory 출력 경로를 자동시험한다.
+- Windows x86/x64 Debug/Release, CMake/CTest, ABI/Contract/Core/Integration, CAPL Source Contract와
+  Release Version을 회귀검증한다.
+- CANalyzer 9.x/18 XVP Import·GroupBox 복사·전체 CAPL Compile·Measurement 및 실제 USB-485/Board 시험은
+  External Verification Pending으로 유지한다.
+
 ## [0.5.0] - 2026-08-17
 
 ### Added

@@ -1,0 +1,4 @@
+Address,SignalName,Type,Length,Byte_Order,Start_Bit,Size,Scale,Offset,Unit,Init_Value,Value_Table,Min,Max
+10000,Temperature,Signed,2,BigEndian,0,16,0.1,0,degC,25.5,,-40,125
+10001,Status & Mode <A>,Unsigned,4,BigEndian,30,1,1,0,,1,"0 ""OFF"" 1 ""ON""",0,1
+10003,한글 온도,IEEE Float,4,LittleEndian,0,32,1,0,degC,25.5,,,

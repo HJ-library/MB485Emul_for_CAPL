@@ -62,6 +62,22 @@
 - [ ] Panel/Control 이름을 틀리게 설정해도 CSV 기록·OFF Drain·파일 Close가 정상 완료됨
 - [ ] 새 Session은 Panel 표시를 비우고 Logging OFF 뒤에는 마지막 표시가 유지됨
 
+## Device Signal Panel Generator
+
+- [ ] 회사 `M485E_Device.csv` Analyze 결과의 실제 Index, Map, Signal/XVP 수 확인
+- [ ] Output의 `generation-manifest.json`과 COPY_GUIDE 생성 및 입력/출력 SHA-256 확인
+- [ ] `M485E_DevicePanel.generated.vsysvar`를 Configuration에 추가 또는 교체
+- [ ] Output `CAPL\M485E\DevicePanel`을 Config의 같은 위치에 교체하고 전체 Compile
+- [ ] 생성 XVP의 GroupBox를 실제 Device Tab에 복사하고 `M485E_DevicePanel::IndexN` Binding 확인
+- [ ] Display Update 성공 후 SnapshotValid=1, Physical 값과 Raw Hex 확인
+- [ ] Display Update가 미전송 편집값을 현재 Runtime 값으로 덮어쓰는 정책 확인
+- [ ] Physical 편집 후 Send Changed가 Baseline과 다른 Signal만 쓰고 Read-back/Raw를 갱신
+- [ ] SnapshotValid=0 Send와 작업 중 재진입이 오류로 거부되고 momentary command가 0으로 복귀
+- [ ] Device Reset 후 CSV Init Value가 표시되고 Reset All의 완료 수/실패 Index 확인
+- [ ] Reset All과 Send Changed는 전체 Device 원자 Transaction이 아님을 확인
+- [ ] 외부 Master 동시 Write 중 Raw/Physical이 동일 시점 Snapshot이 아님을 확인
+- [ ] CSV Schema 또는 Signal 행 순서 변경 뒤 재생성·전체 교체
+
 ## 종료와 복구
 
 - [ ] ConnectSwitch OFF 시 Port 해제

@@ -1,7 +1,7 @@
 # Modbus485Emulator 요구사항 명세
 
-> 상태: v0.5.0 Release Baseline
-> 기준: 2026-08-17까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
+> 상태: v0.6.0 Release Baseline
+> 기준: 2026-08-20까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
 > 주의: 본 문서의 **제안** 및 **미확정** 항목은 확정 요구사항이 아니다.
 
 ## 1. 프로젝트 목적
@@ -27,7 +27,7 @@
 | ENV-006 | COM Port의 Baud Rate, Data Bits, Stop Bits 등 통신 설정은 CAPL에서 DLL로 전달한다. |
 | ENV-007 | CAN Monitoring 메시지는 Extended CAN을 사용한다. |
 | ENV-008 | CAPL Register 배열은 Address당 16bit인 `word` 배열을 사용한다. |
-| ENV-009 | v0.5.0은 x86/x64 구현 및 자동 검증 대상 Release Baseline이며 CANalyzer 9.x SP8, CANalyzer 18, USB-RS485 Adapter와 실제 Board를 사용하는 대상 실환경 검증은 별도로 수행한다. |
+| ENV-009 | v0.6.0은 x86/x64 구현 및 자동 검증 대상 Release Baseline이며 CANalyzer 9.x SP8, CANalyzer 18, USB-RS485 Adapter와 실제 Board를 사용하는 대상 실환경 검증은 별도로 수행한다. |
 | ENV-010 | CANalyzer 13 설치 환경과 공식 CAPL DLL Sample은 `.vmodule`, x86/x64 Export Table 및 CAPL 연동 구조의 자동 검증 기준으로 사용한다. |
 | ENV-011 | 현재 개발·검증·배포 대상 아키텍처는 Windows x86과 Windows x64이며 두 바이너리는 동일한 CAPL-visible 논리 API를 제공한다. |
 | ENV-012 | CAN Monitoring은 가상 CAN 채널만 사용하며 물리 CAN 채널 또는 외부 CAN 장치로 송출하지 않는다. |
@@ -316,6 +316,45 @@
 | DES-UI-001 | `Btn_ReadOption`은 사용자 편의용 Scalar만 추가하고 Handler, Timer 또는 DLL 호출을 만들지 않는다. 실제 Rule 선택 상태의 단일 기준은 기존 `Check_ReadOption[200]` Candidate/Applied 경로다. |
 | DES-UI-002 | RTU Panel 표시는 별도 DLL Queue나 System Variable 문자열을 만들지 않고 기존 10ms CSV Drain의 성공 경로에서 같은 문자열을 10줄 ring buffer로 복사한다. 별도 200ms CAPL Timer가 하나의 bounded 문자열을 구성해 CAPL Output View를 갱신한다. Panel·Control 이름은 `M485E_Main.can`의 단일 설정 영역에서 관리한다. |
 
+### 3.5A Device Signal Panel Generator
+
+| ID | 요구사항 |
+| --- | --- |
+| FR-DPG-001 | `Panel_Generator.exe`는 선택한 `M485E_Device.csv`의 정확한 Header와 각 Device의 `CSV_DB_Name` Register Map Header를 현재 Core Loader 계약과 동일하게 검증한다. 절대경로, Device CSV 디렉터리를 벗어나는 `..`, 누락 파일, 중복 Device Index와 중복 SignalName을 행·Column 정보와 함께 거부한다. |
+| FR-DPG-002 | Generator GUI는 Device CSV 선택, Analyze/Validate, Device Index·Device Name·CSV_DB_Name·Signal Count·XVP Count Preview, Generate와 Open Output을 제공한다. 자동시험용 CLI는 동일 Parser/Generator Core를 사용한다. |
+| FR-DPG-003 | 출력 기준은 현재 Working Directory가 아니라 실행 중인 `Panel_Generator.exe`의 디렉터리이며, 실제 sparse Device Index별 `IndexN`, `Common`, `CAPL/M485E/DevicePanel`, `SystemVariables`, Manifest와 `COPY_GUIDE.md`를 생성한다. 같은 Register Map을 공유하는 Device도 Index별 독립 상태를 생성한다. |
+| FR-DPG-004 | Output은 임시 디렉터리에 전체 생성·검증한 뒤 성공 시에만 교체한다. 기존 Output에 Generator Manifest가 없으면 덮어쓰지 않으며, 실패 시 기존 Output을 보존한다. 동일 입력에는 Timestamp 없는 byte-identical 결과를 생성한다. |
+| FR-DPG-005 | Manifest는 Generator Version, 입력 SHA-256, Device/Signal Mapping과 모든 출력 파일 SHA-256을 기록하며 자체 파일은 출력 Hash 목록에서 제외한다. |
+| FR-DPG-006 | XVP는 기존 Panel 전체나 Tab을 재현하지 않는 독립 복사·붙여넣기 Fragment이며 기본 Vector GroupBox, Static Text, String Display와 editable 64bit Floating Input/Output만 사용한다. Value_Table은 Parse하지만 ComboBox/Enum Control은 만들지 않는다. |
+| FR-DPG-007 | 주소 Group은 실제 Decimal 최소 Address부터 31 Register inclusive 단위로 계산하고 Signal 시작 Address로 배치한다. 빈 Group은 생략하며 한 Group의 Signal이 `MAX_ROWS_PER_FRAGMENT=15`를 넘으면 같은 범위의 `_P01`, `_P02` Fragment로 분할한다. |
+| FR-DPG-008 | XVP의 모든 Object Name, Control Name과 TabIndex는 파일 안에서 고유하며 각 Signal의 `PhysicalValue[i]`와 `RawHex::Sxxx` 바인딩은 정확히 한 번 존재한다. Raw Hex Control은 Display Only, Physical Control은 editable이고 XML 특수문자·한글·공백을 올바르게 Escape한다. |
+| FR-DPG-009 | 생성 System Variable DB의 Root는 `M485E_DevicePanel`이다. Common은 `ResetAllDefault`, `ResultCode`, `CompletedDeviceCount`, `FailedDeviceIndex`를 갖고, 각 `IndexN`은 64bit `PhysicalValue[signalCount]`, String `RawHex::Sxxx`, `DisplayUpdate`, `SendChanged`, `ResetDefault`, `SnapshotValid`, `ResultCode`, `WrittenCount`, `FailedSignalIndex`, `FailedSignalName`을 갖는다. |
+| FR-DPG-010 | Raw Hex는 Byte_Order를 정상화한 논리 Signal Frame에서 Start_Bit/Size를 적용한 unsigned Raw Bit Pattern이다. `0x` Prefix, 대문자, `ceil(Size/4)`자리 Leading Zero 형식을 사용하며 CAPL qword/double Shift가 아닌 `word[]` Bit/Nibble 알고리즘으로 Size 1~64를 처리한다. |
+| FR-DPG-011 | Generator Signal Mapping Index `S000...`과 `PhysicalValue[i]`는 Register Map Header를 제외한 Signal CSV 행 순서로 고정한다. 같은 Address+Length+Byte_Order Frame을 공유하는 Bit Signal은 Display Update 중 한 번 읽은 Register Word를 재사용한다. |
+| FR-DPG-012 | 생성 CAPL은 `M485E_Core_ReadRegisters`, `M485E_Core_ReadSignal`, `M485E_Core_WriteSignal`, `M485E_Core_ResetDevice`만 사용하고 저수준 `M485E_Dll_*`을 직접 호출하지 않는다. 공개 DLL API 23개와 RuleDataMeta 9개 계약은 변경하지 않는다. |
+| FR-DPG-013 | Display Update는 시작 시 SnapshotValid를 0으로 만들고 현재 Runtime의 모든 Physical/Raw 값을 15 Signal 이하 Chunk Timer로 읽는다. 전체 성공 후에만 Physical 배열·Baseline을 게시하고 SnapshotValid=1로 바꾸며, Raw 실패는 해당 표시를 `N/A`로 바꾸고 전체 Snapshot을 무효로 유지한다. |
+| FR-DPG-014 | Send Changed는 SnapshotValid=1일 때만 시작하며 Panel Float Array와 Baseline이 다른 Signal만 CSV 순서로 Write한다. 첫 실패에서 중단하고 이미 성공한 Write는 유지하며 WrittenCount·실패 Signal을 게시한다. 성공 Signal은 Read-back으로 양자화된 Physical/Raw와 Baseline을 갱신한다. |
+| FR-DPG-015 | Device Reset은 해당 Index의 `M485E_Core_ResetDevice` 성공 후 Display Update를 수행한다. Reset All은 실제 Device Index 오름차순으로 Device Reset과 Read-back을 수행하고 첫 실패에서 중단하며 이미 완료된 앞 Device는 Rollback하지 않는다. |
+| FR-DPG-016 | 모든 momentary command는 성공·실패·Busy 경로에서 0으로 복귀한다. Device 작업과 Reset All은 재진입을 `M485E_ERR_OPERATION_BUSY`로 거부하고, SnapshotValid=0인 Send Changed는 `M485E_ERR_INVALID_STATE`로 거부한다. |
+| FR-DPG-017 | 성공한 CSV Refresh로 새 Runtime이 게시될 때 모든 Device Panel Snapshot을 무효화한다. 실패한 Refresh는 Active Runtime과 기존 Snapshot 계약을 임의로 교체하지 않는다. |
+| FR-DPG-018 | Display Update는 Device 전체의 동일 시점 원자 Snapshot을 보장하지 않는다. 외부 Master가 동시에 Write하면 Raw Register Read와 Physical Signal Read 사이의 시점이 다를 수 있으며, Reset All과 Send Changed도 Device 전체 원자 Transaction이 아니다. |
+| FR-DPG-019 | IEEE Float/Double Physical 값은 지원한다. Signed/Unsigned 정수 Physical 값은 기존 double Signal API 때문에 ±2^53 범위까지만 정확하며 64bit 전체 Raw Pattern은 Raw Hex로 정확히 표시한다. v0.6.0은 Raw Hex 편집과 full-range 64bit Integer Write를 지원하지 않는다. |
+| FR-DPG-020 | 배포는 pinned PyInstaller one-file `Panel_Generator.exe`를 포함하여 회사 PC에 Python 설치를 요구하지 않는다. COPY_GUIDE는 CSV 선택→Analyze→Generate→System Variable/CAPL 교체→XVP GroupBox 복사→Binding/Compile/동작 확인→CSV 변경 시 재생성 순서를 명시하고 Generated 파일 직접 편집을 금지한다. |
+
+#### 설계 결정
+
+| ID | 결정 |
+| --- | --- |
+| DES-DPG-001 | GUI와 CLI는 `tools/panel_generator/core.py`의 단일 Parser/Generator Core를 공유하고 Python 표준 라이브러리와 tkinter만 Runtime 의존성으로 사용한다. |
+| DES-DPG-002 | XVP Serializer는 사용자 제공 Float Array Probe의 9.0.137.0 구조와 설치된 Vector Sample의 GroupBox/String Symbol을 기술 Fixture로 사용하되 사용자 Panel 디자인은 Template로 사용하지 않는다. Symbol Type은 Integer=1, Floating=2, String=4로 고정해 자동 검증한다. |
+| DES-DPG-003 | `M485E_UI.cin`은 생성 Mapping 하나만 Include하고 Mapping이 Device별 생성 CAPL을 Include한다. `M485E_Main.can`에는 Device별 Include를 추가하지 않는다. |
+| DES-DPG-004 | Sample Device CSV에서 생성한 CAPL과 System Variable DB를 Config에 체크인하고 Generator stale 시험으로 재생성 결과와 byte 단위 일치를 확인한다. 회사 Register Map은 저장소에 포함하지 않는다. |
+| DES-DPG-005 | Physical 편집 Baseline과 작업 Cursor/Timer는 Device별 고정 크기 CAPL 상태로 분리하며 주기 자동 갱신, 신규 DLL API, 별도 Queue 또는 무제한 Panel Buffer를 만들지 않는다. |
+| DES-DPG-006 | Raw Hex Frame Cache는 Display Update Chunk 시작 시 무효화하고 같은 Frame Signal 사이에서만 재사용한다. Signal Write Read-back은 해당 Frame만 무효화해 다시 읽는다. |
+| DES-DPG-007 | Output 교체는 Manifest 소유권 확인, sibling 임시 생성, 검증, 기존 Output Backup, 원자 Rename 순서로 수행하고 실패 시 Backup을 복원한다. |
+| DES-DPG-008 | Generator CAPL은 CP949+CRLF, Python/JSON/Markdown/XML은 UTF-8을 사용한다. XVP와 System Variable XML은 Parser 재개방, 고유 식별자, 바인딩 개수와 Symbol Type을 자동 검증한다. |
+| DES-DPG-009 | Sample Configuration은 Generator 산출 CAPL/System Variable을 포함하지만 XVP는 사용자가 Panel Designer에서 기존 Tab에 복사하는 Fragment로만 배포한다. 저장소에 임의의 완성 Panel `.xvp`를 만들지 않는다. |
+
 ### 3.6 CAN Monitoring
 
 | ID | 요구사항 |
@@ -557,7 +596,7 @@
 | IF-CORE-005 | Signal 범주는 `Index + SignalName` 기반 Physical Read와 Physical Write 기능을 제공한다. |
 | IF-CORE-006 | 진단 범주는 Versioned Lifecycle Status, Context Handle별 최근 동기 오류 상세 Context, 비동기 Error Event FIFO 및 FIFO 손실 상태 조회 기능을 제공한다. |
 | IF-CORE-007 | 1차 CAPL 공개 API 범위는 `IF-CORE-001~006`으로 제한하며 DLL 내부 Worker, Queue, Register Memory 및 Serial Handle을 직접 조작하는 API는 공개하지 않는다. |
-| IF-CORE-008 | 모든 공개 Core API 이름은 `M485E_Core_` Prefix를 사용하고 `IF-RET-001~009`의 공통 상태·출력 계약을 따른다. v0.5.0의 23개 CAPL-visible API는 x86/x64에서 동일한 이름·순서·Signature를 사용하며 실제 CAPL DLL ABI는 CANalyzer 9.x와 18 시험에서 검증한다. |
+| IF-CORE-008 | 모든 공개 Core API 이름은 `M485E_Core_` Prefix를 사용하고 `IF-RET-001~009`의 공통 상태·출력 계약을 따른다. v0.6.0의 23개 CAPL-visible API는 x86/x64에서 동일한 이름·순서·Signature를 사용하며 실제 CAPL DLL ABI는 CANalyzer 9.x와 18 시험에서 검증한다. |
 | IF-CORE-009 | 공개 Core CSV 설정 API는 `DeviceMap`, `ModbusRule`, `Modbus485EmulMap`의 논리 파일 종류와 프로젝트 상대경로를 입력받고 `getAbsFilePath()`로 변환한다. 저수준 DLL Export는 논리 파일 종류와 변환된 절대경로를 입력받는다. 별도 Base Directory 설정 API는 제공하지 않으며 FileType과 문자열 ABI는 `IF-CONST-001`, `IF-ABI-001~011` 및 `TBD-021`을 따른다. |
 
 #### CAPL 공개 API와 저수준 DLL Export 목록
@@ -1451,10 +1490,17 @@
 | AC-241 | PERF-022, DES-THREAD-005 | Disconnected, Connected 및 진행 중 Lifecycle 작업의 취소 가능한 I/O 상태에서 Finalize가 2,000ms 이내 완료된다. 지연 강제 시험에서도 Thread Detach·강제 종료와 Join 전 Context 해제가 발생하지 않고 목표 초과를 진단한다. |
 | AC-242 | DES-BUILD-005 | 깨끗한 개발 PC에서 지정한 Vector 설치 경로 Build Property와 Visual Studio/MSBuild 또는 CMake Win32/x64 Configuration으로 빌드할 수 있고 저장소에 재배포가 확인되지 않은 Vector SDK 파일이 포함되지 않는다. |
 | AC-243 | IF-CODE-019~020, DES-CODE-004 | 확정 오류 코드와 C++·CAPL 상수·Message Key가 일치한다. 시험용 신규 오류 코드를 해당 영역의 미사용 번호에 추가해도 기존 코드의 숫자·이름·의미가 바뀌지 않고 기준 목록, 양쪽 언어 매핑, 문서와 시험이 함께 갱신된다. |
-| AC-254 | IF-API-001~008, IF-API-011, IF-API-014~027, COMP-009 | x86/x64 ABI Probe가 v0.5의 23개 API 이름·순서·파라미터 방향·Capacity 보호와 제거 Export 부재를 확인한다. |
+| AC-254 | IF-API-001~008, IF-API-011, IF-API-014~027, COMP-009 | x86/x64 ABI Probe가 v0.6의 23개 API 이름·순서·파라미터 방향·Capacity 보호와 제거 Export 부재를 확인한다. |
 | AC-255 | FR-UI-022, DES-UI-001 | System Variable DB에 `Btn_ReadOption`이 `int32` Scalar로 존재하고 `Check_ReadOption[200]`은 그대로 유지되며, 저장소 CAPL에 `Btn_ReadOption` Handler가 존재하지 않는다. |
 | AC-256 | FR-UI-023, DES-UI-002, LOG-025~028 | 하나의 RTU Log Queue Dequeue 경로가 모든 CSV 행을 기록하고 같은 성공 문자열만 최근 10줄 ring buffer에 추가한다. Panel 갱신은 200ms 이상 간격의 `putValueToControl()` Overwrite이며 Panel 실패가 CSV Drain·Shutdown·DroppedCount에 영향을 주지 않는다. |
 | AC-257 | FR-UI-023, LOG-025~028 | 새 Session에서 Panel buffer가 초기화되고 OFF·Measurement 종료 시 CSV Queue를 기존 정책대로 배출·종료한 뒤 마지막 Panel 표시가 유지된다. CANalyzer 9.x와 18에서 Panel Name·Control Name 일치, Overwrite Mode, 10줄 경계와 갱신 주기를 실환경 확인한다. |
+| AC-258 | FR-DPG-001~005 | 정확/오류 Header, 누락·절대·이탈 Map, 중복 Index/Signal, sparse/shared Map, deterministic 생성, Manifest Hash, 기존 Output 보존과 manifest 없는 Output 거부 자동시험이 모두 통과한다. |
+| AC-259 | FR-DPG-006~008 | 31 Register Group, 빈 Group 생략, 15행 Page 분할, GroupBox, XML Parse/Escape, 식별자 고유성, Physical/Raw 바인딩 1회, Raw read-only, Physical editable, ComboBox 부재 시험이 통과한다. |
+| AC-260 | FR-DPG-009~012 | 생성 System Variable 구조·Array 길이·Symbol Type과 Sxxx CSV 순서를 확인하고, 생성 CAPL이 네 Core Wrapper만 호출하며 DLL Export 직접 호출이 없음을 검증한다. |
+| AC-261 | FR-DPG-010~011 | 2/4/6/8Byte, Big/LittleEndian, 비정렬/Word 경계, Size 1/16/32/64, Signed -125, Temperature 0x00FF/25.5, IEEE Float/Double, 64bit Pattern, Leading Zero와 공유 Frame Raw Hex 시험이 통과한다. |
+| AC-262 | FR-DPG-013~017 | Generated CAPL Source Contract가 bounded Chunk, SnapshotValid, Busy/Invalid State, 실패 Signal/Count, momentary 복귀, Reset/Reset All, 성공 Refresh invalidate와 Sample stale 계약을 검증한다. |
+| AC-263 | FR-DPG-002~005, FR-DPG-020 | pinned one-file EXE가 tkinter 시작, Analyze/Generate와 다른 Working Directory 실행을 통과하고 Output이 EXE 옆에 생성되며 회사 PC에서 Python이 필요 없는 단일 파일로 패키징된다. |
+| AC-264 | FR-DPG-013~018 | CANalyzer 9.x/18에서 Float Array Binding, XVP Import/복사, Display/Send/Reset, Busy, Refresh invalidate, 비원자 동시 Master 동작을 실제 Configuration에서 검증하고 미실행 항목은 External Verification Pending으로 유지한다. |
 
 ## 12. 확정 설계 및 검증 추적
 
@@ -1734,6 +1780,11 @@
 | RISK-017 | Finalize 2,000ms 목표는 확정했지만 안전을 위해 모든 Worker Join 전 반환할 수 없으므로 취소 불가능한 Driver I/O가 있으면 CANalyzer 종료가 지연될 수 있다. 실제 Adapter 동작을 `TBD-065`에서 검증한다. |
 | RISK-018 | 자동 방향 제어가 아닌 RS-485 Adapter를 연결하면 응답 송신 또는 Local Echo 처리에 실패할 수 있다. 지원 Adapter 조건을 배포 문서와 연결 전 진단에 명시하고 `AC-229`로 검증한다. |
 | RISK-019 | CANalyzer Configuration의 Panel Name 또는 CAPL Output View Control Name이 CAPL 설정값과 다르면 최근 로그 표시가 갱신되지 않을 수 있다. CSV는 독립적으로 계속 기록되므로 전체 원본 손실 위험은 없으며, 이름 일치·Overwrite Mode·고속 갱신 지연은 `TBD-066`에서 실환경 검증한다. |
+| RISK-020 | 사용자 제공 Float Array Probe는 성공했다고 보고됐지만 정확한 CANalyzer Version/SP/날짜가 기록되지 않았다. Float Array Serializer 근거와 별개로 생성 String Control, GroupBox Import, 복사·붙여넣기와 전체 Generated CAPL Compile/Measurement는 CANalyzer 9.x/18 실환경 검증이 필요하다. |
+| RISK-021 | 외부 Master 동시 Write 시 Display Update의 Raw와 Physical Read 시점이 달라질 수 있고 Send Changed/Reset All은 전체 Device 원자 Transaction이 아니다. UI와 COPY_GUIDE에 이 제한을 명시하고 실패 시 성공 완료 수와 실패 Signal/Device를 보존한다. |
+| RISK-022 | CAPL `float`/DLL `double` Signal 경계는 64bit Floating을 사용하지만 정수 64bit 전체 범위를 정확히 표현하지 못한다. ±2^53 밖의 정수는 Raw Hex 확인만 보장하고 편집 Write를 지원하지 않는다. |
+| RISK-023 | 회사 Register Map은 저장소 밖에 있어 Sample/합성 Fixture만 자동 검증한다. 회사 적용 전 Analyze, Generated CAPL Compile, XVP Import와 실제 Device별 Read/Write/Reset 검증을 수행해야 한다. |
+| RISK-024 | 150 Signal Device의 Chunk 처리와 생성 CAPL 크기는 정적·자동 시험 대상이지만 CANalyzer 9.x UI 응답성과 이벤트 지연은 실제 Panel에서 측정되지 않았다. Chunk 상수 15를 유지하고 실환경 결과 없이 성능 PASS를 주장하지 않는다. |
 
 ## 14. 범위에서 제외할 내용
 
@@ -1747,6 +1798,8 @@
 | OOS-006 | 연결 중 CSV Hot Refresh |
 | OOS-007 | CSV 파일 변경 자동 감지 |
 | OOS-008 | 상세 Panel 화면 배치와 디자인 |
+| OOS-016 | 회사 Register Map을 인터넷 또는 제품명으로 추정해 저장소 Sample로 추가하는 것 |
+| OOS-017 | v0.6.0에서 Raw Hex 편집, full-range 64bit Integer Write 또는 이를 위한 신규 DLL API 추가 |
 | OOS-009 | 요구사항에 포함되지 않은 Modbus Function Code 구현 |
 | OOS-010 | IEEE 타입 외의 추가 Signal 타입 지원 |
 | OOS-011 | 확정된 23개 외 추가 공개 Export API 및 FC `0x06` 정상 Write 지원 |

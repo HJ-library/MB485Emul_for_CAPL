@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<systemvariables version="4">
+  <namespace name="" comment="">
+    <namespace name="M485E_DevicePanel" comment="Generated M485E Device Signal Panel variables">
+      <namespace name="Common" comment="All-device reset state">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResetAllDefault" comment="Momentary non-atomic reset command for all generated Device indexes" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Final all-device reset result" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="CompletedDeviceCount" comment="Number of Devices fully reset and read back before completion" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="FailedDeviceIndex" comment="Actual failed Device Index, or -1 when no failure occurred" bitcount="32" isSigned="true" encoding="65001" type="int" />
+      </namespace>
+      <namespace name="Index0" comment="Generated Device Index 0: Sample Device A">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="PhysicalValue" comment="Editable physical values in Register Map signal-row order" bitcount="64" isSigned="true" encoding="65001" type="floatarray" arrayLength="4" />
+        <namespace name="RawHex" comment="Exact unsigned signal Raw Bit Pattern">
+          <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="S000" comment="Power12V raw bits; generated mapping index 0" bitcount="0" isSigned="false" encoding="65001" type="string" />
+          <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="S001" comment="Control_SD_Detect_Switch raw bits; generated mapping index 1" bitcount="0" isSigned="false" encoding="65001" type="string" />
+          <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="S002" comment="SignedCurrent raw bits; generated mapping index 2" bitcount="0" isSigned="false" encoding="65001" type="string" />
+          <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="S003" comment="Temperature raw bits; generated mapping index 3" bitcount="0" isSigned="false" encoding="65001" type="string" />
+        </namespace>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="DisplayUpdate" comment="Momentary command to read all Device signals in bounded chunks" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SendChanged" comment="Momentary command to write values changed from the valid baseline" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResetDefault" comment="Momentary command to restore CSV Init values and read back" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SnapshotValid" comment="1 only after a complete successful Display Update/read-back" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Result of the most recent Device Panel operation" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="WrittenCount" comment="Signals successfully written by the most recent Send Changed" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="FailedSignalIndex" comment="CSV signal-row mapping index, or -1" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="FailedSignalName" comment="Exact failed CSV SignalName, or an empty string" bitcount="0" isSigned="false" encoding="65001" type="string" />
+      </namespace>
+      <namespace name="Index1" comment="Generated Device Index 1: Sample Device B">
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="PhysicalValue" comment="Editable physical values in Register Map signal-row order" bitcount="64" isSigned="true" encoding="65001" type="floatarray" arrayLength="1" />
+        <namespace name="RawHex" comment="Exact unsigned signal Raw Bit Pattern">
+          <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="S000" comment="Counter raw bits; generated mapping index 0" bitcount="0" isSigned="false" encoding="65001" type="string" />
+        </namespace>
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="DisplayUpdate" comment="Momentary command to read all Device signals in bounded chunks" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SendChanged" comment="Momentary command to write values changed from the valid baseline" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResetDefault" comment="Momentary command to restore CSV Init values and read back" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="SnapshotValid" comment="1 only after a complete successful Display Update/read-back" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="ResultCode" comment="Result of the most recent Device Panel operation" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="WrittenCount" comment="Signals successfully written by the most recent Send Changed" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="FailedSignalIndex" comment="CSV signal-row mapping index, or -1" bitcount="32" isSigned="true" encoding="65001" type="int" />
+        <variable anlyzLocal="2" readOnly="false" valueSequence="false" unit="" name="FailedSignalName" comment="Exact failed CSV SignalName, or an empty string" bitcount="0" isSigned="false" encoding="65001" type="string" />
+      </namespace>
+    </namespace>
+  </namespace>
+</systemvariables>

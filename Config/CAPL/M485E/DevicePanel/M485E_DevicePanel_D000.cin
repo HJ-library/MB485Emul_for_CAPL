@@ -1,0 +1,536 @@
+/*@!Encoding:949*/
+
+// Generated file. Do not edit; regenerate from M485E_Device.csv.
+variables
+{
+     const long M485E_DEVICEPANEL_D000_INDEX = 0;
+     const long M485E_DEVICEPANEL_D000_SIGNAL_COUNT = 4;
+     const long M485E_DEVICEPANEL_D000_FRAME_COUNT = 4;
+     struct M485E_DevicePanel_D000_FrameCache
+     {
+          word words[4];
+          long valid;
+     };
+     struct M485E_DevicePanel_D000_FrameCache g485E_DevicePanel_D000Frames[4];
+     float g485E_DevicePanel_D000Baseline[4];
+     float g485E_DevicePanel_D000Working[4];
+     float g485E_DevicePanel_D000PanelValues[4];
+     long g485E_DevicePanel_D000Meta[6];
+     char g485E_DevicePanel_D000SignalName[128];
+     char g485E_DevicePanel_D000RawText[20];
+     long g485E_DevicePanel_D000Operation;
+     long g485E_DevicePanel_D000Cursor;
+     long g485E_DevicePanel_D000DisplayStage;
+     long g485E_DevicePanel_D000SnapshotValid;
+     long g485E_DevicePanel_D000WrittenCount;
+     long g485E_DevicePanel_D000CommonRequest;
+     msTimer t485E_DevicePanel_D000;
+}
+
+long M485E_DevicePanel_D000_IsBusy()
+{
+     return g485E_DevicePanel_D000Operation != M485E_DEVICE_PANEL_OPERATION_NONE;
+}
+
+void M485E_DevicePanel_D000_GetSignalName(long signalIndex, char outName[])
+{
+     outName[0] = 0;
+     switch (signalIndex)
+     {
+          case 0:
+               outName[0] = 0;
+               outName[0] = 80;
+               outName[1] = 111;
+               outName[2] = 119;
+               outName[3] = 101;
+               outName[4] = 114;
+               outName[5] = 49;
+               outName[6] = 50;
+               outName[7] = 86;
+               outName[8] = 0;
+               break;
+          case 1:
+               outName[0] = 0;
+               outName[0] = 67;
+               outName[1] = 111;
+               outName[2] = 110;
+               outName[3] = 116;
+               outName[4] = 114;
+               outName[5] = 111;
+               outName[6] = 108;
+               outName[7] = 95;
+               outName[8] = 83;
+               outName[9] = 68;
+               outName[10] = 95;
+               outName[11] = 68;
+               outName[12] = 101;
+               outName[13] = 116;
+               outName[14] = 101;
+               outName[15] = 99;
+               outName[16] = 116;
+               outName[17] = 95;
+               outName[18] = 83;
+               outName[19] = 119;
+               outName[20] = 105;
+               outName[21] = 116;
+               outName[22] = 99;
+               outName[23] = 104;
+               outName[24] = 0;
+               break;
+          case 2:
+               outName[0] = 0;
+               outName[0] = 83;
+               outName[1] = 105;
+               outName[2] = 103;
+               outName[3] = 110;
+               outName[4] = 101;
+               outName[5] = 100;
+               outName[6] = 67;
+               outName[7] = 117;
+               outName[8] = 114;
+               outName[9] = 114;
+               outName[10] = 101;
+               outName[11] = 110;
+               outName[12] = 116;
+               outName[13] = 0;
+               break;
+          case 3:
+               outName[0] = 0;
+               outName[0] = 84;
+               outName[1] = 101;
+               outName[2] = 109;
+               outName[3] = 112;
+               outName[4] = 101;
+               outName[5] = 114;
+               outName[6] = 97;
+               outName[7] = 116;
+               outName[8] = 117;
+               outName[9] = 114;
+               outName[10] = 101;
+               outName[11] = 0;
+               break;
+          default:
+               break;
+     }
+}
+
+long M485E_DevicePanel_D000_GetSignalMeta(long signalIndex, long outMeta[])
+{
+     switch (signalIndex)
+     {
+          case 0:
+               outMeta[0] = 0;
+               outMeta[1] = 10000;
+               outMeta[2] = 2;
+               outMeta[3] = 0;
+               outMeta[4] = 0;
+               outMeta[5] = 32;
+               return M485E_OK;
+          case 1:
+               outMeta[0] = 1;
+               outMeta[1] = 10002;
+               outMeta[2] = 2;
+               outMeta[3] = 0;
+               outMeta[4] = 30;
+               outMeta[5] = 1;
+               return M485E_OK;
+          case 2:
+               outMeta[0] = 2;
+               outMeta[1] = 10004;
+               outMeta[2] = 2;
+               outMeta[3] = 0;
+               outMeta[4] = 0;
+               outMeta[5] = 16;
+               return M485E_OK;
+          case 3:
+               outMeta[0] = 3;
+               outMeta[1] = 10006;
+               outMeta[2] = 2;
+               outMeta[3] = 1;
+               outMeta[4] = 0;
+               outMeta[5] = 32;
+               return M485E_OK;
+          default:
+               return M485E_ERR_INVALID_ARGUMENT;
+     }
+}
+
+void M485E_DevicePanel_D000_SetRawHex(long signalIndex, char text[])
+{
+     switch (signalIndex)
+     {
+          case 0:
+               sysSetVariableString(sysvar::M485E_DevicePanel::Index0::RawHex::S000, text);
+               break;
+          case 1:
+               sysSetVariableString(sysvar::M485E_DevicePanel::Index0::RawHex::S001, text);
+               break;
+          case 2:
+               sysSetVariableString(sysvar::M485E_DevicePanel::Index0::RawHex::S002, text);
+               break;
+          case 3:
+               sysSetVariableString(sysvar::M485E_DevicePanel::Index0::RawHex::S003, text);
+               break;
+          default:
+               break;
+     }
+}
+
+void M485E_DevicePanel_D000_SetRawUnavailable(long signalIndex)
+{
+     strncpy(g485E_DevicePanel_D000RawText, "N/A", elcount(g485E_DevicePanel_D000RawText));
+     M485E_DevicePanel_D000_SetRawHex(signalIndex, g485E_DevicePanel_D000RawText);
+}
+
+void M485E_DevicePanel_D000_ClearFailure()
+{
+     g485E_DevicePanel_D000SignalName[0] = 0;
+     @sysvar::M485E_DevicePanel::Index0::FailedSignalIndex = -1;
+     sysSetVariableString(sysvar::M485E_DevicePanel::Index0::FailedSignalName, g485E_DevicePanel_D000SignalName);
+}
+
+void M485E_DevicePanel_D000_SetFailure(long result, long signalIndex)
+{
+     @sysvar::M485E_DevicePanel::Index0::ResultCode = result;
+     @sysvar::M485E_DevicePanel::Index0::FailedSignalIndex = signalIndex;
+     if (signalIndex >= 0)
+          M485E_DevicePanel_D000_GetSignalName(signalIndex, g485E_DevicePanel_D000SignalName);
+     else
+          g485E_DevicePanel_D000SignalName[0] = 0;
+     sysSetVariableString(sysvar::M485E_DevicePanel::Index0::FailedSignalName, g485E_DevicePanel_D000SignalName);
+}
+
+void M485E_DevicePanel_D000_ClearFrameCache()
+{
+     long frameIndex;
+     for (frameIndex = 0; frameIndex < M485E_DEVICEPANEL_D000_FRAME_COUNT; frameIndex++)
+          g485E_DevicePanel_D000Frames[frameIndex].valid = 0;
+}
+
+void M485E_DevicePanel_D000_InvalidateSignalFrame(long signalIndex)
+{
+     if (M485E_DevicePanel_D000_GetSignalMeta(signalIndex, g485E_DevicePanel_D000Meta) == M485E_OK)
+          g485E_DevicePanel_D000Frames[g485E_DevicePanel_D000Meta[0]].valid = 0;
+}
+
+long M485E_DevicePanel_D000_ReadRaw(long signalIndex)
+{
+     long result;
+     long frameIndex;
+     result = M485E_DevicePanel_D000_GetSignalMeta(signalIndex, g485E_DevicePanel_D000Meta);
+     if (result != M485E_OK) return result;
+     frameIndex = g485E_DevicePanel_D000Meta[0];
+     if (g485E_DevicePanel_D000Frames[frameIndex].valid == 0)
+     {
+          result = M485E_Core_ReadRegisters(0,
+               g485E_DevicePanel_D000Meta[1], g485E_DevicePanel_D000Meta[2],
+               g485E_DevicePanel_D000Frames[frameIndex].words);
+          if (result != M485E_OK)
+          {
+               M485E_DevicePanel_D000_SetRawUnavailable(signalIndex);
+               return result;
+          }
+          g485E_DevicePanel_D000Frames[frameIndex].valid = 1;
+     }
+     M485E_DevicePanel_FormatRawHex(g485E_DevicePanel_D000Frames[frameIndex].words,
+          g485E_DevicePanel_D000Meta[2], g485E_DevicePanel_D000Meta[3],
+          g485E_DevicePanel_D000Meta[4], g485E_DevicePanel_D000Meta[5], g485E_DevicePanel_D000RawText);
+     M485E_DevicePanel_D000_SetRawHex(signalIndex, g485E_DevicePanel_D000RawText);
+     return M485E_OK;
+}
+
+void M485E_DevicePanel_D000_FinishDisplay(long result, long failedSignalIndex)
+{
+     long signalIndex;
+     if (result == M485E_OK && g485E_DevicePanel_D000Cursor == M485E_DEVICEPANEL_D000_SIGNAL_COUNT)
+     {
+          for (signalIndex = 0; signalIndex < M485E_DEVICEPANEL_D000_SIGNAL_COUNT; signalIndex++)
+          {
+               g485E_DevicePanel_D000Baseline[signalIndex] = g485E_DevicePanel_D000Working[signalIndex];
+               g485E_DevicePanel_D000PanelValues[signalIndex] = g485E_DevicePanel_D000Working[signalIndex];
+          }
+          sysSetVariableFloatArray(sysvar::M485E_DevicePanel::Index0::PhysicalValue,
+               g485E_DevicePanel_D000PanelValues, M485E_DEVICEPANEL_D000_SIGNAL_COUNT);
+          g485E_DevicePanel_D000SnapshotValid = 1;
+          @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 1;
+          @sysvar::M485E_DevicePanel::Index0::ResultCode = M485E_OK;
+          M485E_DevicePanel_D000_ClearFailure();
+     }
+     else
+     {
+          g485E_DevicePanel_D000SnapshotValid = 0;
+          @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+          M485E_DevicePanel_D000_SetFailure(result, failedSignalIndex);
+     }
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_NONE;
+     if (g485E_DevicePanel_D000CommonRequest != 0)
+     {
+          g485E_DevicePanel_D000CommonRequest = 0;
+          M485E_DevicePanel_CommonDeviceCompleted(0, result);
+     }
+}
+
+void M485E_DevicePanel_D000_ProcessDisplay()
+{
+     long processed;
+     long result;
+     float physicalValue;
+     if (g485E_DevicePanel_D000DisplayStage == M485E_DEVICE_PANEL_DISPLAY_STAGE_CLEAR_RAW)
+     {
+          for (processed = 0; processed < M485E_DEVICE_PANEL_CHUNK_SIZE &&
+               g485E_DevicePanel_D000Cursor < M485E_DEVICEPANEL_D000_SIGNAL_COUNT; processed++)
+          {
+               M485E_DevicePanel_D000_SetRawUnavailable(g485E_DevicePanel_D000Cursor);
+               g485E_DevicePanel_D000Cursor++;
+          }
+          if (g485E_DevicePanel_D000Cursor < M485E_DEVICEPANEL_D000_SIGNAL_COUNT)
+          {
+               setTimer(t485E_DevicePanel_D000, 1);
+               return;
+          }
+          g485E_DevicePanel_D000DisplayStage = M485E_DEVICE_PANEL_DISPLAY_STAGE_READ;
+          g485E_DevicePanel_D000Cursor = 0;
+          setTimer(t485E_DevicePanel_D000, 1);
+          return;
+     }
+     for (processed = 0; processed < M485E_DEVICE_PANEL_CHUNK_SIZE &&
+          g485E_DevicePanel_D000Cursor < M485E_DEVICEPANEL_D000_SIGNAL_COUNT; processed++)
+     {
+          result = M485E_DevicePanel_D000_ReadRaw(g485E_DevicePanel_D000Cursor);
+          if (result != M485E_OK)
+          {
+               M485E_DevicePanel_D000_FinishDisplay(result, g485E_DevicePanel_D000Cursor);
+               return;
+          }
+          M485E_DevicePanel_D000_GetSignalName(g485E_DevicePanel_D000Cursor, g485E_DevicePanel_D000SignalName);
+          physicalValue = 0.0;
+          result = M485E_Core_ReadSignal(0, g485E_DevicePanel_D000SignalName, physicalValue);
+          if (result != M485E_OK)
+          {
+               M485E_DevicePanel_D000_FinishDisplay(result, g485E_DevicePanel_D000Cursor);
+               return;
+          }
+          g485E_DevicePanel_D000Working[g485E_DevicePanel_D000Cursor] = physicalValue;
+          g485E_DevicePanel_D000Cursor++;
+     }
+     if (g485E_DevicePanel_D000Cursor >= M485E_DEVICEPANEL_D000_SIGNAL_COUNT)
+          M485E_DevicePanel_D000_FinishDisplay(M485E_OK, -1);
+     else
+          setTimer(t485E_DevicePanel_D000, 1);
+}
+
+long M485E_DevicePanel_D000_BeginDisplay(long commonRequest)
+{
+     if (M485E_DevicePanel_D000_IsBusy() != 0) return M485E_ERR_OPERATION_BUSY;
+     if (commonRequest == 0 && M485E_DevicePanel_CommonIsActive() != 0)
+          return M485E_ERR_OPERATION_BUSY;
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_DISPLAY;
+     g485E_DevicePanel_D000Cursor = 0;
+     g485E_DevicePanel_D000DisplayStage = M485E_DEVICE_PANEL_DISPLAY_STAGE_CLEAR_RAW;
+     g485E_DevicePanel_D000CommonRequest = commonRequest;
+     g485E_DevicePanel_D000SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::WrittenCount = 0;
+     @sysvar::M485E_DevicePanel::Index0::ResultCode = M485E_OK;
+     M485E_DevicePanel_D000_ClearFailure();
+     M485E_DevicePanel_D000_ClearFrameCache();
+     setTimer(t485E_DevicePanel_D000, 1);
+     return M485E_OK;
+}
+
+void M485E_DevicePanel_D000_FinishSend(long result, long failedSignalIndex, long invalidateSnapshot)
+{
+     sysSetVariableFloatArray(sysvar::M485E_DevicePanel::Index0::PhysicalValue,
+          g485E_DevicePanel_D000PanelValues, M485E_DEVICEPANEL_D000_SIGNAL_COUNT);
+     @sysvar::M485E_DevicePanel::Index0::WrittenCount = g485E_DevicePanel_D000WrittenCount;
+     if (invalidateSnapshot != 0)
+     {
+          g485E_DevicePanel_D000SnapshotValid = 0;
+          @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+     }
+     if (result == M485E_OK)
+     {
+          @sysvar::M485E_DevicePanel::Index0::ResultCode = M485E_OK;
+          M485E_DevicePanel_D000_ClearFailure();
+     }
+     else
+          M485E_DevicePanel_D000_SetFailure(result, failedSignalIndex);
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_NONE;
+}
+
+void M485E_DevicePanel_D000_ProcessSend()
+{
+     long processed;
+     long result;
+     float readBack;
+     for (processed = 0; processed < M485E_DEVICE_PANEL_CHUNK_SIZE &&
+          g485E_DevicePanel_D000Cursor < M485E_DEVICEPANEL_D000_SIGNAL_COUNT; processed++)
+     {
+          if (g485E_DevicePanel_D000PanelValues[g485E_DevicePanel_D000Cursor] !=
+               g485E_DevicePanel_D000Baseline[g485E_DevicePanel_D000Cursor])
+          {
+               M485E_DevicePanel_D000_GetSignalName(g485E_DevicePanel_D000Cursor, g485E_DevicePanel_D000SignalName);
+               result = M485E_Core_WriteSignal(0, g485E_DevicePanel_D000SignalName,
+                    g485E_DevicePanel_D000PanelValues[g485E_DevicePanel_D000Cursor]);
+               if (result != M485E_OK)
+               {
+                    M485E_DevicePanel_D000_FinishSend(result, g485E_DevicePanel_D000Cursor, 0);
+                    return;
+               }
+               readBack = 0.0;
+               result = M485E_Core_ReadSignal(0, g485E_DevicePanel_D000SignalName, readBack);
+               if (result != M485E_OK)
+               {
+                    M485E_DevicePanel_D000_SetRawUnavailable(g485E_DevicePanel_D000Cursor);
+                    M485E_DevicePanel_D000_FinishSend(result, g485E_DevicePanel_D000Cursor, 1);
+                    return;
+               }
+               g485E_DevicePanel_D000PanelValues[g485E_DevicePanel_D000Cursor] = readBack;
+               g485E_DevicePanel_D000Baseline[g485E_DevicePanel_D000Cursor] = readBack;
+               M485E_DevicePanel_D000_InvalidateSignalFrame(g485E_DevicePanel_D000Cursor);
+               result = M485E_DevicePanel_D000_ReadRaw(g485E_DevicePanel_D000Cursor);
+               if (result != M485E_OK)
+               {
+                    M485E_DevicePanel_D000_FinishSend(result, g485E_DevicePanel_D000Cursor, 1);
+                    return;
+               }
+               g485E_DevicePanel_D000WrittenCount++;
+          }
+          g485E_DevicePanel_D000Cursor++;
+     }
+     if (g485E_DevicePanel_D000Cursor >= M485E_DEVICEPANEL_D000_SIGNAL_COUNT)
+          M485E_DevicePanel_D000_FinishSend(M485E_OK, -1, 0);
+     else
+          setTimer(t485E_DevicePanel_D000, 1);
+}
+
+long M485E_DevicePanel_D000_BeginSend()
+{
+     long arrayLength;
+     if (M485E_DevicePanel_D000_IsBusy() != 0 || M485E_DevicePanel_CommonIsActive() != 0)
+          return M485E_ERR_OPERATION_BUSY;
+     if (g485E_DevicePanel_D000SnapshotValid == 0) return M485E_ERR_INVALID_STATE;
+     arrayLength = SysGetVariableArrayLength(sysvar::M485E_DevicePanel::Index0::PhysicalValue);
+     if (arrayLength != M485E_DEVICEPANEL_D000_SIGNAL_COUNT)
+          return M485E_ERR_INVALID_ARGUMENT;
+     sysGetVariableFloatArray(sysvar::M485E_DevicePanel::Index0::PhysicalValue,
+          g485E_DevicePanel_D000PanelValues, arrayLength);
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_SEND;
+     g485E_DevicePanel_D000Cursor = 0;
+     g485E_DevicePanel_D000WrittenCount = 0;
+     @sysvar::M485E_DevicePanel::Index0::WrittenCount = 0;
+     @sysvar::M485E_DevicePanel::Index0::ResultCode = M485E_OK;
+     M485E_DevicePanel_D000_ClearFailure();
+     setTimer(t485E_DevicePanel_D000, 1);
+     return M485E_OK;
+}
+
+long M485E_DevicePanel_D000_BeginReset(long commonRequest)
+{
+     long result;
+     if (M485E_DevicePanel_D000_IsBusy() != 0) return M485E_ERR_OPERATION_BUSY;
+     if (commonRequest == 0 && M485E_DevicePanel_CommonIsActive() != 0)
+          return M485E_ERR_OPERATION_BUSY;
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_RESET;
+     g485E_DevicePanel_D000SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::WrittenCount = 0;
+     M485E_DevicePanel_D000_ClearFailure();
+     result = M485E_Core_ResetDevice(0);
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_NONE;
+     if (result != M485E_OK)
+     {
+          M485E_DevicePanel_D000_SetFailure(result, -1);
+          return result;
+     }
+     return M485E_DevicePanel_D000_BeginDisplay(commonRequest);
+}
+
+void M485E_DevicePanel_D000_Invalidate()
+{
+     long notifyCommon;
+     notifyCommon = g485E_DevicePanel_D000CommonRequest;
+     cancelTimer(t485E_DevicePanel_D000);
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_NONE;
+     g485E_DevicePanel_D000CommonRequest = 0;
+     g485E_DevicePanel_D000DisplayStage = M485E_DEVICE_PANEL_DISPLAY_STAGE_CLEAR_RAW;
+     g485E_DevicePanel_D000SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::DisplayUpdate = 0;
+     @sysvar::M485E_DevicePanel::Index0::SendChanged = 0;
+     @sysvar::M485E_DevicePanel::Index0::ResetDefault = 0;
+     if (notifyCommon != 0)
+          M485E_DevicePanel_CommonDeviceCompleted(0, M485E_ERR_INVALID_STATE);
+}
+
+void M485E_DevicePanel_D000_Start()
+{
+     long signalIndex;
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_NONE;
+     g485E_DevicePanel_D000CommonRequest = 0;
+     g485E_DevicePanel_D000DisplayStage = M485E_DEVICE_PANEL_DISPLAY_STAGE_CLEAR_RAW;
+     g485E_DevicePanel_D000SnapshotValid = 0;
+     g485E_DevicePanel_D000WrittenCount = 0;
+     cancelTimer(t485E_DevicePanel_D000);
+     @sysvar::M485E_DevicePanel::Index0::DisplayUpdate = 0;
+     @sysvar::M485E_DevicePanel::Index0::SendChanged = 0;
+     @sysvar::M485E_DevicePanel::Index0::ResetDefault = 0;
+     @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::ResultCode = M485E_OK;
+     @sysvar::M485E_DevicePanel::Index0::WrittenCount = 0;
+     M485E_DevicePanel_D000_ClearFailure();
+     for (signalIndex = 0; signalIndex < M485E_DEVICEPANEL_D000_SIGNAL_COUNT; signalIndex++)
+          M485E_DevicePanel_D000_SetRawUnavailable(signalIndex);
+}
+
+void M485E_DevicePanel_D000_Stop()
+{
+     cancelTimer(t485E_DevicePanel_D000);
+     g485E_DevicePanel_D000Operation = M485E_DEVICE_PANEL_OPERATION_NONE;
+     g485E_DevicePanel_D000CommonRequest = 0;
+     g485E_DevicePanel_D000DisplayStage = M485E_DEVICE_PANEL_DISPLAY_STAGE_CLEAR_RAW;
+     g485E_DevicePanel_D000SnapshotValid = 0;
+     @sysvar::M485E_DevicePanel::Index0::DisplayUpdate = 0;
+     @sysvar::M485E_DevicePanel::Index0::SendChanged = 0;
+     @sysvar::M485E_DevicePanel::Index0::ResetDefault = 0;
+     @sysvar::M485E_DevicePanel::Index0::SnapshotValid = 0;
+}
+
+on sysvar_update sysvar::M485E_DevicePanel::Index0::DisplayUpdate
+{
+     long result;
+     if (@this == 0) return;
+     result = M485E_DevicePanel_D000_BeginDisplay(0);
+     if (result != M485E_OK)
+          M485E_DevicePanel_D000_SetFailure(result, -1);
+     @this = 0;
+}
+
+on sysvar_update sysvar::M485E_DevicePanel::Index0::SendChanged
+{
+     long result;
+     if (@this == 0) return;
+     result = M485E_DevicePanel_D000_BeginSend();
+     if (result != M485E_OK)
+          M485E_DevicePanel_D000_SetFailure(result, -1);
+     @this = 0;
+}
+
+on sysvar_update sysvar::M485E_DevicePanel::Index0::ResetDefault
+{
+     long result;
+     if (@this == 0) return;
+     result = M485E_DevicePanel_D000_BeginReset(0);
+     if (result != M485E_OK &&
+          @sysvar::M485E_DevicePanel::Index0::ResultCode == M485E_OK)
+          M485E_DevicePanel_D000_SetFailure(result, -1);
+     @this = 0;
+}
+
+on timer t485E_DevicePanel_D000
+{
+     if (g485E_DevicePanel_D000Operation == M485E_DEVICE_PANEL_OPERATION_DISPLAY)
+          M485E_DevicePanel_D000_ProcessDisplay();
+     else if (g485E_DevicePanel_D000Operation == M485E_DEVICE_PANEL_OPERATION_SEND)
+          M485E_DevicePanel_D000_ProcessSend();
+}

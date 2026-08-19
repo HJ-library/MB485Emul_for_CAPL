@@ -218,6 +218,7 @@ on timer tM485E_LifecycleStatus
                M485E_Core_ReportSyncFailure("MonitoringStart", monitoringResult);
           }
           M485E_DeviceCommunication_Poll(gM485E_ControlLifecycleStatus);
+          M485E_DevicePanel_Poll(gM485E_ControlLifecycleStatus);
           gM485E_ControlLastLifecycleState = currentState;
      }
      M485E_Core_PollOneErrorEvent();
