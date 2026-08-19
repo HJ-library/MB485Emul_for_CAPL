@@ -1,4 +1,5 @@
 build/
+tools/panel_generator/Output/
 build-cmake*/
 out/
 .vs/
@@ -25,3 +26,4 @@ dist/*
 !dist/Windows-x86/M485E.dll
 !dist/Windows-x64/
 !dist/Windows-x64/M485E.dll
+!dist/Panel_Generator.exe

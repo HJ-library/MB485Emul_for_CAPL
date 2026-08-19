@@ -390,13 +390,13 @@ rtm.getRange("A2:H132").values = rtmValues;
 requirements.getRange("A2:G132").values = requirementValues;
 
 const cover = workbook.worksheets.getItem("Cover");
-cover.getRange("B7").values = [["0.5.0"]];
+cover.getRange("B7").values = [["0.6.0"]];
 cover.getRange("B8").values = [["Release Baseline"]];
-cover.getRange("B9").values = [["2026-08-17"]];
-cover.getRange("B10:B11").values = [[138], [40]];
-cover.getRange("E5:E8").values = [[19], [138], [138], [138]];
+cover.getRange("B9").values = [["2026-08-20"]];
+cover.getRange("B10:B11").values = [[148], [45]];
+cover.getRange("E5:E8").values = [[21], [148], [148], [148]];
 cover.getRange("F5:F8").clear({contentsOnly:true});
-cover.getRange("E10").values = [["138 / 138 mapped"]];
+cover.getRange("E10").values = [["148 / 148 mapped"]];
 cover.getRange("F10").clear({contentsOnly:true});
 cover.getRange("E9").values = [["자동·실환경 Test Case ID 부여 완료"]];
 cover.getRange("A13").values = [["사용 지침\nRTM 시트는 Requirement → Functional Specification → Design Component → Verification Method → Test Case ID/Status의 현재 Baseline 추적을 제공한다. 자동 검증 PASS와 실환경 검증 대기 상태를 구분하여 유지한다."]];
@@ -417,6 +417,15 @@ functionalSpecs.getRange("A39:C41").values = [
 ];
 functionalSpecs.getRange("A39:C41").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
 functionalSpecs.getRange("39:41").format.autofitRows();
+functionalSpecs.getRange("A42:C46").values = [
+  ["FS-DPG-001", "Device/Register CSV 분석과 Transaction 생성", "REQ-DPG-001~002"],
+  ["FS-DPG-002", "XVP Fragment와 System Variable DB 생성", "REQ-DPG-003~004"],
+  ["FS-DPG-003", "Raw Hex와 bounded Display Update", "REQ-DPG-005~006"],
+  ["FS-DPG-004", "Send Changed와 Device/All Reset", "REQ-DPG-007~009"],
+  ["FS-DPG-005", "Python-free 배포와 회사 적용 절차", "REQ-DPG-010"],
+];
+functionalSpecs.getRange("A42:C46").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
+functionalSpecs.getRange("42:46").format.autofitRows();
 
 const designComponents = workbook.worksheets.getItem("Design Components");
 const designValues = designComponents.getRange("A2:C18").values;
@@ -430,6 +439,12 @@ designComponents.getRange("A19:C20").values = [
 ];
 designComponents.getRange("A19:C20").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
 designComponents.getRange("19:20").format.autofitRows();
+designComponents.getRange("A21:C22").values = [
+  ["DC-20", "Device Panel Generator", "Python stdlib/tkinter GUI·CLI 공통 Parser/Generator, XVP·vsysvar·CAPL·Manifest Transaction 출력, PyInstaller one-file"],
+  ["DC-21", "Generated Device Panel CAPL", "M485E_UI include 체계, Device별 bounded timer 작업·baseline·Raw Hex frame cache·SnapshotValid·momentary command adapter"],
+];
+designComponents.getRange("A21:C22").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
+designComponents.getRange("21:22").format.autofitRows();
 designComponents.getRange("C2").values = [["CAPL_DLL_INFO4, __stdcall, 불투명 Context Handle(0 포함), Length/Capacity 검증, caller-owned 출력 보호, Signal F[1] 저수준 출력, 생산 23개 Export와 생존 API 상대 순서 유지"]];
 designComponents.getRange("C16:C17").format.wrapText = true;
 designComponents.getRange("16:17").format.autofitRows();
@@ -461,28 +476,29 @@ const verificationRows = [
   ["TC-P10-STATIC-001", "10", "Static", "UI System Variable adapter, Btn_ReadOption int32 Scalar/no-handler, Check_ReadOption[200] 유지, RTU Log 단일 Drain·최근 10줄·200ms putValueToControl, Manual Write Data[122], Signal Control, Register Read UI 부재 계약", "Test-M485ECaplSources.ps1; Main compile in configured CANalyzer project", "Static PASS / External Pending", "EV-011~EV-013, EV-016, EV-019"],
   ["TC-REG-AUTO-001", "1~10", "Automated", "Windows x86/x64 Debug/Release, /W4 /WX, ErrorCodes 91/PublicConstants 189, 23 API ABI, RuleDataMeta[9], RTU 로그 idle wait·단일 Drain Panel adapter, 1/4 Port·5 Port 경계, 누락 PortSlot, contract/core/integration/CAPL probes", "MSBuild + CMake + CTest + CANalyzer 13 x86 CAPL compiler", "PASS", "EV-001~EV-019"],
   ["TC-V03-AUTO-001", "5/7/10", "Automated + Static", "Index별 RTU 비활성화, Broadcast 제외, RTU Log REQ/RES/NO_RES pairing, queue overflow, CAPL Device/Log adapters", "M485E.Core.Tests + M485E.IntegrationTests + Test-M485ECaplSources.ps1", "PASS", "EV-017~EV-019"],
-  ["EV-001~EV-019", "External", "External", "CANalyzer 9.x/18, SystemBase Multi USB-485, Board, Panel, CAPL Output View, virtual CAN, RTU CSV", "External Verification Guide", "Not Tested", "대상 실환경에서 결과 기록"],
+  ["TC-DPG-AUTO-001", "10/11", "Automated + Static", "CSV 계약·경로 안전성·deterministic transaction 출력, XVP XML/바인딩, Raw Hex vectors, generated CAPL/vsysvar stale, one-file EXE 다른 cwd smoke", "Python unittest + Test-M485EDevicePanelSources.ps1 + Test-PanelGeneratorExe.ps1", "PASS / External Pending", "EV-020"],
+  ["EV-001~EV-020", "External", "External", "CANalyzer 9.x/18, SystemBase Multi USB-485, Board, Panel/XVP copy, CAPL Output View, virtual CAN, RTU CSV", "External Verification Guide", "Not Tested", "대상 실환경에서 결과 기록"],
   ["TC-CAPL13-COMPILE-001", "1/2/9", "Compiler", "Phase 1 ABI, Phase 2 Contracts, Phase 9 Core/Monitoring CAPL probes", "CANalyzer 13 Exec32 caplcompexec.exe", "PASS (warning-free)", "CANalyzer 9.x SP8 Compile/Measurement remains EV-001"],
 ];
-verification.getRange("A1:G13").values = verificationRows;
+verification.getRange("A1:G14").values = verificationRows;
 verification.freezePanes.freezeRows(1);
 verification.getRange("A1:G1").format = {
   fill: "#17365D", font: { bold: true, color: "#FFFFFF" }, wrapText: true,
   horizontalAlignment: "center", verticalAlignment: "center",
   borders: { preset: "all", style: "thin", color: "#9CA3AF" },
 };
-verification.getRange("A2:G13").format = {
+verification.getRange("A2:G14").format = {
   wrapText: true, verticalAlignment: "top",
   borders: { preset: "all", style: "thin", color: "#D1D5DB" },
 };
 [18, 9, 14, 35, 34, 14, 28].forEach((width, index) =>
-  verification.getRangeByIndexes(0, index, 13, 1).format.columnWidth = width);
+  verification.getRangeByIndexes(0, index, 14, 1).format.columnWidth = width);
 verification.getRange("F2:F8").format = { fill: "#E2F0D9", font: { bold: true, color: "#006100" } };
 verification.getRange("F9").format = { fill: "#FFF2CC", font: { bold: true, color: "#7F6000" } };
 verification.getRange("F10").format = { fill: "#E2F0D9", font: { bold: true, color: "#006100" } };
-verification.getRange("F11").format = { fill: "#FFF2CC", font: { bold: true, color: "#7F6000" } };
-verification.getRange("F12:F13").format = { fill: "#E2F0D9", font: { bold: true, color: "#006100" } };
-verification.getRange("2:13").format.autofitRows();
+verification.getRange("F11:F13").format = { fill: "#FFF2CC", font: { bold: true, color: "#7F6000" } };
+verification.getRange("F14").format = { fill: "#E2F0D9", font: { bold: true, color: "#006100" } };
+verification.getRange("2:14").format.autofitRows();
 
 const inputs = workbook.worksheets.getItem("Verification Inputs");
 inputs.getRange("B3").values = [["실환경 입력 필요"]];
@@ -490,7 +506,7 @@ inputs.getRange("C2").values = [["생산 23 API + 시험 전용 ABI Fixture 자�
 inputs.getRange("B5:C5").values = [["66 Frame/Tick, 최종 실측", "200 Rule 0x80-only Periodic profile"]];
 inputs.getRange("A8:C9").values = [
   ["External Verification Guide", "작성 완료", "docs/05_Test/External_Verification_Guide.docx"],
-  ["External Test Result", "19건 Not Tested", "docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx"],
+  ["External Test Result", "20건 Not Tested", "docs/05_Test/Modbus485Emulator_External_Test_Result.xlsx"],
 ];
 
 const v030 = workbook.worksheets.getOrAdd("v0.3.0 Traceability");
@@ -529,7 +545,7 @@ const v030RequirementRows = [
   ["REQ-FUNC-047", "UI", "실제 Lifecycle Connected/Disconnected 상태를 서로 독립된 LED로 표시", "FR-UI-016~018", "FS-CONNECTION-LED-001", "DC-15", "CAPL source contract와 EV-017"],
   ["REQ-FUNC-048", "Diagnostics", "RTU 요청과 실제 응답 또는 무응답을 동일 Sequence의 REQ/RES 또는 REQ/NO_RES CSV 행으로 빠짐없이 기록하고, 같은 Dequeue 문자열을 별도 Consumer 없이 최근 10줄 Panel 표시에 재사용", "LOG-018~028", "FS-RTULOG-001", "DC-19", "RtuLogQueue/PortWorker 자동 시험, CAPL 단일 Consumer 정적 계약과 EV-018~019"],
   ["REQ-FUNC-049", "Diagnostics", "RTU Log 파일 Open 성공 후 Capture를 시작하고 OFF·종료 시 최대 2,000ms Idle 대기 후 완료 행을 배출한다. CAPL Output View는 설정 이름으로 최근 10줄을 200ms 이상 간격 Overwrite하며 실패가 CSV를 중단하지 않고 OFF 후 마지막 표시를 유지", "FR-UI-021~023; LOG-022~028; ERR-044", "FS-RTULOG-001", "DC-19", "Core/Integration/CAPL source contract와 EV-018~019"],
-  ["REQ-IF-015", "API", "CAPL DLL Export Table은 Appendix A의 v0.5.0 23개 Entry를 정확히 제공하고 제거된 Monitoring·Change Queue API를 공개하지 않는다", "IF-API-001~008; IF-API-011; IF-API-014~027; COMP-009", "FS-INIT-001; FS-MON-003; FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-11; DC-18; DC-19", "x86/x64 23-entry ABI Probe, 제거 Export 부재 검사와 EV-001"],
+  ["REQ-IF-015", "API", "CAPL DLL Export Table은 Appendix A의 v0.6.0 23개 Entry를 정확히 제공하고 제거된 Monitoring·Change Queue API를 공개하지 않는다", "IF-API-001~008; IF-API-011; IF-API-014~027; COMP-009", "FS-INIT-001; FS-MON-003; FS-DEVICE-001; FS-RTULOG-001", "DC-01; DC-11; DC-18; DC-19", "x86/x64 23-entry ABI Probe, 제거 Export 부재 검사와 EV-001"],
   ["REQ-IF-016", "Buffer", "Context별 완결 Transaction 256개와 caller-owned RTU CSV line Buffer; Capture Disabled에서만 Idle 대기; DLL 파일 I/O 금지", "IF-LIMIT-009; LOG-023~024; ERR-044", "FS-RTULOG-001", "DC-19", "Queue 경계·overflow·idle wake/timeout·pair 보존 자동 시험과 EV-018"],
 ];
 requirements.getRange("A133:G139").values = v030RequirementRows;
@@ -549,6 +565,38 @@ rtm.getRange("A133:H139").values = v030RtmRows;
 rtm.getRange("A133:H139").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
 rtm.getRange("133:139").format.autofitRows();
 
+const v060RequirementRows = [
+  ["REQ-DPG-001", "Generator", "Device CSV와 각 CSV_DB_Name Register Map을 Core Loader 계약과 같은 Header·행·값·경로 규칙으로 분석하고 오류 파일/행/열/원인을 표시", "FR-DPG-001~003", "FS-DPG-001", "DC-20", "Python 자동시험과 EV-020"],
+  ["REQ-DPG-002", "Generator", "EXE 위치 기준 Output을 임시 경로에서 완전 생성·검증한 뒤 Manifest 소유 Output만 원자 교체하고 동일 입력은 byte-identical 결과를 생성", "FR-DPG-004~005", "FS-DPG-001", "DC-20", "transaction·determinism·manifest guard·다른 cwd EXE 시험과 EV-020"],
+  ["REQ-DPG-003", "Panel", "실제 Device Index와 Decimal Address 31-register Group, 15행 Page로 독립 XVP Fragment를 만들고 고유 Object/Control/TabIndex와 정확한 바인딩을 제공", "FR-DPG-006~009", "FS-DPG-002", "DC-20", "XVP XML·GroupBox·page·binding 자동시험과 EV-020"],
+  ["REQ-DPG-004", "Interface", "Common 및 Device별 PhysicalValue/RawHex/Command/Snapshot/Result System Variable 계약을 생성하고 각 Device baseline과 결과를 격리", "FR-DPG-010", "FS-DPG-002", "DC-20; DC-21", "generated vsysvar stale/source contract와 EV-020"],
+  ["REQ-DPG-005", "Data", "Raw Hex는 정규화 논리 Signal Frame에서 Start_Bit/Size로 추출한 1~64bit unsigned pattern을 대문자·leading zero로 표시하고 frame 공유 Signal은 Register Read를 재사용", "FR-DPG-011~012", "FS-DPG-003", "DC-21", "Endian/bit/nibble/frame-cache vector 자동시험과 EV-020"],
+  ["REQ-DPG-006", "Panel", "Display Update는 15 Signal bounded timer chunk로 Physical/Raw를 요청 시에만 읽고 성공한 전체 결과만 baseline/SnapshotValid로 게시하며 재진입을 Busy로 거부", "FR-DPG-013", "FS-DPG-003", "DC-21", "generated CAPL source contract와 EV-020"],
+  ["REQ-DPG-007", "Panel", "Send Changed는 유효 Snapshot baseline과 다른 Signal만 CSV 순서로 Write하고 첫 실패에서 중단하며 성공 Signal read-back·양자화·결과를 반영", "FR-DPG-014", "FS-DPG-004", "DC-21", "generated CAPL source contract와 EV-020"],
+  ["REQ-DPG-008", "Panel", "Device Reset은 ResetDevice 후 read-back하고 Reset All은 실제 Index 오름차순으로 비원자 처리해 완료 수·첫 실패 Index·Result를 게시", "FR-DPG-015~016", "FS-DPG-004", "DC-21", "generated CAPL source contract와 EV-020"],
+  ["REQ-DPG-009", "Concurrency", "Refresh 성공 시 모든 Snapshot을 무효화하고 Display Update가 Device 전체 동일시점 Snapshot이 아니며 Send/Reset All이 전체 Transaction 원자적이지 않음을 보존·표시", "FR-DPG-017~019", "FS-DPG-004", "DC-21", "refresh/busy/non-atomic source contract와 EV-020"],
+  ["REQ-DPG-010", "Release", "PyInstaller one-file Generator, Sample generated Config, Manifest/COPY_GUIDE와 회사 적용·재생성 절차를 배포하며 실제 회사 Map을 저장소에 포함하지 않음", "FR-DPG-020", "FS-DPG-005", "DC-20", "EXE/package/hash 자동시험과 EV-020"],
+];
+requirements.getRange("A140:G149").values = v060RequirementRows;
+requirements.getRange("A140:G149").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
+requirements.getRange("140:149").format.autofitRows();
+
+const v060RtmRows = [
+  ["REQ-DPG-001", v060RequirementRows[0][2], "FS-DPG-001", "DC-20 Device Panel Generator", "정상/오류 CSV fixture와 Core Loader 규칙 비교", "TC-DPG-AUTO-001; EV-020", "Automated PASS / External Pending", "FR-DPG-001~003"],
+  ["REQ-DPG-002", v060RequirementRows[1][2], "FS-DPG-001", "DC-20 Device Panel Generator", "deterministic output, transaction rollback, manifest guard와 다른 cwd EXE smoke", "TC-DPG-AUTO-001; EV-020", "Automated PASS / External Pending", "FR-DPG-004~005"],
+  ["REQ-DPG-003", v060RequirementRows[2][2], "FS-DPG-002", "DC-20 Device Panel Generator", "34/45/72/150 Signal XVP XML·Address group·page·binding 검사", "TC-DPG-AUTO-001; EV-020", "Automated PASS / External Pending", "FR-DPG-006~009"],
+  ["REQ-DPG-004", v060RequirementRows[3][2], "FS-DPG-002", "DC-20 Generator; DC-21 Generated CAPL", "vsysvar schema와 sample generated artifact stale 검사", "TC-DPG-AUTO-001; EV-020", "Automated/Static PASS / External Pending", "FR-DPG-010"],
+  ["REQ-DPG-005", v060RequirementRows[4][2], "FS-DPG-003", "DC-21 Generated Device Panel CAPL", "1~64bit, endian, bit crossing, signed/float/double/full-range raw vectors", "TC-DPG-AUTO-001; EV-020", "Automated/Static PASS / External Pending", "FR-DPG-011~012"],
+  ["REQ-DPG-006", v060RequirementRows[5][2], "FS-DPG-003", "DC-21 Generated Device Panel CAPL", "chunk/busy/snapshot/raw stale-clear CAPL source contract", "TC-DPG-AUTO-001; EV-020", "Static PASS / External Pending", "FR-DPG-013"],
+  ["REQ-DPG-007", v060RequirementRows[6][2], "FS-DPG-004", "DC-21 Generated Device Panel CAPL", "baseline compare, ordered partial send, read-back/result source contract", "TC-DPG-AUTO-001; EV-020", "Static PASS / External Pending", "FR-DPG-014"],
+  ["REQ-DPG-008", v060RequirementRows[7][2], "FS-DPG-004", "DC-21 Generated Device Panel CAPL", "momentary reset, ascending sparse Index reset-all/result source contract", "TC-DPG-AUTO-001; EV-020", "Static PASS / External Pending", "FR-DPG-015~016"],
+  ["REQ-DPG-009", v060RequirementRows[8][2], "FS-DPG-004", "DC-21 Generated Device Panel CAPL", "Refresh 성공 invalidate, busy와 비원자 경계 정적/외부 시험", "TC-DPG-AUTO-001; EV-020", "Static PASS / External Pending", "FR-DPG-017~019"],
+  ["REQ-DPG-010", v060RequirementRows[9][2], "FS-DPG-005", "DC-20 Device Panel Generator", "one-file EXE, portable package, COPY_GUIDE, manifest/hash 검사", "TC-DPG-AUTO-001; EV-020", "Automated PASS / External Pending", "FR-DPG-020"],
+];
+rtm.getRange("A140:H149").values = v060RtmRows;
+rtm.getRange("A140:H149").format = {wrapText:true,verticalAlignment:"top",borders:{preset:"all",style:"thin",color:"#D1D5DB"}};
+rtm.getRange("140:149").format.autofitRows();
+
 const formulaError = /#REF!|#DIV\/0!|#VALUE!|#NAME\?|#N\/A/i;
 for (const sheet of workbook.worksheets.items) {
   const used = sheet.getUsedRange(true);
@@ -561,15 +609,17 @@ for (const sheet of workbook.worksheets.items) {
     }
   }
 }
-require(cover.getRange("B7").values[0][0] === "0.5.0", "Release version mismatch");
+require(cover.getRange("B7").values[0][0] === "0.6.0", "Release version mismatch");
 require(cover.getRange("B8").values[0][0] === "Release Baseline", "Release status mismatch");
-require(cover.getRange("B9").values[0][0] === "2026-08-17", "Release baseline date mismatch");
+require(cover.getRange("B9").values[0][0] === "2026-08-20", "Release baseline date mismatch");
 require(findRow(rtmValues, "REQ-DIAG-002")[5] === "TC-P6-AUTO-001; TC-P9-STATIC-001", "REQ-DIAG-002 traceability mismatch");
 require(findRow(rtmValues, "REQ-FUNC-004")[5].includes("TC-P8-AUTO-001"), "REQ-FUNC-004 integration trace missing");
 require(findRow(rtmValues, "REQ-COM-002")[5].includes("TC-P9-STATIC-001"), "REQ-COM-002 active-Port trace missing");
 require(findRow(rtmValues, "REQ-COMP-003")[1].includes("M485E 23 API"), "Current public API baseline missing");
 require(v030.getRange("A2:G9").values.length === 8, "v0.3.0 traceability row count mismatch");
 require(requirements.getRange("A133:A139").values.length === 7, "v0.3.0 requirement integration mismatch");
+require(requirements.getRange("A140:A149").values.length === 10, "v0.6.0 Device Panel requirement integration mismatch");
+require(rtm.getRange("A140:A149").values.every((row) => String(row[0]).startsWith("REQ-DPG-")), "v0.6.0 Device Panel RTM mismatch");
 require(findRow(rtmValues, "REQ-DATA-006")[1].includes("M485E_Device.csv"), "Current device file baseline missing");
 
 const output = await SpreadsheetFile.exportXlsx(workbook);

@@ -1,4 +1,7 @@
-# CANalyzer 9.x Panel 64bit Floating Array 시험 가이드
+# CANalyzer Panel 64bit Floating Array Probe와 Generator Fixture
+
+> 상태: 사용자는 기존 체크리스트 항목이 모두 예상대로 동작했다고 보고했다.
+> 제한: 정확한 CANalyzer Version, Service Pack, Windows Version과 시험 날짜는 기록되지 않았으므로 특정 CANalyzer 9.x/18 버전의 PASS로 추정하지 않는다.
 
 ## 1. 시험 목적
 
@@ -8,9 +11,12 @@ M485E Device Panel 구현 전에 CANalyzer 9.x에서 다음 기능이 실제로 
 2. Panel Input/Output Box를 배열의 각 원소에 연결할 수 있는지
 3. CAPL에서 배열 전체를 Get/Set할 수 있는지
 4. `16777217.0`이 32bit floating 정밀도로 잘리지 않는지
-5. 시험 Panel의 `.xvp` 구조를 향후 Panel Generator가 재사용할 수 있는지
+5. 시험 Panel의 `.xvp` 구조를 Panel Generator의 Float Array Serializer Fixture로 사용할 수 있는지
 
 이 시험은 M485E DLL을 호출하지 않는다. CANalyzer, System Variable, CAPL, Panel 연결만 확인한다.
+v0.6.0 Generator는 이 XVP의 `Version=9.0.137.0`, Floating Symbol Type 2와 Integer Symbol
+Type 1을 자동 Fixture로 사용한다. String Symbol Type 4와 GroupBox는 설치된 Vector Sample을
+추가 근거로 사용하며 실제 CANalyzer Import/Measurement는 External Verification Pending이다.
 
 ## 2. 준비된 파일
 
@@ -20,13 +26,8 @@ M485E Device Panel 구현 전에 CANalyzer 9.x에서 다음 기능이 실제로 
 | `tests/capl/M485E_PanelFloatArrayProbe.can` | 배열 전체 Get/Set과 정밀도 확인 CAPL |
 | `tests/capl/M485E_PanelFloatArrayProbe_Result.md` | 시험 결과 기록 양식 |
 
-회사 PC에서 이 브랜치를 받을 때는 다음 명령을 사용한다.
-
-```powershell
-git fetch origin
-git switch agent/panel-probe-test
-git pull --ff-only
-```
+v0.6.0 Release에서는 Probe 자료와 Generator를 같은 Tag Source에서 사용한다. 별도 Probe Branch를
+전환할 필요가 없다.
 
 ## 3. System Variable 추가
 
@@ -212,9 +213,9 @@ Panel이 다른 파일을 자동 생성하거나 외부 리소스를 참조한�
 - Button의 System Variable Binding
 - Input/Output Box의 숫자 표시 형식
 
-## 8. 결과 전달
+## 8. 결과 보존
 
-`tests/capl/M485E_PanelFloatArrayProbe_Result.md`를 작성하고 다음 파일을 함께 전달한다.
+`tests/capl/M485E_PanelFloatArrayProbe_Result.md`에는 확인된 사실과 미기록 환경을 구분한다.
 
 1. `M485E_PanelFloatArrayProbe.xvp`
 2. 작성한 결과 문서
@@ -222,18 +223,7 @@ Panel이 다른 파일을 자동 생성하거나 외부 리소스를 참조한�
 4. CAPL을 수정했다면 수정본
 5. Compile 오류 또는 Panel 화면 캡처
 
-작업 결과를 같은 브랜치에 올릴 경우 이번 Probe 파일만 명시적으로 Stage한다.
-
-```powershell
-git status -sb
-git add tests/capl/M485E_PanelFloatArrayProbe.xvp
-git add tests/capl/M485E_PanelFloatArrayProbe_Result.md
-git add tests/capl/M485E_PanelFloatArrayProbe_CANalyzer9.vsysvar
-git commit -m "Record CANalyzer 9 panel array probe"
-git push
-```
-
-실제로 생성되지 않은 파일은 `git add` 명령에서 제외한다.
+정확한 Version/SP/날짜가 확인되기 전에는 빈 환경 필드를 추정해 채우지 않는다.
 
 ## 9. 판정 기준
 
@@ -244,3 +234,7 @@ git push
 | 배열 원소 Panel Binding 실패 | Signal별 scalar System Variable 자동생성 |
 | `16777217.0` 정밀도 손실 | 64bit floating 계약 재검토 |
 | `.xvp` 반복 구조가 안정적 | Template 기반 Panel 자동생성 2차 검토 |
+
+v0.6.0은 마지막 조건을 채택해 XVP Fragment를 생성한다. 다만 Probe는 Float Array 범위만
+user-reported evidence가 있으며 Generated String Control, GroupBox, 복사·붙여넣기와 전체
+Generated CAPL은 별도 외부 시험이 필요하다.

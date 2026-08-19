@@ -126,8 +126,8 @@ Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\M485E\.vmodule"\)' `
     'Main must load M485E.vmodule in modern CANalyzer.'
 Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\Windows-x86\\\\M485E\.dll"\)' `
     'Main must keep the direct Windows-x86 DLL path for CANalyzer 9.x.'
-Require-Match $module '<Version>0\.5\.0</Version>' `
-    'The architecture module version must match Release 0.5.0.'
+Require-Match $module '<Version>0\.6\.0</Version>' `
+    'The architecture module version must match Release 0.6.0.'
 Require-Match $module '<SupportedArchitecture\s+arch="Windows-x64 Windows-x86"\s*/>' `
     'The architecture module must advertise Windows x64 and x86.'
 Require-Match $module '<LibraryPath\s+arch="Windows-x64">\./Windows-x64/M485E\.dll</LibraryPath>' `
@@ -335,7 +335,7 @@ Require-Match $main '#include\s+"M485E_ReadOption\.cin"' `
     'Main must include the project ReadOption mapping.'
 Require-Match $main '#include\s+"M485E_Connection\.cin"' `
     'Main must include the Connection lifecycle module.'
-Require-Match $ui 'includes\s*\{\s*#include\s+"M485E_Control\.cin"\s*\}' `
+Require-Match $ui 'includes\s*\{\s*#include\s+"M485E_Control\.cin"[\s\S]*?\}' `
     'UI must include the Connection Panel Control adapter through an includes block.'
 Require-Match $readOption 'long\s+M485E_ReadOption_ConfigureAll\s*\(' `
     'Project ReadOption configuration function is missing.'

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Modbus485Emulator VERSION 0.5.0 LANGUAGES CXX)
+project(Modbus485Emulator VERSION 0.6.0 LANGUAGES CXX)
 
 if(NOT WIN32)
   message(FATAL_ERROR "Modbus485Emulator supports Windows x86 and x64 only.")
@@ -147,6 +147,9 @@ add_test(NAME M485E.IntegrationTests
 add_test(NAME M485E.CaplSourceContracts
          COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
                  -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/capl/Test-M485ECaplSources.ps1")
+add_test(NAME M485E.DevicePanelSourceContracts
+         COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+                 -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/capl/Test-M485EDevicePanelSources.ps1")
 add_test(NAME M485E.ReleaseVersion
          COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
                  -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/release/Test-M485EVersion.ps1"

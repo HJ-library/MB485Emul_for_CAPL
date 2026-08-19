@@ -92,3 +92,30 @@ Monitoring은 `ReadSwitch`와 선택된 ReadOption에 따라 `0x80` Periodic Rul
 | Result | `M485E::SignalControl::ResultCode` | Read-only Numeric |
 
 표시 전용 값은 Panel Control 입력을 비활성화한다. CAPL이 쓰는 System Variable 자체는 `readOnly=false`를 유지한다.
+
+## Generated Device Signal Panel
+
+v0.6.0 Sample Configuration은 별도 DB인
+`Config/System Variables/M485E_DevicePanel.generated.vsysvar`와
+`Config/CAPL/M485E/DevicePanel`의 생성 CAPL을 함께 사용한다.
+
+| 표시/제어 | System Variable | Control |
+| --- | --- | --- |
+| Physical Value | `M485E_DevicePanel::IndexN::PhysicalValue[i]` | Editable Numeric |
+| Raw Hex | `M485E_DevicePanel::IndexN::RawHex::Sxxx` | Read-only Text |
+| Display Update | `M485E_DevicePanel::IndexN::DisplayUpdate` | Momentary Button |
+| Send Changed | `M485E_DevicePanel::IndexN::SendChanged` | Momentary Button |
+| Reset Default | `M485E_DevicePanel::IndexN::ResetDefault` | Momentary Button |
+| Snapshot Valid | `M485E_DevicePanel::IndexN::SnapshotValid` | Read-only Numeric/LED |
+| Result/Written/Failure | `ResultCode`, `WrittenCount`, `FailedSignalIndex`, `FailedSignalName` | Read-only |
+| Reset All | `M485E_DevicePanel::Common::ResetAllDefault` | Momentary Button |
+
+`Panel_Generator.exe`에서 Sample 또는 회사 `M485E_Device.csv`를 Analyze/Generate한 뒤 생성 XVP를
+Panel Designer에서 열고 GroupBox 전체를 실제 Index의 Device Tab에 복사한다. XVP는 완성 Panel이나
+Tab이 아니라 복사·붙여넣기용 Fragment다. Display Update는 미전송 편집값을 현재 Runtime 값으로
+덮고, 전체 성공 시에만 Baseline과 `SnapshotValid=1`을 만든다. Send Changed는 Baseline과 다른
+Signal만 CSV 행 순서대로 쓰며 Device 전체 Transaction은 원자적이지 않다.
+
+Raw Hex는 Register 문자열이 아니라 Byte Order 정규화 후 Start Bit/Size로 추출한 Signal Raw Bit
+Pattern이다. CSV Schema나 Signal 행 순서를 바꾸면 XVP, CAPL과 System Variable DB를 모두 재생성해
+교체한다. CANalyzer 9.x/18 XVP Import·복사·Measurement는 External Verification Pending이다.

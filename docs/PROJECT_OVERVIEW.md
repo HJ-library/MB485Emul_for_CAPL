@@ -1,6 +1,6 @@
 # Modbus485Emulator 한눈에 보기
 
-> Release baseline: v0.5.0 (2026-08-17)
+> Release baseline: v0.6.0 (2026-08-20)
 
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
 그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 Windows x86/x64 CAPL DLL이다.
@@ -26,9 +26,11 @@ Board는 RS-485를 통해 Master로 요청하고, CANalyzer의 CAPL·Panel은 Em
 | CAPL Control | Refresh와 100ms Lifecycle 상태를 LED·문자열 System Variable로 변환 |
 | CAPL DeviceCommunication | Index별 외부 RTU 응답 On/Off와 Available LED를 100ms마다 동기화 |
 | CAPL RtuLog | bounded DLL Queue를 한 번만 배출해 전체 요청·응답 CSV를 기록하고, 같은 문자열의 최근 10줄을 CAPL Output View에 표시 |
+| Device Panel Generator | Device/Register CSV에서 주소별 XVP Fragment, Device별 CAPL, 64bit Floating/System Variable DB와 적용 가이드를 결정적으로 생성 |
+| Generated DevicePanel CAPL | On-demand Display Update, Baseline 비교 Send Changed, Device/All Reset과 Raw Hex를 Core Wrapper만으로 처리 |
 | CAPL UI | Manual Write, Signal과 Monitoring System Variable 요청을 캡처해 공개 진입점에 전달 |
 | CAPL Main | 프로젝트 경로·Port 초기 설정과 Measurement 시작·종료 순서를 관리 |
-| CANalyzer Panel | System Variable을 사람이 조작하는 화면. 실제 `.xvp` Panel은 후속 작업 |
+| CANalyzer Panel | 생성 XVP의 GroupBox를 기존 Device Tab에 복사해 Physical/Raw 값과 명령 System Variable을 조작하는 화면 |
 
 Core만 `M485E_Dll_*`을 직접 호출한다. Connection·Control·UI는 System Variable과 Panel
 표현을, Monitoring은 CAN Message 생성과 스케줄링을 소유하며 Core는 표현 계층에 의존하지 않는다.
@@ -156,6 +158,8 @@ M485E.dll Runtime Register Model
 - ReadOption 편의 버튼: `M485E::Monitoring::Btn_ReadOption`은 `int32` Scalar Control 배치를 위한 변수일 뿐 별도 CAPL Handler나 동작이 없다. 실제 선택은 기존 `Check_ReadOption[200]`의 100ms Candidate 동기화와 다음 1,000ms Cycle 원자 적용을 사용한다.
 - Signal Read: `Index + SignalName`을 요청하고 `PhysicalValue`로 물리값을 받는다.
 - Signal Write: `Index + SignalName + PhysicalValue`를 전달하며 Scale·Offset과 자료형 변환을 적용한다.
+- Generated Device Panel: `M485E_DevicePanel::IndexN::PhysicalValue[]`를 Display Update로 현재값/Baseline에 맞추고, Send Changed는 Baseline과 다른 Signal만 순서대로 쓴다. Raw Hex는 `word[]`에서 추출한 1~64bit Signal Pattern이다.
+- Device/All Reset: CSV Init Image로 Reset한 뒤 Read-back한다. Reset All은 Index 오름차순 비원자 처리이며 완료 수와 실패 Index를 남긴다.
 
 수동 Register Read와 AutoRead Panel은 제공하지 않는다. CAN Monitoring과 CAPL/DLL의 공개
 Register Read API는 유지하며, Register별 읽기 표시 System Variable 연결은 인터페이스 확정
@@ -234,22 +238,26 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 | `src/M485E.Core` | CSV, Register/Signal, RTU, Queue, Framing과 Port Worker |
 | `src/M485E.Dll` | CAPL Export Table, Context, Lifecycle, Win32 Serial Adapter |
 | `Config/CAPL/M485E` | Main, Core, Monitoring, UI CAPL 코드 |
+| `Config/CAPL/M485E/DevicePanel` | Sample Device CSV에서 생성한 Mapping과 Device별 CAPL |
 | `Config/System Variables/M485E.vsysvar` | Panel 연동 System Variable 정의 |
+| `Config/System Variables/M485E_DevicePanel.generated.vsysvar` | Sample Generated Device Panel 변수 DB |
 | `Config/Maps/M485E` | 기본 DeviceMap, FrameRule 및 장치 유형별 Register Map |
 | `spec` | 오류 코드와 공개 상수의 단일 원본 |
 | `generated` | spec에서 생성한 C++·CAPL 계약 |
 | `tests` | ABI, Core, Integration, CAPL 계약과 실환경 Probe |
+| `tools/panel_generator` | tkinter GUI/CLI와 CSV/XVP/CAPL/System Variable Generator Core |
 | `examples/M485E_Test` | 저장소 자체 완결형 Device A/B Map, Panel 가이드와 검증 체크리스트 |
 | `docs/05_Test` | 대상 실환경 검증 가이드와 결과 기록서 |
 | `dist/M485E.vmodule` | CANalyzer 13 이상에서 아키텍처별 DLL을 선택하는 Manifest |
 | `dist/Windows-x86/M485E.dll` | CANalyzer 9.x에 배치할 Release/x86 DLL |
 | `dist/Windows-x64/M485E.dll` | CANalyzer 18에 배치할 Release/x64 DLL |
+| `dist/Panel_Generator.exe` | Python 설치 없이 실행하는 Windows one-file Device Panel Generator |
 
 ## 10. 처음 실행하는 순서
 
 1. Solution을 `Release/Win32`와 `Release/x64`로 빌드하여 두 DLL과 `M485E.vmodule`을 만든다.
 2. `tools/Prepare-M485EPackage.ps1 -Configuration Release`로 Manifest와 DLL을 `Config/CAPL/Dll`에 배치한다.
-3. CANalyzer Configuration에 `M485E.vsysvar`를 등록한다.
+3. CANalyzer Configuration에 `M485E.vsysvar`와 Sample `M485E_DevicePanel.generated.vsysvar`를 등록한다.
 4. Program Node에 `M485E_Main.can`을 연결한다.
 5. Main의 COM 번호와 Serial 설정, CSV 상대경로를 실제 환경에 맞춘다.
 6. Measurement를 시작하면 ConnectSwitch가 자동으로 ON 된다. `ConfigurationValid=1`, `ConnectedLed=1`, `State=Connected`를 확인한다.
@@ -257,6 +265,8 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 8. 자동 Connect가 실패했다면 USB-RS485와 Board 연결을 확인하고 `ConnectSwitch`를 다시 켠다.
 9. DeviceCommunication Enabled/Available LED, FC03·FC04·FC10과 가상 CAN Trace, 재연결을 순서대로 시험한다.
 10. RtuLog LogSwitch를 ON하고 Master 요청 후 `Logs/M485E`의 REQ/RES 또는 REQ/NO_RES 쌍을 확인한다.
+11. 회사 CSV를 사용할 때 `Panel_Generator.exe`로 Analyze/Generate하고 Output의 System Variable DB와 DevicePanel CAPL을 교체한다.
+12. 생성 XVP를 Panel Designer에서 열어 GroupBox를 해당 Device Tab에 복사한 뒤 Display Update, 편집, Send Changed와 Reset을 시험한다.
 
 대상 환경에서 수행할 상세 순서는
 [`examples/M485E_Test/VALIDATION_CHECKLIST.md`](../examples/M485E_Test/VALIDATION_CHECKLIST.md)를
@@ -276,5 +286,7 @@ Window에 출력한다. 따라서 반복 오류 Burst를 계속 출력하지 않
 - 최대 200 Rule의 Periodic 출력과 장시간 안정성
 - SystemBase Multi USB 485와 실제 Board에서 RTU Chunk 분할·병합, 응답 Timing 및 Noise 재동기화 검증
 - 장치별 탭을 포함한 실제 CANalyzer Panel `.xvp`
+- CANalyzer 9.x/18에서 생성 XVP의 GroupBox/String/Floating Binding Import와 전체 Generated CAPL Compile/Measurement
+- 실제 Master 동시 Write 중 Device Panel 비원자 Display 정책과 150 Signal Chunk UI 응답성
 
 x86/x64 DLL의 자동 Build·ABI 검증은 완료되어 있다. CANalyzer 9.x와 18에서 실제 Measurement를 수행하는 항목은 대상 실환경 검증으로 남아 있다.

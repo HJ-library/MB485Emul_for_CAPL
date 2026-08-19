@@ -14,15 +14,18 @@ ProjectConfig/
     Dll/Windows-x86/M485E.dll
     Dll/Windows-x64/M485E.dll
     M485E/*.can, *.cin
+    M485E/DevicePanel/*.cin
   Maps/M485E/*.csv
   System Variables/M485E.vsysvar
+  System Variables/M485E_DevicePanel.generated.vsysvar
 ```
 
 저장소의 `Config` 폴더를 `ProjectConfig`로 사용할 수 있다. `CANalyzerConfig.cfg`는 `Config` 루트에 저장한다.
 
 ## 2. 적용 순서
 
-1. `Config/System Variables/M485E.vsysvar`를 CANalyzer Configuration에 등록한다.
+1. `Config/System Variables/M485E.vsysvar`와
+   `Config/System Variables/M485E_DevicePanel.generated.vsysvar`를 CANalyzer Configuration에 등록한다.
 2. Program Node에 `Config/CAPL/M485E/M485E_Main.can`을 연결한다.
 3. `tools/Prepare-M485EPackage.ps1 -Configuration Release`를 실행해 `.vmodule`과 x86/x64 DLL을 `Config/CAPL/DLL`에 배치한다.
 4. 이 폴더의 네 CSV를 `Config/Maps/M485E`에 배치한다.
@@ -49,7 +52,15 @@ ProjectConfig/
 6. `ResultCode=0`을 확인하고 다음 `0x80IIRRMM` Periodic 출력에 변경값이 반영되는지 확인한다. 별도 `0x81` 변경 Message는 출력되지 않는다.
 7. `DeviceCommunication::Enabled[0]`을 0으로 내리고 Slave 1 요청이 무응답이며 Slave 2는 계속 응답하는지 확인한다. `AvailableLed[0]`은 0, `[1]`은 1이어야 한다.
 8. `RtuLog::LogSwitch`를 ON하고 요청을 전송한 뒤 최근 10줄이 CAPL Output View에 표시되는지 확인한다. OFF 후 `Logs/M485E`의 새 CSV에서 전체 Sequence의 REQ/RES 또는 REQ/NO_RES 쌍을 확인한다.
+9. 생성 Device Panel에서 `DisplayUpdate`를 누르고 Physical/Raw 값을 확인한 다음 하나의 값을 편집해 `SendChanged`를 누른다. `ResultCode=0`, `WrittenCount=1`과 실제 Read-back을 확인한다.
 
-## 5. 실제 장비 적용
+## 5. Device Panel Generator 사용
+
+`dist/Panel_Generator.exe`에서 `Config/Maps/M485E/M485E_Device.csv`를 선택해 Analyze와 Generate를
+실행한다. EXE 옆 `Output`의 System Variable DB와 `CAPL/M485E/DevicePanel`을 Config에 교체하고,
+`IndexN` XVP의 GroupBox를 Panel Designer에서 해당 Device Tab에 복사한다. 실제 `N`은 CSV 행 번호가
+아니라 Device Index다. 생성 파일은 직접 편집하지 않으며 CSV Schema/행 순서 변경 시 다시 생성한다.
+
+## 6. 실제 장비 적용
 
 COM 번호, Baud Rate, Parity, Stop Bits와 Device/Rule/Register CSV를 대상 시스템에 맞게 변경한다. `gM485E_ActivePortCount`는 Device CSV의 고유 Port 수와 일치해야 한다.

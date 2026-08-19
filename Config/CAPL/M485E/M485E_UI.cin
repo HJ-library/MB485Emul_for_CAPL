@@ -2,6 +2,7 @@
 includes
 {
      #include "M485E_Control.cin"
+     #include "DevicePanel\\M485E_DevicePanel_Mapping.cin"
 }
 
 // UI는 Panel/System Variable 입력을 요청으로 변환하고 처리 결과를 다시 표시한다.
@@ -193,6 +194,7 @@ on sysvar_update sysvar::M485E::Monitoring::ReadSwitch
  */
 void M485E_UI_Start()
 {
+     M485E_DevicePanel_Start();
      M485E_UI_SyncReadOptions();
      setTimer(tM485E_UISync, 100);
      M485E_Control_Start();
@@ -214,5 +216,6 @@ on timer tM485E_UISync
 void M485E_UI_Stop()
 {
      cancelTimer(tM485E_UISync);
+     M485E_DevicePanel_Stop();
      M485E_Control_Stop();
 }

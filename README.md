@@ -1,11 +1,12 @@
 # Modbus485Emulator
 
-## v0.5.0 RTU Log Panel View
+## v0.6.0 Device Signal Panel Generator
 
 - CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드합니다.
 - CANalyzer 13 이상(CANalyzer 18 포함)은 `M485E.vmodule`에서 실행 환경에 맞는 x86/x64 DLL을 선택합니다.
 - 두 아키텍처는 같은 23개 CAPL-visible API, CSV 형식과 Runtime 동작을 유지합니다.
 - 정식 배포 파일은 `dist/M485E.vmodule`, `dist/Windows-x86/M485E.dll`, `dist/Windows-x64/M485E.dll`입니다.
+- `dist/Panel_Generator.exe`는 Python 설치 없이 Device/Register CSV에서 복사·붙여넣기용 XVP, CAPL Mapping과 System Variable DB를 생성합니다.
 
 ```powershell
 $vectorIncludes = 'C:\Users\Public\Documents\Vector\CANalyzer\Sample Configurations 13.0.172\Programming\CAPLdll\Includes'
@@ -21,7 +22,13 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 양쪽 Release 빌드 후 `Prepare-M485EPackage.ps1`을 실행하면 CAPL Config에 `.vmodule`과 두 DLL을 함께 배치합니다.
 
-현재 릴리스는 **v0.5.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+현재 릴리스는 **v0.6.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+
+v0.6.0은 `M485E_Device.csv`와 Device별 Register Map을 분석해 실제 Index/주소별 XVP Fragment,
+Device별 Generated CAPL, `M485E_DevicePanel` System Variable DB, Manifest와 회사 적용용 COPY_GUIDE를
+만듭니다. Display Update는 on-demand bounded Chunk로 Physical/Raw 값을 읽고, Send Changed는
+마지막 성공 Baseline과 다른 Signal만 쓰며, Device/All Default Reset을 지원합니다. 공개 DLL
+ABI는 23개로 그대로입니다.
 
 v0.5.0은 기존 RTU CSV Logging Session에서 기록한 동일한 REQ/RES/NO_RES 문자열의 최근 10줄을 CANalyzer Panel의 CAPL Output View에 최대 200ms마다 한 번 Overwrite합니다. Panel 표시는 최근 상태 확인용이며 전체 원본은 계속 CSV에 보존됩니다. `M485E::Monitoring::Btn_ReadOption`은 ReadOption Checkbox를 누르기 편하게 배치하는 `int32` Scalar 편의 버튼으로, CAPL Handler나 별도 동작은 없습니다. 공개 DLL ABI는 v0.4.0과 동일한 23개 API입니다.
 
@@ -33,6 +40,50 @@ CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니�
 
 프로젝트가 어떻게 동작하는지 먼저 보려면 [Modbus485Emulator 한눈에 보기](docs/PROJECT_OVERVIEW.md)를 참조하세요.
 처음 적용할 때는 [기본 예제 시작 가이드](examples/M485E_Test/START_HERE.md)를 위에서부터 따라가세요.
+
+## Device Panel Generator
+
+`Panel_Generator.exe`에서 `M485E_Device.csv`를 선택하고 Analyze로 실제 Device Index, Map,
+Signal/XVP 수를 확인한 뒤 Generate를 실행합니다. Output은 현재 Shell 경로가 아니라 EXE 옆에
+transaction 방식으로 생성됩니다. 기존 Output에 Generator Manifest가 없으면 사용자 파일로
+간주하여 덮어쓰지 않습니다.
+
+```text
+Output\IndexN\*.xvp
+Output\Common\ResetAllDefault.xvp
+Output\CAPL\M485E\DevicePanel\*.cin
+Output\SystemVariables\M485E_DevicePanel.generated.vsysvar
+Output\generation-manifest.json
+Output\COPY_GUIDE.md
+```
+
+회사 적용 순서:
+
+1. Analyze 결과를 확인하고 Generate합니다.
+2. Output System Variable DB와 `CAPL\M485E\DevicePanel`을 Configuration에 추가/교체합니다.
+3. 생성 XVP를 Panel Designer에서 열어 GroupBox 전체를 해당 Device Tab에 복사합니다.
+4. `M485E_DevicePanel::IndexN` Binding을 확인하고 CANalyzer 9.x에서 Compile합니다.
+5. Display Update, Physical 값 편집, Send Changed와 Device/All Reset을 시험합니다.
+6. CSV Schema나 Signal 행 순서가 바뀌면 Generated 파일을 직접 고치지 말고 다시 생성합니다.
+
+Raw Hex는 Byte_Order를 적용한 논리 Frame에서 Start_Bit/Size로 추출한 Signal 자체의 unsigned
+Bit Pattern입니다. 예를 들어 Signed -125는 `0xFF83`, IEEE Float 25.5는 `0x41CC0000`입니다.
+Physical 정수는 기존 double Signal API 정책상 ±2^53까지만 정확하고, 전체 64bit Pattern은
+Raw Hex로만 정확히 표시합니다. Raw Hex 편집과 full-range 64bit Integer Write는 지원하지 않습니다.
+
+Generator 개발/배포 빌드는 프로젝트 전용 venv와 고정된 PyInstaller 버전을 사용합니다.
+
+```powershell
+$python = 'C:\path\to\python.exe'
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\tools\Build-PanelGenerator.ps1 -PythonPath $python
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\tests\panel_generator\Test-PanelGeneratorExe.ps1
+```
+
+Float Array Probe의 사용자 체크리스트 결과는 예상대로였다는 user-reported evidence로 보존합니다.
+정확한 CANalyzer Version/SP/날짜가 없으므로 CANalyzer 9.x/18의 Generated XVP Import,
+String/GroupBox, 전체 CAPL Compile/Measurement는 External Verification Pending입니다.
 
 ## Phase 1 범위
 
@@ -174,15 +225,29 @@ Visual Studio/MSBuild와 CMake 중 어느 방식으로 빌드해도 생산 DLL�
 디렉터리에 남습니다. Debug DLL은 Release를 덮어쓰지 않도록 `M485E.Debug.dll`을 사용하며
 정식 배포에는 포함하지 않습니다.
 
-CTest는 ABI, 계약 생성, 공개 계약, Core Unit/Boundary, DLL Integration 및 CAPL 소스 계약 검사를 실행합니다. CANalyzer 또는 실제 RS-485 장비를 사용하지 않으므로 해당 결과를 외부 검증 PASS로 해석하지 않습니다.
+CTest는 ABI, 계약 생성, 공개 계약, Core Unit/Boundary, DLL Integration, 기존 CAPL과 Generated
+DevicePanel 소스 계약 검사를 실행합니다. 별도 Python 시험은 CSV/XVP/Raw Hex/transaction 생성과
+Sample stale을 검증하고 one-file EXE smoke는 tkinter 시작과 다른 Working Directory 출력을
+검증합니다. CANalyzer 또는 실제 RS-485 장비를 사용하지 않으므로 해당 결과를 외부 검증
+PASS로 해석하지 않습니다.
 
 ## CANalyzer Config 패키지 준비
 
-Release/Win32와 Release/x64 빌드 후 다음 명령으로 두 DLL, `.vmodule`과 생성된 CAPL 계약을 이동 가능한 `Config` 구조에 배치합니다.
+Release/Win32와 Release/x64 빌드 및 Generator EXE 생성 후 다음 명령으로 두 DLL, `.vmodule`,
+생성된 CAPL 계약과 Sample DevicePanel 산출물을 이동 가능한 `Config` 구조에 배치합니다.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\tools\Prepare-M485EPackage.ps1 -Configuration Release
+```
+
+GitHub Release용 architecture별 DLL, `.vmodule`, one-file Generator, Portable ZIP과
+`SHA256SUMS`는 다음 명령으로 `build/release-assets/v<version>`에 생성합니다. Portable ZIP은
+Release DLL만 명시적으로 포함하며 Debug/PDB/LIB/OBJ/CBF 산출물을 포함하지 않습니다.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\tools\Build-M485EReleaseAssets.ps1
 ```
 
 CANalyzer Program Node에는 `Config/CAPL/M485E/M485E_Main.can`을 연결합니다. 프로젝트별 CSV 경로, COM 이름과 Serial 설정은 이 파일의 전역변수와 시작 코드에서 변경하고, FrameRule별 Monitoring 목록은 `M485E_ReadOption.cin`에서 관리합니다. Measurement 시작 시 Main이 500ms 연결 제어 Timer로 `ConnectSwitch`를 자동 ON 하며, Panel에서는 같은 Switch로 수동 Disconnect/재연결할 수 있습니다.
@@ -206,8 +271,11 @@ CAPL에서 COM Port 설정은 `struct M485E_PortConfig gM485E_PortConfigs[4]` �
 - `spec`: 공개 계약 단일 원본 CSV
 - `generated`: C++/CAPL 생성 계약
 - `tools`: 계약 생성 및 검증 도구
+- `tools/panel_generator`: tkinter GUI/CLI와 CSV/XVP/CAPL/System Variable Generator Core
+- `tests/panel_generator`: Generator, Raw Hex, transaction Output와 one-file EXE 시험
 - `tests/capl`: 신규 CANalyzer CAPL Probe
 - `Config/CAPL/M485E`: CAPL Core/Monitoring/UI Adapter
+- `Config/CAPL/M485E/DevicePanel`: Sample Device CSV에서 생성한 Device별 CAPL Mapping
 - `Config/System Variables`: Panel 연동용 System Variable 정의
 - `Config/Maps/M485E`: 이동 가능한 기본 예제 CSV 세트
 - `docs/05_Test`: 대상 실환경 검증 가이드와 결과 기록서
