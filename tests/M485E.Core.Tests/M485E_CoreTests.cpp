@@ -444,6 +444,41 @@ void TestRuntimeRegisterAndSignalOperations()
               preservedRule.address == 4321 && preservedDevice.slaveId == 99 &&
               preservedValues == std::vector<std::uint16_t>({0xBEEFU}),
           "failed Rule Data read changed caller-owned outputs");
+  Require(runtime.ReadRule(255, 1, preservedRule, preservedDevice, preservedValues) ==
+                  M485E_ERR_DEVICE_NOT_FOUND &&
+              preservedRule.address == 4321 && preservedDevice.slaveId == 99 &&
+              preservedValues == std::vector<std::uint16_t>({0xBEEFU}),
+          "missing Device Rule Data read changed caller-owned outputs");
+}
+
+void TestRuleDataConfigurationLifetime()
+{
+  Fixture fixture;
+  const auto paths = fixture.Write(ValidDevices(), ValidRules(), ValidSignals());
+  ConfigurationStore store;
+  Require(store.Refresh(paths, ConfigurationLoader{}).status == M485E_OK,
+          "Rule Data lifetime fixture refresh failed");
+  auto original = store.Snapshot();
+  const std::weak_ptr<const m485e::core::ActiveConfiguration> lifetime = original;
+  m485e::core::RuntimeModel runtime(original);
+  original.reset();
+
+  fixture.WriteFile("devices.csv", std::string(kDeviceHeader) +
+                                    "0,COM22,7,Replacement,signals.csv\n");
+  fixture.WriteFile("rules.csv", std::string(kRuleHeader) +
+                                  "0,1,0x03,200,1,Replacement Rule\n");
+  Require(store.Refresh(paths, ConfigurationLoader{}).status == M485E_OK &&
+              !lifetime.expired(),
+          "Runtime did not retain its immutable configuration after store replacement");
+  m485e::core::RuleDefinition rule;
+  m485e::core::DeviceDefinition device;
+  std::vector<std::uint16_t> values;
+  Require(runtime.ReadRule(0, 1, rule, device, values) == M485E_OK &&
+              rule.address == 10000 && rule.quantity == 4 &&
+              rule.requestName == "Read Holding" && device.port == "COM11" &&
+              device.slaveId == 1 && device.csvDbName == "signals.csv" &&
+              values == std::vector<std::uint16_t>({0x4148U, 0U, 0x4000U, 0x0010U}),
+          "Rule Data mixed new store metadata with its retained Register image");
 }
 
 void TestRuleDataQuantitiesAndAtomicReads()
@@ -540,8 +575,15 @@ void TestRuleDataQuantitiesAndAtomicReads()
   std::uint32_t readCount = 0;
   while (!writerDone.load() || readCount < 20000U)
   {
-    const auto current = ReadRuleValues(runtime, 0, 3);
-    if (current != first && current != second)
+    m485e::core::RuleDefinition currentRule;
+    m485e::core::DeviceDefinition currentDevice;
+    std::vector<std::uint16_t> current;
+    if (runtime.ReadRule(0, 3, currentRule, currentDevice, current) != M485E_OK ||
+        (current != first && current != second) || currentRule.index != 0 ||
+        currentRule.ruleId != 3 || currentRule.address != 30000 ||
+        currentRule.quantity != 5 || currentRule.requestName != "Q5" ||
+        currentDevice.index != 0 || currentDevice.slaveId != 1 ||
+        currentDevice.port != "COM11" || currentDevice.deviceName != "Quantity Device")
     {
       failure.store(true);
       break;
@@ -956,6 +998,62 @@ void TestDiagnosticQueue()
           "Error Queue oldest-drop diagnostics failed");
 }
 
+void TestDiagnosticTextValidity()
+{
+  m485e::core::ErrorQueue errors;
+  m485e::core::ErrorEvent event;
+  event.errorCode = M485E_ERR_RTU_FRAME_DISCARDED;
+  event.validMask = M485E_EM_VALID_PORT_SLOT | M485E_EM_VALID_DEVICE_INDEX;
+  event.context[0] = 2;
+  event.context[1] = 7;
+  errors.Push(event, "detail");
+  // Callers may already have set OutText. Normalizing that bit must not prevent
+  // otherwise identical errors from coalescing.
+  event.validMask |= M485E_EM_VALID_OUT_TEXT;
+  errors.Push(event, "detail");
+  m485e::core::ErrorEvent output;
+  output.errorCode = 12345;
+  output.text.fill('Z');
+  Require(errors.TryDequeue(6, output) == M485E_ERR_BUFFER_TOO_SMALL &&
+              output.errorCode == 12345 &&
+              std::all_of(output.text.begin(), output.text.end(),
+                          [](const char value) { return value == 'Z'; }) &&
+              errors.GetStats().pending == 1 && errors.GetStats().dequeuedCount == 0,
+          "small Error Event text buffer consumed or changed the event/output");
+  Require(errors.TryDequeue(7, output) == M485E_OK && output.repeatCount == 2 &&
+              output.sequence == 1 && output.validMask == event.validMask &&
+              output.context == event.context && std::string(output.text.data()) == "detail",
+          "nonempty Error Event text did not set OutText while preserving context");
+
+  errors.Push(event, "");
+  Require(errors.TryDequeue(0, output) == M485E_ERR_BUFFER_TOO_SMALL &&
+              errors.GetStats().pending == 1,
+          "empty Error Event lost its required NUL terminator capacity");
+  Require(errors.TryDequeue(1, output) == M485E_OK && output.text[0] == '\0' &&
+              output.validMask == (event.validMask & ~M485E_EM_VALID_OUT_TEXT) &&
+              output.context == event.context && output.sequence == 2,
+          "empty Error Event retained OutText or changed other context bits");
+
+  const std::string longText(800, 'X');
+  event.validMask &= ~M485E_EM_VALID_OUT_TEXT;
+  errors.Push(event, longText);
+  Require(errors.TryDequeue(511, output) == M485E_ERR_BUFFER_TOO_SMALL &&
+              errors.GetStats().pending == 1,
+          "truncated Error Event was consumed before its text fit");
+  Require(errors.TryDequeue(512, output) == M485E_OK && output.text.back() == '\0' &&
+              std::string(output.text.data()) == std::string(511, 'X') &&
+              output.validMask == (event.validMask | M485E_EM_VALID_OUT_TEXT) &&
+              output.context == event.context && output.sequence == 3,
+          "truncated Error Event text validity or NUL termination failed");
+
+  // OutText describes the stored C string, not the length of an input view.
+  event.validMask |= M485E_EM_VALID_OUT_TEXT;
+  errors.Push(event, std::string_view("\0hidden", 7));
+  Require(errors.TryDequeue(1, output) == M485E_OK && output.text[0] == '\0' &&
+              (output.validMask & M485E_EM_VALID_OUT_TEXT) == 0U,
+          "NUL-leading Error Event incorrectly advertised nonempty text");
+}
+
 void TestRtuTimingAndStreamFraming()
 {
   using m485e::core::CalculateRtuTiming;
@@ -1020,6 +1118,36 @@ void TestRtuTimingAndStreamFraming()
   batch = parser.PushBytes(unsupported.data(), unsupported.size());
   Require(batch.frames.size() == 1U && batch.frames[0] == unsupported,
           "CRC sliding fallback did not recover an unknown Function request");
+
+  const std::array<std::vector<std::uint8_t>, 5> knownFrames{
+      readRequest, Rtu({1, 0x04, 0x27, 0x10, 0, 1}),
+      Rtu({1, 0x03, 2, 0x12, 0x34}), Rtu({1, 0x83, 2}),
+      Rtu({1, 0x10, 0x27, 0x10, 0, 1})};
+  for (const auto& known : knownFrames)
+  {
+    for (const bool genericFirst : std::array<bool, 2>{false, true})
+    {
+      for (const bool hasNoise : std::array<bool, 2>{false, true})
+      {
+        const auto& firstFrame = genericFirst ? unsupported : known;
+        const auto& secondFrame = genericFirst ? known : unsupported;
+        std::vector<std::uint8_t> stream;
+        if (hasNoise) stream = {0x55U, 0xAAU};
+        stream.insert(stream.end(), firstFrame.begin(), firstFrame.end());
+        stream.insert(stream.end(), secondFrame.begin(), secondFrame.end());
+        parser.Reset();
+        batch = parser.PushBytes(stream.data(), stream.size());
+        Require(batch.frames.size() == 2U && batch.frames[0] == firstFrame &&
+                    batch.frames[1] == secondFrame &&
+                    batch.discardedSegments == (hasNoise ? 1U : 0U),
+                "known/generic RTU candidates changed earliest-offset selection");
+        if (hasNoise)
+          Require(batch.discardedData.size() == 1U &&
+                      batch.discardedData[0] == std::vector<std::uint8_t>({0x55U, 0xAAU}),
+                  "RTU candidate selection lost the exact noise prefix");
+      }
+    }
+  }
 
   std::vector<std::uint8_t> maximumWrite{1, 0x10, 0, 0, 0, 123, 246};
   maximumWrite.resize(7U + 246U, 0x5AU);
@@ -1200,12 +1328,14 @@ int main()
     TestCardinalityBoundaries();
     TestAtomicRefresh();
     TestRuntimeRegisterAndSignalOperations();
+    TestRuleDataConfigurationLifetime();
     TestRuleDataQuantitiesAndAtomicReads();
     TestBroadcastWriteAndRuleDataConcurrency();
     TestPortCardinalityAndSlot3Routing();
     TestModbusRtuEngine();
     TestRtuLogQueue();
     TestDiagnosticQueue();
+    TestDiagnosticTextValidity();
     TestRtuTimingAndStreamFraming();
     TestPortWorkerWithPartialIoAndCancellation();
     TestPortWorkerBroadcastWrite();

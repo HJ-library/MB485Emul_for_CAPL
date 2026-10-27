@@ -257,12 +257,19 @@ std::int32_t RuntimeModel::ReadRule(const std::uint8_t index, const std::uint8_t
   const std::int16_t ruleIndex = devices_[index]->ruleById[ruleId];
   if (ruleIndex < 0) return M485E_ERR_RULE_NOT_FOUND;
   const RuleDefinition& selected = configuration_->rules[static_cast<std::size_t>(ruleIndex)];
+  // RuntimeModel owns this immutable configuration for its entire lifetime.
+  // Prepare allocating metadata copies before locking the mutable Register image.
+  RuleDefinition ruleCopy = selected;
+  DeviceDefinition deviceCopy =
+      configuration_->devices[configuration_->deviceByIndex[index]].definition;
   std::vector<std::uint16_t> copy(selected.quantity);
-  std::lock_guard<std::mutex> lock(devices_[index]->mutex);
-  std::copy_n(devices_[index]->current.values.begin() + selected.address, selected.quantity,
-              copy.begin());
-  rule = selected;
-  device = configuration_->devices[configuration_->deviceByIndex[index]].definition;
+  {
+    std::lock_guard<std::mutex> lock(devices_[index]->mutex);
+    std::copy_n(devices_[index]->current.values.begin() + selected.address, selected.quantity,
+                copy.begin());
+  }
+  rule = std::move(ruleCopy);
+  device = std::move(deviceCopy);
   values = std::move(copy);
   return M485E_OK;
 }

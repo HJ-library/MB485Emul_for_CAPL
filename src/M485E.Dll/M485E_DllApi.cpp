@@ -94,6 +94,20 @@ std::unique_ptr<Context> gContext;
 std::thread gLifecycleThread;
 std::atomic<bool> gLifecycleThreadDone{true};
 
+template <typename Function, typename... Arguments>
+std::thread MakeLifecycleThread(Function&& function, Arguments&&... arguments)
+{
+#if defined(M485E_LIFECYCLE_TESTS)
+  // Only the source-including lifecycle test executable supplies this factory.
+  // The production DLL has neither an injection hook nor an additional export.
+  return m485e::test::MakeLifecycleThread(std::forward<Function>(function),
+                                         std::forward<Arguments>(arguments)...);
+#else
+  return std::thread(std::forward<Function>(function),
+                     std::forward<Arguments>(arguments)...);
+#endif
+}
+
 std::uint32_t NextSequence(const std::uint32_t sequence) noexcept
 {
   return sequence >= 0x7FFFFFFFU ? 1U : sequence + 1U;
@@ -550,13 +564,16 @@ std::int32_t __stdcall M485E_Dll_RefreshCsv(const std::uint32_t contextHandle)
   CsvPaths paths{gContext->csvPaths};
   Context* const context = gContext.get();
   const std::uint32_t generation = NextSequence(gContext->activeGeneration);
+  // Construct before publishing acceptance. If allocation/thread creation throws,
+  // the boundary guard reports it while all lifecycle fields remain unchanged.
+  // gMutex keeps the worker's completion publication behind the following stores.
+  gLifecycleThread = MakeLifecycleThread(FinishRefresh, context, std::move(paths), generation);
   gContext->activeGeneration = generation;
   gContext->activeOperation = M485E_OPERATION_REFRESH_CSV;
   gContext->state = M485E_STATE_REFRESHING;
   // Acceptance is synchronous, completion is asynchronous. CAPL polls the versioned
   // lifecycle layout instead of blocking the measurement thread on file I/O.
   gLifecycleThreadDone.store(false);
-  gLifecycleThread = std::thread(FinishRefresh, context, std::move(paths), generation);
   return RecordSuccess(*gContext);
 }
 
@@ -566,6 +583,14 @@ std::int32_t __stdcall M485E_Dll_Connect(const std::uint32_t contextHandle)
   std::lock_guard<std::mutex> lock(gMutex);
   const std::int32_t status = ValidateContext(contextHandle);
   if (status != M485E_OK) return status;
+  // The store tracks CSV failures; a later runtime allocation failure is recorded
+  // in the completed Refresh result. Neither is cleared by a rejected Connect or
+  // the already-disconnected no-op: only a successful Refresh recovers validity.
+  if (gContext->configurationStore.IsStale() ||
+      (gContext->lastCompletedOperation == M485E_OPERATION_REFRESH_CSV &&
+       gContext->lastResult < M485E_OK))
+    return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_STALE,
+                         "Refresh failed; a new successful CSV refresh is required.");
   if (!gContext->configurationValid || !gContext->runtime)
     return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
                          "A successful CSV refresh is required before Connect.");
@@ -592,12 +617,12 @@ std::int32_t __stdcall M485E_Dll_Connect(const std::uint32_t contextHandle)
   }
   Context* const context = gContext.get();
   const std::uint32_t generation = NextSequence(gContext->activeGeneration);
+  gLifecycleThread =
+      MakeLifecycleThread(FinishConnect, context, generation, std::move(configs), activePortCount);
   gContext->activeGeneration = generation;
   gContext->activeOperation = M485E_OPERATION_CONNECT;
   gContext->state = M485E_STATE_CONNECTING;
   gLifecycleThreadDone.store(false);
-  gLifecycleThread =
-      std::thread(FinishConnect, context, generation, std::move(configs), activePortCount);
   return RecordSuccess(*gContext);
 }
 
@@ -614,11 +639,11 @@ std::int32_t __stdcall M485E_Dll_Disconnect(const std::uint32_t contextHandle)
                          "A Lifecycle operation is already in progress.");
   Context* const context = gContext.get();
   const std::uint32_t generation = NextSequence(gContext->activeGeneration);
+  gLifecycleThread = MakeLifecycleThread(FinishDisconnect, context, generation);
   gContext->activeGeneration = generation;
   gContext->activeOperation = M485E_OPERATION_DISCONNECT;
   gContext->state = M485E_STATE_DISCONNECTING;
   gLifecycleThreadDone.store(false);
-  gLifecycleThread = std::thread(FinishDisconnect, context, generation);
   return RecordSuccess(*gContext);
 }
 
@@ -942,6 +967,10 @@ std::int32_t __stdcall M485E_Dll_SetRtuLogEnabled(
   if (enabled != 0 && enabled != 1)
     return RecordFailure(*gContext, M485E_ERR_INVALID_ARGUMENT,
                          "RTU Log enabled value must be zero or one.");
+  if (enabled != 0 && (!RuntimeState(*gContext) ||
+                       gContext->activeOperation != M485E_OPERATION_NONE))
+    return RecordFailure(*gContext, M485E_ERR_OPERATION_BUSY,
+                         "New RTU Log capture cannot start during a Lifecycle operation.");
   if (!gContext->rtuLog)
     return RecordFailure(*gContext, M485E_ERR_CONFIGURATION_NOT_READY,
                          "A successful CSV refresh is required before RTU logging.");

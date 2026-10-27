@@ -124,6 +124,16 @@ target_compile_features(M485E.IntegrationTests PRIVATE cxx_std_17)
 target_include_directories(M485E.IntegrationTests PRIVATE generated/cpp "${VECTOR_CAPL_DLL_INCLUDE_DIR}")
 add_dependencies(M485E.IntegrationTests M485E)
 
+add_executable(M485E.LifecycleTests
+  tests/M485E.LifecycleTests/M485E_LifecycleTests.cpp
+  src/M485E.Dll/M485E_Connection.cpp
+  src/M485E.Dll/M485E_Win32Serial.cpp
+)
+target_compile_features(M485E.LifecycleTests PRIVATE cxx_std_17)
+target_include_directories(M485E.LifecycleTests PRIVATE src/M485E.Dll)
+target_compile_definitions(M485E.LifecycleTests PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(M485E.LifecycleTests PRIVATE M485E.Core)
+
 if(MSVC)
   target_compile_options(M485E.Core PRIVATE /W4 /WX /permissive-)
   target_compile_options(M485E PRIVATE /W4 /WX /permissive-)
@@ -132,6 +142,7 @@ if(MSVC)
   target_compile_options(M485E.ContractTests PRIVATE /W4 /WX /permissive-)
   target_compile_options(M485E.Core.Tests PRIVATE /W4 /WX /permissive-)
   target_compile_options(M485E.IntegrationTests PRIVATE /W4 /WX /permissive-)
+  target_compile_options(M485E.LifecycleTests PRIVATE /W4 /WX /permissive-)
 endif()
 
 enable_testing()
@@ -144,6 +155,8 @@ add_test(NAME M485E.ContractTests COMMAND M485E.ContractTests)
 add_test(NAME M485E.Core.Tests COMMAND M485E.Core.Tests)
 add_test(NAME M485E.IntegrationTests
          COMMAND M485E.IntegrationTests $<TARGET_FILE:M485E>)
+add_test(NAME M485E.LifecycleTests COMMAND M485E.LifecycleTests)
+set_tests_properties(M485E.LifecycleTests PROPERTIES TIMEOUT 30)
 add_test(NAME M485E.CaplSourceContracts
          COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
                  -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/capl/Test-M485ECaplSources.ps1")

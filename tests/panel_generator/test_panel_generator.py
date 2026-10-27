@@ -229,6 +229,135 @@ class CsvContractTests(unittest.TestCase):
                 core.analyze_device_map(device)
 
 
+class NumericValidationTests(unittest.TestCase):
+    def test_integer_syntax_rejects_python_extensions_with_field_context(self) -> None:
+        invalid = ("0_0", "+0", "-0", "０", "٠", "0x_0", "0x+0", "0X０", "0b0", "0x")
+        for column in ("Index", "Address"):
+            for value in invalid + (("100_00",) if column == "Address" else ()):
+                with self.subTest(column=column, value=value), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    device = create_fixture(root, 1)
+                    target = device if column == "Index" else root / "Synthetic.csv"
+                    text = target.read_text(encoding="utf-8")
+                    lines = text.splitlines()
+                    cells = lines[1].split(",")
+                    cells[0] = value
+                    write_text(target, lines[0] + "\n" + ",".join(cells) + "\n")
+                    with self.assertRaises(core.GeneratorError) as caught:
+                        core.analyze_device_map(device)
+                    self.assertEqual(caught.exception.path, target)
+                    self.assertEqual(caught.exception.row, 2)
+                    self.assertEqual(caught.exception.column, column)
+
+    def test_integer_syntax_accepts_ascii_decimal_hex_and_field_boundaries(self) -> None:
+        for index, slave, address, length, start, size in (
+            ("000", "001", "00000", "02", "00", "016"),
+            ("0xFF", "0XF7", "0xFFFF", "0x2", "0x0", "0X10"),
+            ("255", "247", "65532", "8", "63", "1"),
+        ):
+            with self.subTest(index=index, address=address), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                device = create_fixture(root, 1)
+                write_text(device, DEVICE_HEADER + f"\n{index},COM8,{slave},D,Synthetic.csv\n")
+                row = f"{address},S,Unsigned,{length},BigEndian,{start},{size},1,0,,0,,,"
+                write_text(root / "Synthetic.csv", REGISTER_HEADER + "\n" + row + "\n")
+                analysis = core.analyze_device_map(device)
+                self.assertEqual(analysis.devices[0].index, 0 if index == "000" else 255)
+                self.assertEqual(analysis.devices[0].signals[0].address, {"00000": 0, "0xFFFF": 65535, "65532": 65532}[address])
+
+    def _check_init(self, *, accepted: bool, minimum: str = "", maximum: str = "", **parameters: object) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            device = create_fixture(root, 1)
+            cells = simple_signal(10000, "InitSignal", **parameters).split(",")
+            cells[12:14] = [minimum, maximum]
+            register_map = root / "Synthetic.csv"
+            write_text(register_map, REGISTER_HEADER + "\n" + ",".join(cells) + "\n")
+            if accepted:
+                signal = core.analyze_device_map(device).devices[0].signals[0]
+                self.assertEqual(signal.init_value, float(parameters["init"]))
+            else:
+                with self.assertRaises(core.GeneratorError) as caught:
+                    core.analyze_device_map(device)
+                self.assertEqual(caught.exception.path, register_map)
+                self.assertEqual(caught.exception.row, 2)
+                self.assertEqual(caught.exception.column, "Init_Value")
+
+    def test_integer_init_raw_bounds_and_half_away_from_zero(self) -> None:
+        # Hand-computed raw boundaries distinguish std::round from ties-to-even.
+        for signal_type, size, value, accepted in (
+            ("Unsigned", 16, "65535", True),
+            ("Unsigned", 16, "70000", False),
+            ("Unsigned", 16, "65535.49", True),
+            ("Unsigned", 16, "65535.5", False),
+            ("Unsigned", 16, "-0.49999999999999994", True),
+            ("Unsigned", 16, "-0.5", False),
+            ("Signed", 16, "-32768", True),
+            ("Signed", 16, "32767", True),
+            ("Signed", 16, "-32768.49", True),
+            ("Signed", 16, "-32768.5", False),
+            ("Signed", 16, "32767.5", False),
+            ("Signed", 2, "1.5", False),
+            ("Signed", 2, "-2.5", False),
+            ("Signed", 1, "-0.5", True),
+            ("Signed", 1, "0.5", False),
+        ):
+            with self.subTest(signal_type=signal_type, size=size, value=value):
+                self._check_init(signal_type=signal_type, size=size, init=value, accepted=accepted)
+
+    def test_integer_init_scale_offset_finiteness_and_precision(self) -> None:
+        for scale, offset, value, accepted in (
+            ("-0.1", "10", "22.5", True),  # raw -125
+            ("-0.5", "10", "16394", True),  # raw -32768
+            ("-0.5", "10", "16394.25", False),  # raw -32768.5
+            ("-0.5", "10", "-16373.5", True),  # raw 32767
+            ("-0.5", "10", "-16373.75", False),  # raw 32767.5
+            ("1e-300", "0", "1e308", False),  # non-finite division
+            ("1", "-1e308", "1e308", False),  # non-finite subtraction
+        ):
+            with self.subTest(scale=scale, offset=offset, value=value):
+                self._check_init(signal_type="Signed", scale=scale, offset=offset, init=value, accepted=accepted)
+        for signal_type, value, accepted in (
+            ("Signed", "9007199254740991", True),
+            ("Signed", "9007199254740992", True),
+            ("Signed", "9007199254740994", False),
+            ("Signed", "-9007199254740992", True),
+            ("Signed", "-9007199254740994", False),
+            ("Unsigned", "9007199254740992", True),
+            ("Unsigned", "9007199254740994", False),
+            ("Unsigned", "-1", False),
+        ):
+            with self.subTest(signal_type=signal_type, value=value):
+                self._check_init(signal_type=signal_type, length=8, size=64, init=value, accepted=accepted)
+        # At Size 53 the unsigned raw maximum is one below the API precision cap.
+        self._check_init(length=8, size=53, init="9007199254740991", accepted=True)
+        self._check_init(length=8, size=53, init="9007199254740992", accepted=False)
+
+    def test_ieee_init_binary32_range_and_double_policy(self) -> None:
+        for value, accepted in (
+            ("25.5", True),
+            ("1e100", False),
+            ("-1e100", False),
+            ("3.4028234663852886e38", True),  # FLT_MAX
+            ("3.4028235e38", True),  # rounds to finite FLT_MAX
+            ("3.4028235677973366e38", False),  # binary32 overflow midpoint
+            ("-3.4028235e38", True),
+            ("-3.4028235677973366e38", False),
+            ("1.401298464324817e-45", True),  # smallest positive binary32 subnormal
+            ("1e-100", True),  # binary32 zero is finite; Core allows it
+        ):
+            with self.subTest(value=value):
+                self._check_init(signal_type="IEEE Float", length=4, size=32, init=value, accepted=accepted)
+        for value in ("1e100", "-1e100", "1.7976931348623157e308"):
+            self._check_init(signal_type="IEEE Double", length=8, size=64, init=value, accepted=True)
+
+    def test_init_physical_min_max_still_apply_before_encoding(self) -> None:
+        for value, accepted in (("-2", True), ("2", True), ("-2.01", False), ("2.01", False)):
+            with self.subTest(value=value):
+                self._check_init(signal_type="Signed", scale="-0.5", offset="10", init=value,
+                                 minimum="-2", maximum="2", accepted=accepted)
+
+
 class FragmentAndOutputTests(unittest.TestCase):
     def test_checked_in_sample_generated_artifacts_are_not_stale(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
