@@ -37,6 +37,10 @@ void ErrorQueue::Push(ErrorEvent event, const std::string_view text) noexcept
   const std::size_t copySize = std::min(text.size(), event.text.size() - 1U);
   std::copy_n(text.data(), copySize, event.text.begin());
   event.text[copySize] = '\0';
+  if (event.text[0] != '\0')
+    event.validMask |= M485E_EM_VALID_OUT_TEXT;
+  else
+    event.validMask &= ~static_cast<std::uint32_t>(M485E_EM_VALID_OUT_TEXT);
   std::lock_guard<std::mutex> lock(mutex_);
   if (size_ != 0U)
   {

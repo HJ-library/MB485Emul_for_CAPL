@@ -13,6 +13,7 @@ import math
 import os
 import re
 import shutil
+import struct
 import tempfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -267,7 +268,7 @@ def _parse_int(
     try:
         base = 16 if value.startswith(("0x", "0X")) else 10
         digits = value[2:] if base == 16 else value
-        if not digits:
+        if re.fullmatch(r"[0-9A-Fa-f]+" if base == 16 else r"[0-9]+", digits) is None:
             raise ValueError
         parsed = int(digits, base)
     except ValueError as exc:
@@ -338,6 +339,46 @@ def _resolve_register_map(base: Path, value: str, *, path: Path, row: int) -> Pa
             column="CSV_DB_Name",
         )
     return resolved
+
+
+def _validate_init_encoding(
+    signal_type: str,
+    size: int,
+    scale: float,
+    offset: float,
+    init_value: float,
+    *,
+    path: Path,
+    row: int,
+) -> None:
+    """Match SignalCodec::Encode without changing the physical input value."""
+    message = ""
+    if signal_type == "IEEE Float":
+        try:
+            encoded = struct.unpack(">f", struct.pack(">f", init_value))[0]
+        except OverflowError:
+            encoded = math.inf
+        if not math.isfinite(encoded):
+            message = "Init_Value cannot be encoded as a finite IEEE Float"
+    elif signal_type != "IEEE Double":
+        candidate = (init_value - offset) / scale
+        if not math.isfinite(candidate):
+            message = "Init_Value produces a non-finite Raw candidate"
+        else:
+            # std::round uses halfway-away-from-zero. Splitting the fraction also
+            # avoids adding 0.5 to a large, already integral binary64 value.
+            fraction, rounded = math.modf(candidate)
+            if abs(fraction) >= 0.5:
+                rounded += math.copysign(1.0, candidate)
+            if abs(rounded) > 9007199254740992:
+                message = "Init_Value Raw exceeds the inclusive +/-2^53 precision range"
+            else:
+                minimum = 0 if signal_type == "Unsigned" else -(1 << (size - 1))
+                maximum = (1 << (size if signal_type == "Unsigned" else size - 1)) - 1
+                if rounded < minimum or rounded > maximum:
+                    message = f"Init_Value Raw is outside the {signal_type} Size={size} range"
+    if message:
+        raise GeneratorError(message, path=path, row=row, column="Init_Value")
 
 
 def _parse_register_map(path: Path) -> tuple[Signal, ...]:
@@ -481,6 +522,9 @@ def _parse_register_map(path: Path) -> tuple[Signal, ...]:
             raise GeneratorError(
                 "Init_Value is above Max", path=path, row=row_number, column="Init_Value"
             )
+        _validate_init_encoding(
+            signal_type, size, scale, offset, init_value, path=path, row=row_number
+        )
 
         range_key = (address, length)
         bit_range = (start_bit, start_bit + size - 1, name, row_number)

@@ -1,5 +1,47 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Refresh/Connect/Disconnect 진행 중 신규 RTU Log ON을 Busy로 거부하여 Refresh의 Queue 교체로
+  성공한 ON 설정이 유실되지 않게 한다. OFF, 진단, Queue 배출과 종료 Flush 경로는 유지한다.
+- 실패한 Refresh 이후 성공한 새 Refresh 전 Connect는 `CONFIGURATION_STALE(-2003)`을 반환하고,
+  아직 준비되지 않은 `CONFIGURATION_NOT_READY(-2002)`와 구분한다. last-good 데이터는 보존한다.
+- 비동기 Error Event의 `OUT_TEXT` ValidMask를 실제 저장된 NUL 종료 문자열에 맞추고 빈 문자열,
+  잘림, 작은 출력 Buffer의 무소비 및 기존 Context/병합/Drop 계약을 유지한다.
+- Lifecycle 스레드 생성 성공 후에만 진행 상태와 세대를 게시하여 생성 예외 발생 시 이전 상태,
+  완료 결과와 연결 자원을 보존하고 재시도 및 Finalize가 가능하게 한다.
+- Panel Generator 정수 필드는 Core와 같은 ASCII Decimal/Hex 문법만 허용한다. Init_Value에는
+  Signed/Unsigned 역변환·유한성·절반에서 0 반대 방향 반올림·±2^53·Size별 Raw 범위와
+  IEEE Float의 유한한 binary32 표현 검증을 적용한다. 오류의 파일·행·Column 정보는 유지한다.
+
+### Improved
+
+- RTU Known Frame이 Buffer 시작에 있으면 불필요한 Generic CRC 탐색을 생략한다.
+- ReadRule의 불변 Rule/Device metadata 복사는 잠금 밖에서 준비하고 Device mutex는 전체
+  Register snapshot 복사 구간에만 유지한다.
+
+### Tests
+
+- 시험 전용 실행 파일에서 Refresh 대기와 스레드 생성 실패를 결정적으로 주입하며 생산 DLL에
+  새 공개 API나 실행 시 주입 경로를 추가하지 않는다.
+- Lifecycle 재시도/Finalize, Stale 복구, Log OFF/배출/Flush, Error Text Buffer와 ValidMask,
+  Frame 후보 순서 및 ReadRule Configuration 수명·동시성 회귀시험을 보강한다.
+- Generator의 정수 문법, Init 반올림·범위·binary32 경계 시험을 추가하고 기존 Sample 생성물을
+  그대로 유지한다. 로캘 처리는 이번 변경 대상에서 제외한다.
+- 버전과 정식 배포물은 변경하지 않는다. DOCX/XLSX 및 릴리스 자산 갱신은 후속 릴리스 범위다.
+
+### Known Review Findings (Not Changed)
+
+- 기존 Lifecycle 스레드 회수와 다음 작업 시작 사이에는 joinable 슬롯을 덮어쓸 수 있는 경합이
+  남아 있다. 초기 Connect 중 AutoReconnect가 게시된 뒤 Disconnect하는 경로도 영향을 받는다.
+  정적 검토로 확인했으며 실제 경합 재현은 미수행이다. 이번 스레드 생성 실패 복구와는 별개로,
+  즉시 취소 계약을 보존하는 스레드 소유권 처리와 결정적 회귀시험이 필요하다.
+- 기존 실수 Parsing에서 IEEE Double `Init_Value=1e-999`는 Generator가 0으로 수용하지만 DLL은
+  `-1015`로 거부한다. 신규 DLL 비교로 확인했으며 이번 정수 문법/Init 인코딩 수정과 구분한다.
+  ParseReal/strtod와 로캘 처리 및 일반 실수 Parsing 정책은 이번에 변경하지 않았다.
+
 ## [0.6.0] - 2026-08-20
 
 ### Added

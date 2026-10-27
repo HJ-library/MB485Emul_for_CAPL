@@ -244,6 +244,8 @@ M485E_API M485E_Dll_GetDeviceCommunicationStates(std::uint32_t contextHandle,
  * @param enabled One starts a fresh session at Sequence 1; zero stops new capture.
  * @return M485E_OK on success, otherwise a negative M485E error code.
  * @note Disabling retains completed and in-flight lines so CAPL can drain them.
+ *       New capture requires an idle Disconnected or Connected lifecycle state;
+ *       disabling and draining remain available while lifecycle work is in progress.
  */
 M485E_API M485E_Dll_SetRtuLogEnabled(std::uint32_t contextHandle,
                                      std::int32_t enabled);

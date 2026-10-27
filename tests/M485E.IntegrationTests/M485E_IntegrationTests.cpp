@@ -267,6 +267,44 @@ int main(int argc, char** argv)
     Require(lifecycle[M485E_LS_STATE] == M485E_STATE_DISCONNECTED &&
                 lifecycle[M485E_LS_LAST_RESULT] == M485E_ERR_SERIAL_OPEN_FAILED,
             "failed one-Port Connect did not reach the Serial Open stage");
+
+    const std::string missingRule = fixture.Path("MissingRule.csv");
+    Require(setPath(handle, M485E_FILE_MODBUS_RULE,
+                    static_cast<std::uint32_t>(missingRule.size()), missingRule.c_str()) ==
+                M485E_OK && refresh(handle) == M485E_OK,
+            "missing-file Refresh was not accepted");
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+      Require(getStatus(handle, static_cast<std::uint32_t>(lifecycle.size()),
+                        lifecycle.data()) == M485E_OK,
+              "failed Refresh status polling failed");
+      if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    Require(lifecycle[M485E_LS_LAST_RESULT] < 0 &&
+                lifecycle[M485E_LS_CONFIGURATION_VALID] == 0 &&
+                connect(handle) == M485E_ERR_CONFIGURATION_STALE,
+            "failed Refresh must make Connect report CONFIGURATION_STALE");
+    Require(readRegisters(handle, 0, 10000, 4,
+                          static_cast<std::uint32_t>(words.size()), words.data()) == M485E_OK &&
+                words[0] == 0x4148U,
+            "failed Refresh discarded the last-good register image");
+    const std::string validRule = fixture.Path("Rule.csv");
+    Require(setPath(handle, M485E_FILE_MODBUS_RULE,
+                    static_cast<std::uint32_t>(validRule.size()), validRule.c_str()) ==
+                M485E_OK && refresh(handle) == M485E_OK,
+            "recovery Refresh was not accepted");
+    for (int attempt = 0; attempt < 500; ++attempt)
+    {
+      Require(getStatus(handle, static_cast<std::uint32_t>(lifecycle.size()),
+                        lifecycle.data()) == M485E_OK,
+              "recovery Refresh status polling failed");
+      if (lifecycle[M485E_LS_ACTIVE_OPERATION] == M485E_OPERATION_NONE) break;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    Require(lifecycle[M485E_LS_LAST_RESULT] == M485E_OK &&
+                lifecycle[M485E_LS_CONFIGURATION_VALID] == 1,
+            "successful Refresh did not recover configuration validity");
     Require(finalize(handle) == M485E_OK, "Finalize failed");
     FreeLibrary(module);
     std::cout << "M485E DLL Phase 3-8 home integration tests PASS.\n";

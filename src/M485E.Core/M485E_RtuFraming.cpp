@@ -123,6 +123,8 @@ std::optional<FrameCandidate> FindNextFrame(
     const std::vector<std::uint8_t>& buffer) noexcept
 {
   const auto known = FindKnownFrame(buffer);
+  // No generic candidate can precede a known frame at the buffer start.
+  if (known && known->offset == 0U) return known;
   const auto generic = FindGenericCrcFrame(buffer);
   if (!known) return generic;
   if (!generic || known->offset <= generic->offset) return known;
