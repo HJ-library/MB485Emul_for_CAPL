@@ -1,6 +1,6 @@
 # Modbus485Emulator 한눈에 보기
 
-> Release baseline: v0.6.0 (2026-08-20)
+> Release baseline: v0.6.1 (2026-11-16)
 
 `Modbus485Emulator`는 Windows PC에서 실제 Modbus RTU Slave 장치 여러 대를 흉내 내고,
 그 Register 상태를 CANalyzer의 가상 CAN 채널로 관찰할 수 있게 하는 Windows x86/x64 CAPL DLL이다.

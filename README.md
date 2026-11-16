@@ -1,6 +1,6 @@
 # Modbus485Emulator
 
-## v0.6.0 Device Signal Panel Generator
+## v0.6.1 Float Double CSV aliases
 
 - CANalyzer 9.x는 `Windows-x86/M485E.dll`을 직접 로드합니다.
 - CANalyzer 13 이상(CANalyzer 18 포함)은 `M485E.vmodule`에서 실행 환경에 맞는 x86/x64 DLL을 선택합니다.
@@ -22,7 +22,9 @@ $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\MSBuild
 
 양쪽 Release 빌드 후 `Prepare-M485EPackage.ps1`을 실행하면 CAPL Config에 `.vmodule`과 두 DLL을 함께 배치합니다.
 
-현재 릴리스는 **v0.6.0**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+현재 릴리스 버전은 **v0.6.1**입니다. 버전 이력은 [CHANGELOG](CHANGELOG.md)을 참조하세요.
+
+v0.6.1은 Register Map의 `Float`/`Double` 표기를 추가하며 기존 `IEEE Float`/`IEEE Double`과 동일하게 처리합니다.
 
 v0.6.0은 `M485E_Device.csv`와 Device별 Register Map을 분석해 실제 Index/주소별 XVP Fragment,
 Device별 Generated CAPL, `M485E_DevicePanel` System Variable DB, Manifest와 회사 적용용 COPY_GUIDE를
@@ -42,6 +44,12 @@ CANalyzer CAPL과 연동하는 Windows x86/x64 Modbus RTU Slave Emulator입니�
 처음 적용할 때는 [기본 예제 시작 가이드](examples/M485E_Test/START_HERE.md)를 위에서부터 따라가세요.
 
 ## Device Panel Generator
+
+Register Map CSV의 기본 Type 표기는 `Float`(IEEE-754 32bit), `Double`(64bit)입니다.
+기존 `IEEE Float`, `IEEE Double`도 동일하게 지원합니다. 대소문자는 정확히 구분합니다.
+Size는 각각 32/64, Scale은 1, Offset은 빈칸 또는 0이며 기존 Frame/유한값 검증은 유지합니다.
+예: `10000,Temperature,Float,4,BigEndian,0,32,1,0,degC,12.5,,,`
+기존 CSV와 호환성 예제는 자동 변경하지 않습니다.
 
 `Panel_Generator.exe`에서 `M485E_Device.csv`를 선택하고 Analyze로 실제 Device Index, Map,
 Signal/XVP 수를 확인한 뒤 Generate를 실행합니다. Output은 현재 Shell 경로가 아니라 EXE 옆에
