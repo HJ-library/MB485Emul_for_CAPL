@@ -157,6 +157,50 @@ void TestValidConfigurationAndInit()
           "Signal decode mismatch");
 }
 
+void TestFloatingTypeAliases()
+{
+  for (const std::string type : {"Float", "IEEE Float", "Double", "IEEE Double"})
+  {
+    const bool single = type == "Float" || type == "IEEE Float";
+    const std::string length = single ? "4" : "8";
+    const std::string size = single ? "32" : "64";
+    const auto map = [&](const std::string& bits, const std::string& scale,
+                         const std::string& offset) {
+      return std::string(kSignalHeader) + "10000,Value," + type + "," + length +
+             ",BigEndian,0," + bits + "," + scale + "," + offset + ",,12.5,,,\n";
+    };
+    Fixture fixture;
+    const auto paths = fixture.Write(ValidDevices(), ValidRules(), map(size, "1", ""));
+    const auto loaded = ConfigurationLoader{}.Build(paths);
+    Require(loaded.Succeeded(), "floating type alias was rejected by CSV loader");
+    const auto& image = *loaded.configuration->devices[0].initialImage;
+    Require(image.values[10000] == (single ? 0x4148U : 0x4029U) &&
+                image.values[10001] == 0 &&
+                (single || (image.values[10002] == 0 && image.values[10003] == 0)),
+            "floating alias HighWordFirst IEEE bits differ from independent expectation");
+    double value = 0;
+    Require(m485e::core::SignalCodec::Decode(loaded.configuration->signals[0], image, value) ==
+                M485E_OK && value == 12.5, "floating alias decode mismatch");
+    for (const auto& invalid : {map("16", "1", "0"), map(size, "2", "0"), map(size, "1", "1")})
+    {
+      const auto invalidPaths = fixture.Write(ValidDevices(), ValidRules(), invalid);
+      const auto rejected = ConfigurationLoader{}.Build(invalidPaths);
+      Require(!rejected.Succeeded() &&
+                  rejected.error.code == (invalid == map("16", "1", "0")
+                      ? M485E_ERR_CSV_SIGNAL_FRAME : M485E_ERR_CSV_SIGNAL_PARAMETER),
+              "floating alias Size/Scale/Offset rejection changed");
+    }
+  }
+  for (const std::string type : {"float", "FLOAT", "double", "DOUBLE", "Ieee Float"})
+  {
+    Fixture fixture;
+    const auto paths = fixture.Write(ValidDevices(), ValidRules(), std::string(kSignalHeader) +
+        "10000,Value," + type + ",8,BigEndian,0,64,1,0,,12.5,,,\n");
+    Require(ConfigurationLoader{}.Build(paths).error.code == M485E_ERR_CSV_VALUE_PARSE,
+            "unexpected case-insensitive floating alias accepted");
+  }
+}
+
 void TestUtf8BomAndQuotedComma()
 {
   Fixture fixture;
@@ -1322,6 +1366,7 @@ int main()
   try
   {
     TestValidConfigurationAndInit();
+    TestFloatingTypeAliases();
     TestUtf8BomAndQuotedComma();
     TestInvalidInputs();
     TestEncodingAndLimits();

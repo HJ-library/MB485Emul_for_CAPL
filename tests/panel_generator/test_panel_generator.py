@@ -229,6 +229,58 @@ class CsvContractTests(unittest.TestCase):
                 core.analyze_device_map(device)
 
 
+class FloatingAliasTests(unittest.TestCase):
+    def test_aliases_normalize_and_generate_equivalent_controls(self) -> None:
+        for alias, canonical, length, size in (("Float", "IEEE Float", 4, 32),
+                                                ("Double", "IEEE Double", 8, 64)):
+            with self.subTest(alias=alias), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                device = create_fixture(root, 1)
+                outputs = []
+                for spelling in (alias, canonical):
+                    write_text(root / "Synthetic.csv", REGISTER_HEADER + "\n" + simple_signal(
+                        10000, "Value", signal_type=spelling, length=length, size=size,
+                        init="12.5") + "\n")
+                    analysis = core.analyze_device_map(device)
+                    self.assertEqual(analysis.devices[0].signals[0].signal_type, canonical)
+                    output = core.generate_output(analysis, root / spelling.replace(" ", "_"))
+                    outputs.append({name: digest for name, digest in tree_hashes(output).items()
+                                    if name.endswith((".cin", ".xvp", ".vsysvar"))})
+                self.assertTrue(outputs[0])
+                self.assertEqual(outputs[0], outputs[1])
+
+    def test_aliases_preserve_validation_and_case_sensitivity(self) -> None:
+        for spelling, length, size in (("Float", 4, 32), ("IEEE Float", 4, 32),
+                                       ("Double", 8, 64), ("IEEE Double", 8, 64)):
+            for overrides in ({"size": 16}, {"scale": "2"}, {"offset": "1"},
+                              {"init": "NaN"}, {"init": "inf"}):
+                with self.subTest(type=spelling, overrides=overrides), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    device = create_fixture(root, 1)
+                    parameters = dict(signal_type=spelling, length=length, size=size, init="12.5")
+                    parameters.update(overrides)
+                    write_text(root / "Synthetic.csv", REGISTER_HEADER + "\n" +
+                               simple_signal(10000, "Value", **parameters) + "\n")
+                    with self.assertRaises(core.GeneratorError):
+                        core.analyze_device_map(device)
+        for spelling in ("float", "FLOAT", "double", "DOUBLE", "Ieee Float"):
+            with self.subTest(type=spelling), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                device = create_fixture(root, 1)
+                write_text(root / "Synthetic.csv", REGISTER_HEADER + "\n" +
+                           simple_signal(10000, "Value", signal_type=spelling) + "\n")
+                with self.assertRaises(core.GeneratorError):
+                    core.analyze_device_map(device)
+        for spelling in ("Float", "IEEE Float"):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                device = create_fixture(root, 1)
+                write_text(root / "Synthetic.csv", REGISTER_HEADER + "\n" + simple_signal(
+                    10000, "Value", signal_type=spelling, length=4, size=32, init="1e100") + "\n")
+                with self.assertRaises(core.GeneratorError):
+                    core.analyze_device_map(device)
+
+
 class NumericValidationTests(unittest.TestCase):
     def test_integer_syntax_rejects_python_extensions_with_field_context(self) -> None:
         invalid = ("0_0", "+0", "-0", "０", "٠", "0x_0", "0x+0", "0X０", "0b0", "0x")
@@ -490,7 +542,7 @@ class FragmentAndOutputTests(unittest.TestCase):
             ):
                 self.assertEqual(common_text.count(f";{variable};1;;;-1"), 1)
             manifest = json.loads((output / core.MANIFEST_NAME).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["generatorVersion"], "0.6.0")
+            self.assertEqual(manifest["generatorVersion"], "0.6.1")
             self.assertEqual([device["index"] for device in manifest["devices"]], [0, 7])
             core.validate_output(output)
 

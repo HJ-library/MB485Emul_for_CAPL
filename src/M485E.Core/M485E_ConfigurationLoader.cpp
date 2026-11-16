@@ -565,11 +565,12 @@ ConfigurationBuildResult ParseSignals(const ParsedCsv& csv, DeviceConfiguration&
     SignalType type;
     if (cells[2] == "Signed") type = SignalType::Signed;
     else if (cells[2] == "Unsigned") type = SignalType::Unsigned;
-    else if (cells[2] == "IEEE Float") type = SignalType::IeeeFloat;
-    else if (cells[2] == "IEEE Double") type = SignalType::IeeeDouble;
+    else if (cells[2] == "Float" || cells[2] == "IEEE Float") type = SignalType::IeeeFloat;
+    else if (cells[2] == "Double" || cells[2] == "IEEE Double") type = SignalType::IeeeDouble;
     else
       return Failure(M485E_ERR_CSV_VALUE_PARSE, CsvFileType::EmulatorMap,
-                     static_cast<std::uint32_t>(rowIndex + 1), 3, "Signal Type is invalid.");
+                     static_cast<std::uint32_t>(rowIndex + 1), 3,
+                     "Type must be Signed, Unsigned, Float or Double (IEEE Float/Double also accepted).");
     ByteOrder order;
     if (cells[4] == "BigEndian") order = ByteOrder::BigEndian;
     else if (cells[4] == "LittleEndian") order = ByteOrder::LittleEndian;

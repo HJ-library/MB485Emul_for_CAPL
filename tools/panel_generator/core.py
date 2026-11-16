@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 
-GENERATOR_VERSION = "0.6.0"
+GENERATOR_VERSION = "0.6.1"
 MAX_ROWS_PER_FRAGMENT = 15
 DISPLAY_CHUNK_SIZE = 15
 MANIFEST_NAME = "generation-manifest.json"
@@ -43,7 +43,7 @@ REGISTER_HEADER = (
     "Min",
     "Max",
 )
-VALID_TYPES = {"Signed", "Unsigned", "IEEE Float", "IEEE Double"}
+VALID_TYPES = {"Signed", "Unsigned", "Float", "Double", "IEEE Float", "IEEE Double"}
 VALID_BYTE_ORDERS = {"BigEndian", "LittleEndian"}
 MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_ROW_BYTES = 4096
@@ -454,11 +454,14 @@ def _parse_register_map(path: Path) -> tuple[Signal, ...]:
         signal_type = values["Type"]
         if signal_type not in VALID_TYPES:
             raise GeneratorError(
-                "Type must be Signed, Unsigned, IEEE Float, or IEEE Double",
+                "Type must be Signed, Unsigned, Float, or Double (IEEE Float/Double also accepted)",
                 path=path,
                 row=row_number,
                 column="Type",
             )
+        # Normalize only exact input aliases; all existing IEEE validation and
+        # generation branches continue to use their established internal names.
+        signal_type = {"Float": "IEEE Float", "Double": "IEEE Double"}.get(signal_type, signal_type)
         byte_order = values["Byte_Order"]
         if byte_order not in VALID_BYTE_ORDERS:
             raise GeneratorError(

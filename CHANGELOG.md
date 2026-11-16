@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.1] - 2026-11-16
+
+### Added
+
+- Register Map CSV Type에 기본 표기 Float/Double을 추가한다. 기존 IEEE Float/IEEE Double과
+  동일한 내부 IEEE 타입으로 정규화하며 대소문자, Size/Scale/Offset 및 수치 변환 계약은 유지한다.
+- DLL CSV Loader의 독립 IEEE Word 기대값과 Signal Read, 별칭별 제약 오류, Generator 분석과
+  CAPL/XVP/VSYSVAR 동등성 회귀시험을 추가한다.
+- 미완료 Lifecycle 스레드 경합 수정은 이 릴리스에서 제외한다. 아래 기존 Known Issue는 유지한다.
 
 ### Fixed
 
@@ -30,7 +38,7 @@
   Frame 후보 순서 및 ReadRule Configuration 수명·동시성 회귀시험을 보강한다.
 - Generator의 정수 문법, Init 반올림·범위·binary32 경계 시험을 추가하고 기존 Sample 생성물을
   그대로 유지한다. 로캘 처리는 이번 변경 대상에서 제외한다.
-- 버전과 정식 배포물은 변경하지 않는다. DOCX/XLSX 및 릴리스 자산 갱신은 후속 릴리스 범위다.
+- 위 결함 수정은 이전 개발 커밋에서 반영되었으며 이번 패치 배포에 포함한다.
 
 ### Known Review Findings (Not Changed)
 

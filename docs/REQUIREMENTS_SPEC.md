@@ -1,7 +1,7 @@
 # Modbus485Emulator 요구사항 명세
 
-> 상태: v0.6.0 Release Baseline
-> 기준: 2026-08-20까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
+> 상태: v0.6.1 Release Baseline
+> 기준: 2026-11-16까지 확정·구현·자동 검증된 요구사항과 외부 검증 대기 항목
 > 주의: 본 문서의 **제안** 및 **미확정** 항목은 확정 요구사항이 아니다.
 
 ## 1. 프로젝트 목적
@@ -1041,15 +1041,15 @@
 
 | ID | 요구사항 |
 | --- | --- |
-| DATA-MAP-001 | `Type`은 `Signed`, `Unsigned`, `IEEE Float`, `IEEE Double`을 지원한다. |
+| DATA-MAP-001 | `Type`은 `Signed`, `Unsigned`, `Float`, `Double`, `IEEE Float`, `IEEE Double`을 정확한 대소문자로 지원한다. 기본 안내 표기는 Float/Double이며 IEEE Float/IEEE Double은 각각 동일한 32/64bit 내부 타입의 호환 입력이다. DLL Loader와 Panel Generator는 입력 경계에서 정규화하며 사용자 CSV를 다시 쓰지 않는다. |
 | DATA-MAP-002 | `Type` 칼럼은 `SignalName` 바로 오른쪽에 위치한다. |
 | DATA-MAP-003 | `Byte_Order`의 공개 CSV 표기는 `BigEndian`과 `LittleEndian`만 사용하며 `Motorola`와 `Intel` 별칭을 사용하지 않는다. |
 | DATA-MAP-004 | `Init_Value`는 최초 메모리 구성과 CSV Refresh 시 사용한다. |
 | DATA-MAP-005 | `Value_Table`은 CAN DBC 변환 전용 데이터이며 DLL의 Modbus RTU Slave, Register/Signal API 및 CAN Monitoring 동작에서 사용하지 않는다. |
 | DATA-MAP-006 | 모든 Address는 CAPL 내부 제어 관점에서 R/W 가능하다. |
 | DATA-MAP-007 | SignalName은 DeviceMap에서 Map을 할당받은 Device Index와 함께 Signal 조회 키로 사용한다. |
-| DATA-MAP-008 | `IEEE Float`의 Size는 32bit, `IEEE Double`의 Size는 64bit로 고정하며 다른 Size는 허용하지 않는다. |
-| DATA-MAP-009 | `IEEE Float`와 `IEEE Double` 행의 `Scale`은 반드시 명시적인 `1`이어야 하고 `Offset`은 빈 Cell 또는 `0`이어야 한다. 다른 값이 있으면 CSV Load 또는 Refresh 전체를 실패 처리한다. |
+| DATA-MAP-008 | `Float`(호환 표기 `IEEE Float`)의 Size는 32bit, `Double`(호환 표기 `IEEE Double`)의 Size는 64bit로 고정하며 다른 Size는 허용하지 않는다. Length/Start_Bit Frame 검증, Byte/Word 순서 및 IEEE 변환은 변경하지 않는다. |
+| DATA-MAP-009 | `Float`/`Double` 및 호환 IEEE 표기 행의 `Scale`은 반드시 명시적인 `1`이어야 하고 `Offset`은 빈 Cell 또는 `0`이어야 한다. 다른 값이 있으면 CSV Load 또는 Refresh 전체를 실패 처리한다. NaN/무한대와 초기값 범위 오류는 기존 정책대로 거부한다. |
 | DATA-MAP-010 | 1차 Register Map에는 `Word_Order` 칼럼을 추가하지 않으며 모든 다중 Register Signal은 고정 `HighWordFirst`로 해석한다. |
 | DATA-MAP-011 | `Length`, `Start_Bit`, `Size`의 Frame 범위 검증은 같은 CSV 행의 값만으로 수행하고 Frame 범위 및 Signal Bit 중복·겹침 검증은 같은 Register Map 템플릿 전체를 대상으로 별도 수행한다. |
 | DATA-MAP-012 | Frame이 겹치는지는 실제 Signal Bit 사용 여부가 아니라 `Address`부터 `Length / 2`개 Register의 점유 범위를 기준으로 판단한다. |

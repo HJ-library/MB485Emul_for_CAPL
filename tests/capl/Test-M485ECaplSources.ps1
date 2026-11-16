@@ -126,8 +126,8 @@ Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\M485E\.vmodule"\)' `
     'Main must load M485E.vmodule in modern CANalyzer.'
 Require-Match $main '#pragma\s+library\("\.\.\\\\Dll\\\\Windows-x86\\\\M485E\.dll"\)' `
     'Main must keep the direct Windows-x86 DLL path for CANalyzer 9.x.'
-Require-Match $module '<Version>0\.6\.0</Version>' `
-    'The architecture module version must match Release 0.6.0.'
+Require-Match $module '<Version>0\.6\.1</Version>' `
+    'The architecture module version must match Release 0.6.1.'
 Require-Match $module '<SupportedArchitecture\s+arch="Windows-x64 Windows-x86"\s*/>' `
     'The architecture module must advertise Windows x64 and x86.'
 Require-Match $module '<LibraryPath\s+arch="Windows-x64">\./Windows-x64/M485E\.dll</LibraryPath>' `
